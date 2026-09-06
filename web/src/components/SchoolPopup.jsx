@@ -15,7 +15,7 @@ export default function SchoolPopup({ school, year, tier }) {
     school.delta == null ? '' : school.delta < 0 ? ' is-down' : ' is-up';
 
   return (
-    <div className="popup">
+    <div>
       <header className="popup__head">
         <h3>{school.name}</h3>
         <p>
@@ -23,11 +23,17 @@ export default function SchoolPopup({ school, year, tier }) {
         </p>
       </header>
 
-      <p className="popup__headline" style={{ '--tier': tier?.color }}>
-        <span>{year} 學年推估</span>
-        <strong>{show(projected)}</strong>
-        <span>人 ・ {tier?.label ?? '無推估'}</span>
-      </p>
+      {school.unprojected ? (
+        <p className="popup__headline popup__headline--muted">
+          缺少 {REFERENCE_YEAR} 學年對照資料，無法推估
+        </p>
+      ) : (
+        <p className="popup__headline" style={{ '--tier': tier?.color }}>
+          <span>{year} 學年推估</span>
+          <strong>{show(projected)}</strong>
+          <span>人 ・ {tier?.label ?? '無推估'}</span>
+        </p>
+      )}
 
       <dl className="popup__grid">
         <div>
@@ -55,11 +61,17 @@ export default function SchoolPopup({ school, year, tier }) {
       </dl>
 
       {school.address && <p className="popup__meta">{school.address}</p>}
-      {school.website && (
-        <a className="popup__link" href={school.website} target="_blank" rel="noreferrer">
-          學校網站 ↗
-        </a>
-      )}
+
+      <p className="popup__links">
+        {school.website && (
+          <a href={school.website} target="_blank" rel="noreferrer">
+            學校網站 ↗
+          </a>
+        )}
+        {school.phone && (
+          <a href={`tel:${school.phone.replace(/[^\d+]/g, '')}`}>{school.phone}</a>
+        )}
+      </p>
     </div>
   );
 }

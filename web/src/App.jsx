@@ -2,6 +2,7 @@ import { useMemo, useReducer, useState } from 'react';
 import { BASE_YEAR, PROJECTION_YEARS, REFERENCE_YEAR } from './config/index.js';
 import { filterSchools, summarize } from './lib/schools.js';
 import { useSchoolData } from './hooks/useSchoolData.js';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import SchoolMap from './components/SchoolMap.jsx';
 import ControlPanel from './components/ControlPanel.jsx';
 import SummaryBar from './components/SummaryBar.jsx';
@@ -16,9 +17,15 @@ const initialFilters = {
 
 const merge = (state, patch) => ({ ...state, ...patch });
 
+/** Sentinel for "clear the filters but keep the year the user picked". */
+const RESET = Symbol('reset-filters');
+
+const filtersReducer = (state, patch) =>
+  patch === RESET ? { ...initialFilters, year: state.year } : merge(state, patch);
+
 export default function App() {
   const { status, schools, counties, error } = useSchoolData();
-  const [filters, setFilters] = useReducer(merge, initialFilters);
+  const [filters, setFilters] = useReducer(filtersReducer, initialFilters);
   const [layers, setLayers] = useReducer(merge, { heatmap: true, markers: true });
   const [panelOpen, setPanelOpen] = useState(true);
 
@@ -38,11 +45,12 @@ export default function App() {
         {status === 'ready' && <SummaryBar totals={totals} year={filters.year} />}
         <button
           type="button"
-          className="topbar__toggle"
+          className="pill-button"
           aria-expanded={panelOpen}
+          aria-controls="sidebar"
           onClick={() => setPanelOpen((open) => !open)}
         >
-          {panelOpen ? '收合篩選' : '展開篩選'}
+          {panelOpen ? '收合側欄' : '展開側欄'}
         </button>
       </header>
 
@@ -57,14 +65,28 @@ export default function App() {
           <p className="state state--error" role="alert">
             {error?.message ?? '資料載入失敗'}
             <br />
-            <small>請先執行 <code>npm run fetch:data</code> 取得資料集。</small>
+            <small>請稍後重新整理，或回報這個問題。</small>
           </p>
         )}
 
         {status === 'ready' && (
-          <>
+          <ErrorBoundary>
             <SchoolMap schools={visible} year={filters.year} layers={layers} />
-            <aside className="sidebar">
+
+            {visible.length === 0 && (
+              <p className="stage__empty" role="status">
+                目前的篩選條件沒有符合的學校。
+                <button
+                  type="button"
+                  className="stage__empty-reset"
+                  onClick={() => setFilters(RESET)}
+                >
+                  清除篩選
+                </button>
+              </p>
+            )}
+
+            <aside id="sidebar" className="sidebar">
               <ControlPanel
                 filters={filters}
                 counties={counties}
@@ -74,7 +96,7 @@ export default function App() {
               />
               <Legend year={filters.year} />
             </aside>
-          </>
+          </ErrorBoundary>
         )}
       </main>
 

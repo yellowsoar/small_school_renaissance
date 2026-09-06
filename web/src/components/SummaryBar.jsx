@@ -4,7 +4,7 @@ export default function SummaryBar({ totals, year }) {
   const stats = [
     ['符合條件學校', totals.schools],
     [`${year} 學年推估歸零`, totals.closing],
-    ['50 人以下', totals.atRisk],
+    ['50 人以下（含歸零）', totals.atRisk],
     ['推估學生總數', totals.students],
   ];
 
