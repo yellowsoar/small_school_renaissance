@@ -1,0 +1,60 @@
+name: Deploy web to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+
+      # No lockfile is committed yet, so `npm ci` is not usable.
+      # Switch to `npm ci` once web/package-lock.json lands.
+      - run: npm install --no-audit --no-fund
+
+      - run: npm run build
+        env:
+          # Override in repo Settings → Secrets and variables → Variables
+          # once this repo hosts the dataset itself.
+          DATA_OWNER: ${{ vars.DATA_OWNER || 'g0v' }}
+          DATA_REPO: ${{ vars.DATA_REPO || 'small_school_renaissance' }}
+          DATA_BRANCH: ${{ vars.DATA_BRANCH || 'gh-pages' }}
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

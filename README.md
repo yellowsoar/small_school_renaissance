@@ -6,6 +6,7 @@
   - [緣起](#%E7%B7%A3%E8%B5%B7)
   - [終局](#%E7%B5%82%E5%B1%80)
 - [如何貢獻](#%E5%A6%82%E4%BD%95%E8%B2%A2%E7%8D%BB)
+- [網頁前端](#%E7%B6%B2%E9%A0%81%E5%89%8D%E7%AB%AF)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -34,6 +35,22 @@
   - [OGC][gis_ogc]
   - [OSGeo][gis_osgeo]
   - [OSM][gis_osm]
+
+## 網頁前端
+
+互動地圖的前端放在 [`web/`](web/)，是一個 Vite + React 的專案，把學校點位與 114–130 學年度的學生人數推估畫成熱區圖與分級點位圖。
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+- 資料集 `113-107.csv` **不進版控**：`web/scripts/fetch-data.js` 會在 `dev` / `build` 前自動下載到 `web/public/data/`，來源可用 `DATA_OWNER`、`DATA_BRANCH` 等環境變數切換，說明見 [`web/.env.example`](web/.env.example)。
+- Push 到 `main` 時由 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) 建置並發布到 GitHub Pages。
+- 詳細說明（技術棧、目錄結構、與原版 `docs/index.html` 的差異）見 [`web/README.md`](web/README.md)。
+
+根目錄維持原本的 bash / uv 資料處理流程，前端不影響 `scripts/` 的使用方式。
 
 [g0v_66_hackathon]: https://g0v.hackmd.io/@jothon/g0v-hackath66n/
 [g0v_md_note]: https://g0v.hackmd.io/TG6CtrxyRdudWawzTXfPiw

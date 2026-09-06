@@ -11,17 +11,30 @@
 # (Start with "!")
 
 # Directories
+# "*" also ignores directories, which stops git from descending into nested
+# paths such as web/src/components. Re-include directories first, then let the
+# extension list below decide which files are actually tracked.
+!*/
 !fixture
 !scripts
 
 # Extensions
+!*.css
+!*.html
+!*.js
+!*.jsx
+!*.json
 !*.md
 !*.sh
 !*.toml
 !*.txt
+!*.yml
 
 # Files
 !.gitignore
+!.env.example
+!.nvmrc
+!.prettierrc
 !uv.lock
 
 
@@ -30,10 +43,15 @@
 # ****************************************************************************
 
 # Directories
-
+node_modules/
+web/dist/
 
 # Extensions
-
+*.local
 
 # Files
-
+# Downloaded at build time by web/scripts/fetch-data.js — data is not source.
+web/public/data/*.csv
+.env
+.env.*
+!.env.example
