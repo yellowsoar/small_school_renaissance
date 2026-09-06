@@ -12,6 +12,7 @@
 | UI | React 19 + react-leaflet 5 |
 | 地圖 | Leaflet 1.9 + leaflet.heat |
 | 資料 | PapaParse 解析教育部統計處 CSV |
+| 測試 | Vitest 3 |
 | 語法 | 原生 ES2023 JavaScript（無 TypeScript、無 class component） |
 
 ## 快速開始
@@ -30,9 +31,20 @@ npm run fetch:data # 強制重新抓取上游 CSV
 npm run build      # 產出 dist/
 npm run preview    # 預覽 production build
 npm run lint
+npm test           # Vitest 單次執行
+npm run test:watch # watch 模式
+npm run coverage   # 覆蓋率報告
 ```
 
 需要 Node.js 20.19 以上。
+
+## 測試
+
+`src/lib/schools.js` 是整個資料流的收斂點（CSV → 畫面用的物件），所以測試集中在這裡：`src/lib/schools.test.js`，共 40 個 case，涵蓋 `tierFor`、`parseSchools`、`filterSchools`、`summarize`。
+
+Fixture 直接組出真的 CSV 字串而不是預先 parse 好的 row，所以連 PapaParse 的設定（`header`、`skipEmptyLines`、`transformHeader`）也一起測到。重點在邊界：分級上界是閉區間、沒有座標的 row 會被丟掉、空欄位變成 `null` 而不是空字串、開啟分級篩選時沒有推估值的學校會被排除。
+
+測試設定放在 `vitest.config.js`，與 `vite.config.js` 分開：這些是純函式，不需要 React plugin 也不需要 Pages 的 base path。
 
 ## 資料來源
 
@@ -62,7 +74,7 @@ cp .env.example .env
 - **圖示快取**：每個風險分級只建立一次 icon，2,600 個 marker 不會各自生一份 DOM template。
 - **修正熱區參數**：原版 `blur: 0` + `radius: 80` 會糊成一塊色斑，改為 `radius: 45 / blur: 22`。
 - **可近用性**：語意化 `<dl>` / `<fieldset>`、`aria-pressed`、鍵盤可操作的篩選 chip、`prefers-reduced-motion`。
-- **資料層與畫面分離**：`src/lib/schools.js` 是純函式（解析、篩選、統計），可以直接寫測試。
+- **資料層與畫面分離**：`src/lib/schools.js` 是純函式（解析、篩選、統計），並附上 Vitest 測試。
 - **部署**：GitHub Actions 走官方 Pages artifact 流程，push 到 `main` 就發布，不再手動 commit 產出物到 `gh-pages`。
 - **資料不進版控**：CSV 由建置流程抓取，repo 只放程式碼。
 
@@ -75,6 +87,7 @@ web/
 ├── index.html
 ├── package.json
 ├── vite.config.js              # base path、build 設定
+├── vitest.config.js            # 測試設定
 ├── eslint.config.js
 ├── .env.example                # 環境變數文件
 ├── scripts/
@@ -85,6 +98,7 @@ web/
     ├── config/index.js         # 風險分級、熱區、地圖常數
     ├── lib/
     │   ├── schools.js          # CSV → 正規化資料、篩選、統計（純函式）
+    │   ├── schools.test.js     # Vitest 測試
     │   └── markerIcons.js      # SVG 圖示產生與快取
     ├── hooks/
     │   ├── useSchoolData.js    # 載入 + 解析，支援 AbortController
@@ -105,7 +119,7 @@ CI 設定放在 repo 根目錄的 `.github/workflows/deploy.yml`（GitHub 只認
 
 ## 部署
 
-Push 到 `main` 且變更落在 `web/` 時，會觸發根目錄的 `.github/workflows/deploy.yml`，建置後以官方 Pages artifact 發布到
+Push 到 `main` 且變更落在 `web/` 時，會觸發根目錄的 `.github/workflows/deploy.yml`，測試通過後以官方 Pages artifact 發布到
 <https://yellowsoar.github.io/small_school_renaissance/>。記得到 repo Settings → Pages 把 Source 設成 **GitHub Actions**。
 
 `BASE_PATH` 預設為 `/small_school_renaissance/`（專案站台路徑）。自訂網域或改 repo 名時覆寫：
