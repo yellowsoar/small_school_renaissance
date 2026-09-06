@@ -1,5 +1,5 @@
 import { RISK_TIERS } from '../config/index.js';
-import { shapeSvg } from '../lib/markerIcons.js';
+import TierGlyph from './TierGlyph.jsx';
 
 export default function Legend({ year }) {
   return (
@@ -8,10 +8,9 @@ export default function Legend({ year }) {
       <ul className="legend__list">
         {RISK_TIERS.map((tier) => (
           <li key={tier.id}>
-            <span
-              className="legend__glyph"
-              dangerouslySetInnerHTML={{ __html: shapeSvg(tier.shape, tier.color, 16) }}
-            />
+            <span className="legend__glyph">
+              <TierGlyph shape={tier.shape} color={tier.color} size={16} />
+            </span>
             <span className="legend__label">{tier.label}</span>
             <span className="legend__range">{tier.describe()}</span>
           </li>

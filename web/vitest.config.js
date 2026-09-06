@@ -9,6 +9,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/lib/**'],
+      // markerIcons only wires shapes.js into Leaflet, which needs a DOM.
+      // Its geometry is covered by shapes.test.js.
+      exclude: ['src/lib/markerIcons.js'],
       reporter: ['text', 'html'],
     },
   },
