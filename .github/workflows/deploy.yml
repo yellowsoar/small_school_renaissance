@@ -35,6 +35,8 @@ jobs:
       # Switch to `npm ci` once web/package-lock.json lands.
       - run: npm install --no-audit --no-fund
 
+      - run: npm test
+
       - run: npm run build
         env:
           # Override in repo Settings → Secrets and variables → Variables
