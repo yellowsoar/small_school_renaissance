@@ -47,7 +47,8 @@ npm run dev
 ```
 
 - 資料集 `113-107.csv` **不進版控**：`web/scripts/fetch-data.js` 會在 `dev` / `build` 前自動下載到 `web/public/data/`，來源可用 `DATA_OWNER`、`DATA_BRANCH` 等環境變數切換，說明見 [`web/.env.example`](web/.env.example)。
-- Push 到 `main` 時由 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) 建置並發布到 GitHub Pages。
+- 推估值以 113 與 107 學年度的變化趨勢外推，未計入遷徙、新生兒數與學區調整，**僅供風險排序參考，非廢校預測**。這段說明也顯示在畫面上。
+- CI 由 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在 push 與 pull request 上跑 lint 與測試；push 到 `main` 時再由 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) 建置並發布到 GitHub Pages。
 - 詳細說明（技術棧、目錄結構、與原版 `docs/index.html` 的差異）見 [`web/README.md`](web/README.md)。
 
 根目錄維持原本的 bash / uv 資料處理流程，前端不影響 `scripts/` 的使用方式。

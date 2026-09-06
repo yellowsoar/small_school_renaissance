@@ -13,7 +13,7 @@
 | 地圖 | Leaflet 1.9 + leaflet.heat |
 | 資料 | PapaParse 解析教育部統計處 CSV |
 | 測試 | Vitest 3 |
-| 語法 | 原生 ES2023 JavaScript（無 TypeScript、無 class component） |
+| 語法 | 原生 ES2023 JavaScript（無 TypeScript） |
 
 ## 快速開始
 
@@ -40,11 +40,12 @@ npm run coverage   # 覆蓋率報告
 
 ## 測試
 
-`src/lib/schools.js` 是整個資料流的收斂點（CSV → 畫面用的物件），所以測試集中在這裡：`src/lib/schools.test.js`，共 40 個 case，涵蓋 `tierFor`、`parseSchools`、`filterSchools`、`summarize`。
+`src/lib/` 是純函式層，也是測試的重心：
 
-Fixture 直接組出真的 CSV 字串而不是預先 parse 好的 row，所以連 PapaParse 的設定（`header`、`skipEmptyLines`、`transformHeader`）也一起測到。重點在邊界：分級上界是閉區間、沒有座標的 row 會被丟掉、空欄位變成 `null` 而不是空字串、開啟分級篩選時沒有推估值的學校會被排除。
+- `schools.test.js` 涵蓋 `tierFor`、`parseSchools`、`filterSchools`、`summarize`。Fixture 直接組出真的 CSV 字串而不是預先 parse 好的 row，所以連 PapaParse 的設定（`header`、`skipEmptyLines`、`transformHeader`）也一起測到。重點在邊界：分級上界是閉區間、沒有座標的 row 會被丟掉、空欄位變成 `null` 而不是空字串、開啟分級篩選時沒有推估值的學校會被排除。
+- `shapes.test.js` 確認每個風險分級都有對應圖形、未知圖形會退回圓形、星形頂點不會超出 viewBox。
 
-測試設定放在 `vitest.config.js`，與 `vite.config.js` 分開：這些是純函式，不需要 React plugin 也不需要 Pages 的 base path。
+測試設定放在 `vitest.config.js`，與 `vite.config.js` 分開：這些是純函式，不需要 React plugin 也不需要 Pages 的 base path。`markerIcons.js` 不列入覆蓋率，它只是把 `shapes.js` 接到 Leaflet，需要 DOM 才跑得起來。
 
 ## 資料來源
 
@@ -66,15 +67,24 @@ cp .env.example .env
 
 原始資料由教育部統計處的「國民小學校別基本資料」與「偏遠地區學校名錄」爬取後合併（見 `scripts/*.sh`），推估欄位為 `推估114年人數` … `推估130年人數`。
 
+## 推估值怎麼讀
+
+推估欄位是上游資料集算好的，以 113 與 107 學年度的學生人數變化趨勢外推，**未計入遷徙、新生兒數與學區調整**。它適合拿來排序風險，不適合當成廢校預測。這句話也直接放在畫面的圖例裡（`METHODOLOGY`，定義於 `src/config/index.js`），避免「推估歸零」被誤讀成「這間學校會關」。
+
+沒有 107 學年度對照資料的學校無法推估，popup 會直接說明，而不是顯示 0。
+
 ## 相較原版的改動
 
 - **可切換推估年度**：原版寫死 130 學年，這裡改成 114–130 的滑桿，直接看趨勢怎麼滾。
-- **篩選器**：縣市、風險分級、校名／鄉鎮搜尋，並即時更新統計列。
-- **點位圖示自繪**：以 `L.divIcon` + inline SVG 取代 `leaflet-svg-shape-markers` CDN 相依，圖例與地圖共用同一份 `shapeSvg()`，不會再有兩邊對不起來的問題。
-- **圖示快取**：每個風險分級只建立一次 icon，2,600 個 marker 不會各自生一份 DOM template。
+- **篩選器**：縣市、風險分級、校名／鄉鎮搜尋，並即時更新統計列；篩不到東西時可一鍵清除。
+- **點位圖示自繪**：以 `L.divIcon` + inline SVG 取代 `leaflet-svg-shape-markers` CDN 相依。圖形幾何集中在 `lib/shapes.js`，地圖與圖例讀同一份，不會再有兩邊對不起來的問題。
+- **只畫看得到的點**：依視窗範圍裁切，加上每個分級只建立一次 icon，避免 2,600 個 marker 同時掛在 DOM 上。
+- **熱區就地更新**：熱區圖層只建立一次，拉動年度滑桿時用 `setLatLngs()` 換點，不會整層拆掉重建。
 - **修正熱區參數**：原版 `blur: 0` + `radius: 80` 會糊成一塊色斑，改為 `radius: 45 / blur: 22`。
-- **可近用性**：語意化 `<dl>` / `<fieldset>`、`aria-pressed`、鍵盤可操作的篩選 chip、`prefers-reduced-motion`。
-- **資料層與畫面分離**：`src/lib/schools.js` 是純函式（解析、篩選、統計），並附上 Vitest 測試。
+- **可近用性**：語意化 `<dl>` / `<fieldset>`、`aria-pressed`、篩選 chip 與滑桿都有 focus ring、`prefers-reduced-motion`。
+- **標註推估方法**：畫面上直接寫明數字怎麼來、不含哪些因素。
+- **錯誤與空狀態**：Error boundary 接住 render 例外，篩不到學校時也會明講，而不是給一張空白地圖。
+- **資料層與畫面分離**：`src/lib/` 是純函式（解析、篩選、統計、圖形幾何），並附上 Vitest 測試。
 - **部署**：GitHub Actions 走官方 Pages artifact 流程，push 到 `main` 就發布，不再手動 commit 產出物到 `gh-pages`。
 - **資料不進版控**：CSV 由建置流程抓取，repo 只放程式碼。
 
@@ -86,40 +96,43 @@ cp .env.example .env
 web/
 ├── index.html
 ├── package.json
-├── vite.config.js              # base path、build 設定
-├── vitest.config.js            # 測試設定
-├── eslint.config.js
-├── .env.example                # 環境變數文件
+├── vite.config.js               # base path、build 設定
+├── vitest.config.js             # 測試設定
+├── eslint.config.js             # 瀏覽器與 Node 兩組環境分開
+├── .env.example                 # 環境變數文件
 ├── scripts/
-│   └── fetch-data.js           # 建置前下載 CSV 到 public/data/
+│   └── fetch-data.js            # 建置前下載 CSV 到 public/data/
 └── src/
-    ├── App.jsx                 # 版面組裝與狀態
+    ├── App.jsx                  # 版面組裝與狀態
     ├── main.jsx
-    ├── config/index.js         # 風險分級、熱區、地圖常數
+    ├── config/index.js          # 風險分級、熱區、地圖常數、推估方法說明
     ├── lib/
-    │   ├── schools.js          # CSV → 正規化資料、篩選、統計（純函式）
-    │   ├── schools.test.js     # Vitest 測試
-    │   └── markerIcons.js      # SVG 圖示產生與快取
+    │   ├── schools.js           # CSV → 正規化資料、篩選、統計（純函式）
+    │   ├── shapes.js            # 圖示幾何，地圖與圖例共用的唯一來源
+    │   ├── markerIcons.js       # Leaflet divIcon 產生與快取
+    │   └── *.test.js            # Vitest 測試
     ├── hooks/
-    │   ├── useSchoolData.js    # 載入 + 解析，支援 AbortController
-    │   └── useZoomVisibility.js
+    │   ├── useSchoolData.js     # 載入 + 解析，支援 AbortController
+    │   └── useVisibleSchools.js # 依視窗範圍與縮放層級裁切點位
     ├── components/
     │   ├── SchoolMap.jsx
-    │   ├── HeatmapLayer.jsx    # leaflet.heat 的命令式包裝
+    │   ├── HeatmapLayer.jsx     # leaflet.heat 的命令式包裝
     │   ├── SchoolMarkers.jsx
     │   ├── SchoolPopup.jsx
+    │   ├── TierGlyph.jsx        # 圖例用的 JSX 版圖示
     │   ├── ControlPanel.jsx
     │   ├── SummaryBar.jsx
-    │   └── Legend.jsx
+    │   ├── Legend.jsx
+    │   └── ErrorBoundary.jsx
     └── styles/global.css
 ```
 
-CI 設定放在 repo 根目錄的 `.github/workflows/deploy.yml`（GitHub 只認根目錄的 workflow）。
+CI 設定放在 repo 根目錄（GitHub 只認根目錄的 workflow）：`ci.yml` 在 push 與 pull request 上跑 lint 與測試，`deploy.yml` 只負責 `main` 的 Pages 發布。
 `.gitignore` 也只有根目錄那一份，採 allow list 寫法，已把前端需要的副檔名加進去。
 
 ## 部署
 
-Push 到 `main` 且變更落在 `web/` 時，會觸發根目錄的 `.github/workflows/deploy.yml`，測試通過後以官方 Pages artifact 發布到
+Push 到 `main` 且變更落在 `web/` 時，會觸發 `.github/workflows/deploy.yml`，lint 與測試通過後以官方 Pages artifact 發布到
 <https://yellowsoar.github.io/small_school_renaissance/>。記得到 repo Settings → Pages 把 Source 設成 **GitHub Actions**。
 
 `BASE_PATH` 預設為 `/small_school_renaissance/`（專案站台路徑）。自訂網域或改 repo 名時覆寫：
