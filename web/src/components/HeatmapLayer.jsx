@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
@@ -10,23 +10,38 @@ import { HEATMAP_OPTIONS, HEATMAP_THRESHOLD } from '../config/index.js';
  */
 export default function HeatmapLayer({ schools, year, visible }) {
   const map = useMap();
+  const layerRef = useRef(null);
 
-  useEffect(() => {
-    if (!visible) return undefined;
-
-    const points = [];
+  const points = useMemo(() => {
+    const result = [];
     for (const school of schools) {
       const projected = school.projections.get(year);
       if (projected == null || projected > HEATMAP_THRESHOLD) continue;
       const intensity = Math.max(0.15, 1 - projected / HEATMAP_THRESHOLD);
-      points.push([...school.position, intensity]);
+      result.push([...school.position, intensity]);
     }
+    return result;
+  }, [schools, year]);
 
-    const layer = L.heatLayer(points, HEATMAP_OPTIONS).addTo(map);
+  // Create once, then feed it new points. Rebuilding the layer on every year
+  // change makes the slider flicker as the canvas is torn down and re-added.
+  useEffect(() => {
+    if (!visible) return undefined;
+
+    const layer = L.heatLayer([], HEATMAP_OPTIONS).addTo(map);
+    layerRef.current = layer;
+
     return () => {
+      layerRef.current = null;
       layer.remove();
     };
-  }, [map, schools, year, visible]);
+  }, [map, visible]);
+
+  // `visible` belongs in these deps: re-showing the layer creates a fresh,
+  // empty one, and only this effect puts the points back into it.
+  useEffect(() => {
+    layerRef.current?.setLatLngs(points);
+  }, [points, visible]);
 
   return null;
 }
