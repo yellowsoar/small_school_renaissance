@@ -1,0 +1,38 @@
+name: CI
+
+# Deploy only runs on main, so without this the test suite never sees a pull
+# request — which is where it is actually useful.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+
+      # No lockfile is committed yet, so `npm ci` is not usable.
+      # Switch to `npm ci` once web/package-lock.json lands.
+      - run: npm install --no-audit --no-fund
+
+      - run: npm run lint
+
+      - run: npm test
