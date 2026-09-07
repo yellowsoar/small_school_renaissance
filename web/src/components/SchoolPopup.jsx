@@ -1,4 +1,5 @@
 import { BASE_YEAR, REFERENCE_YEAR } from '../config/index.js';
+import TrendSparkline from './TrendSparkline.jsx';
 
 const integer = new Intl.NumberFormat('zh-Hant-TW');
 const percent = new Intl.NumberFormat('zh-Hant-TW', {
@@ -28,11 +29,18 @@ export default function SchoolPopup({ school, year, tier }) {
           缺少 {REFERENCE_YEAR} 學年對照資料，無法推估
         </p>
       ) : (
-        <p className="popup__headline" style={{ '--tier': tier?.color }}>
-          <span>{year} 學年推估</span>
-          <strong>{show(projected)}</strong>
-          <span>人 ・ {tier?.label ?? '無推估'}</span>
-        </p>
+        <>
+          <p className="popup__headline" style={{ '--tier': tier?.color }}>
+            <span>{year} 學年推估</span>
+            <strong>{show(projected)}</strong>
+            <span>人 ・ {tier?.label ?? '無推估'}</span>
+          </p>
+          <TrendSparkline
+            projections={school.projections}
+            year={year}
+            color={tier?.color}
+          />
+        </>
       )}
 
       <dl className="popup__grid">
