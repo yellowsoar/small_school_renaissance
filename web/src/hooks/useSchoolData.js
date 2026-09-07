@@ -1,12 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DATA_URL } from '../config/index.js';
 import { parseSchools } from '../lib/schools.js';
 
 const initialState = { status: 'loading', schools: [], counties: [], error: null };
 
-/** Loads and parses the school dataset once, aborting cleanly on unmount. */
+/**
+ * Loads and parses the school dataset, aborting cleanly on unmount.
+ * Exposes `reload` so a failed load is recoverable without a full refresh —
+ * the usual cause is a flaky network, not a broken build.
+ */
 export function useSchoolData(url = DATA_URL) {
   const [state, setState] = useState(initialState);
+  const [attempt, setAttempt] = useState(0);
+
+  const reload = useCallback(() => {
+    setState(initialState);
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -29,7 +39,7 @@ export function useSchoolData(url = DATA_URL) {
     })();
 
     return () => controller.abort();
-  }, [url]);
+  }, [url, attempt]);
 
-  return state;
+  return { ...state, reload };
 }

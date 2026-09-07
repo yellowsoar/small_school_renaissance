@@ -7,9 +7,21 @@ const toggle = (set, value) => {
   return next;
 };
 
-export default function ControlPanel({ filters, counties, layers, onChange, onLayers }) {
+export default function ControlPanel({
+  filters,
+  counties,
+  layers,
+  onChange,
+  onLayers,
+  onReset,
+}) {
   const yearId = useId();
   const searchId = useId();
+
+  // Note: the chips below each have their own `active`. This one is about the
+  // panel as a whole, so it gets a distinct name rather than being shadowed.
+  const hasFilters =
+    filters.counties.size > 0 || filters.tiers.size > 0 || filters.search.trim() !== '';
 
   return (
     <form className="panel" onSubmit={(event) => event.preventDefault()}>
@@ -89,6 +101,12 @@ export default function ControlPanel({ filters, counties, layers, onChange, onLa
           })}
         </div>
       </fieldset>
+
+      {hasFilters && (
+        <button type="button" className="panel__reset" onClick={onReset}>
+          清除篩選
+        </button>
+      )}
 
       <fieldset className="panel__block">
         <legend className="panel__label">圖層</legend>
