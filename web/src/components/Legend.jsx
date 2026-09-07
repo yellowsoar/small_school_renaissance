@@ -1,5 +1,5 @@
-import { RISK_TIERS } from '../config/index.js';
-import { shapeSvg } from '../lib/markerIcons.js';
+import { METHODOLOGY, RISK_TIERS } from '../config/index.js';
+import TierGlyph from './TierGlyph.jsx';
 
 export default function Legend({ year }) {
   return (
@@ -8,10 +8,9 @@ export default function Legend({ year }) {
       <ul className="legend__list">
         {RISK_TIERS.map((tier) => (
           <li key={tier.id}>
-            <span
-              className="legend__glyph"
-              dangerouslySetInnerHTML={{ __html: shapeSvg(tier.shape, tier.color, 16) }}
-            />
+            <span className="legend__glyph">
+              <TierGlyph shape={tier.shape} color={tier.color} size={16} />
+            </span>
             <span className="legend__label">{tier.label}</span>
             <span className="legend__range">{tier.describe()}</span>
           </li>
@@ -20,6 +19,7 @@ export default function Legend({ year }) {
       <p className="legend__note">
         熱區顏色代表 100 人以下學校的密集程度，紅 &gt; 橘 &gt; 黃。放大到街廓層級才會顯示個別學校點位。
       </p>
+      <p className="legend__note legend__note--caveat">{METHODOLOGY}</p>
     </aside>
   );
 }

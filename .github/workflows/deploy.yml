@@ -15,7 +15,9 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # Never cancel a deploy in flight: a half-published Pages site is worse than
+  # a queued one. Correctness checks live in ci.yml, which does cancel.
+  cancel-in-progress: false
 
 defaults:
   run:
@@ -25,15 +27,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version-file: web/.nvmrc
+          # v5 auto-caches when package.json declares a packageManager.
+          # There is no lockfile here yet, so opt out explicitly.
+          package-manager-cache: false
 
       # No lockfile is committed yet, so `npm ci` is not usable.
       # Switch to `npm ci` once web/package-lock.json lands.
       - run: npm install --no-audit --no-fund
+
+      - run: npm run lint
+
+      - run: npm test
 
       - run: npm run build
         env:

@@ -44,6 +44,7 @@
 
 # Directories
 node_modules/
+web/coverage/
 web/dist/
 
 # Extensions

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap');
+/* Fonts are linked from index.html so they do not sit behind a CSS import. */
 
 :root {
   --ink: #16211f;
@@ -73,7 +73,7 @@ a {
   color: var(--ink-soft);
 }
 
-.topbar__toggle {
+.pill-button {
   padding: 8px 16px;
   font: inherit;
   font-size: 14px;
@@ -84,9 +84,14 @@ a {
   cursor: pointer;
 }
 
-.topbar__toggle:hover {
+.pill-button:hover {
   color: var(--card);
   background: var(--accent);
+}
+
+.pill-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .summary {
@@ -132,6 +137,45 @@ a {
 
 .state--error {
   color: var(--danger);
+}
+
+.state--error p {
+  margin: 0 0 12px;
+}
+
+.stage__empty {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  z-index: 550;
+  margin: 0;
+  padding: 10px 18px;
+  transform: translateX(-50%);
+  font-size: 14px;
+  color: var(--ink-soft);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+}
+
+.stage__empty-reset {
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--accent);
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.stage__empty-reset:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ---------- sidebar ---------- */
@@ -241,6 +285,13 @@ a {
   cursor: pointer;
 }
 
+.chip:focus-visible,
+.switch input:focus-visible,
+.panel__block input[type='range']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .chip[data-active='true'] {
   color: #fff;
   background: var(--chip, var(--accent));
@@ -250,6 +301,23 @@ a {
 .chip--plain[data-active='true'] {
   background: var(--accent);
   border-color: var(--accent);
+}
+
+.panel__reset {
+  justify-self: start;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.panel__reset:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .switches {
@@ -311,6 +379,11 @@ a {
   color: var(--ink-soft);
 }
 
+.legend__note--caveat {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
 /* ---------- popup ---------- */
 
 .school-marker {
@@ -351,9 +424,35 @@ a {
   font-size: 13px;
 }
 
+.popup__headline--muted {
+  color: var(--ink-soft);
+  background: var(--paper);
+}
+
 .popup__headline strong {
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 22px;
+}
+
+.spark {
+  margin: 0 0 12px;
+}
+
+.spark__chart {
+  display: block;
+  /* Scales down uniformly on a narrow popup; never stretched, which would
+     turn the highlight dot into an ellipse. */
+  max-width: 100%;
+  height: auto;
+}
+
+.spark__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--ink-soft);
 }
 
 .popup__grid {
@@ -389,10 +488,15 @@ a {
   color: var(--ink-soft);
 }
 
-.popup__link {
-  display: inline-block;
-  margin-top: 8px;
+.popup__links {
+  display: flex;
+  gap: 14px;
+  margin: 8px 0 0;
   font-size: 13px;
+}
+
+.popup__links:empty {
+  display: none;
 }
 
 /* ---------- footer ---------- */

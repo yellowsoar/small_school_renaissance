@@ -82,8 +82,13 @@ export const filterSchools = (schools, { year, counties, tiers, search }) => {
     }
 
     if (needle) {
-      const haystack = `${school.name}${school.county}${school.town}`.toLowerCase();
-      if (!haystack.includes(needle)) return false;
+      // Each field is tested on its own. Concatenating them first would let a
+      // term straddle two fields, so "插角國小南投縣" would match a 南投縣 school
+      // named 插角國小 even though nobody would ever type that as one name.
+      const matches = [school.name, school.county, school.town].some((field) =>
+        field.toLowerCase().includes(needle),
+      );
+      if (!matches) return false;
     }
 
     return true;

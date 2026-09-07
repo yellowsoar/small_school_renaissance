@@ -1,24 +1,24 @@
 import { useMemo, useReducer, useState } from 'react';
-import { BASE_YEAR, PROJECTION_YEARS, REFERENCE_YEAR } from './config/index.js';
+import { BASE_YEAR, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
 import { filterSchools, summarize } from './lib/schools.js';
 import { useSchoolData } from './hooks/useSchoolData.js';
+import { useUrlFilters } from './hooks/useUrlFilters.js';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import SchoolMap from './components/SchoolMap.jsx';
 import ControlPanel from './components/ControlPanel.jsx';
 import SummaryBar from './components/SummaryBar.jsx';
 import Legend from './components/Legend.jsx';
 
-const initialFilters = {
-  year: PROJECTION_YEARS.at(-1),
-  counties: new Set(),
-  tiers: new Set(),
-  search: '',
-};
-
 const merge = (state, patch) => ({ ...state, ...patch });
 
 export default function App() {
-  const { status, schools, counties, error } = useSchoolData();
-  const [filters, setFilters] = useReducer(merge, initialFilters);
+  const { status, schools, counties, error, reload } = useSchoolData();
+
+  // Stable for the lifetime of a loaded dataset, which is what lets
+  // useUrlFilters re-validate the URL's counties exactly once.
+  const countySet = useMemo(() => (counties.length ? new Set(counties) : null), [counties]);
+
+  const [filters, setFilters, resetFilters] = useUrlFilters(countySet);
   const [layers, setLayers] = useReducer(merge, { heatmap: true, markers: true });
   const [panelOpen, setPanelOpen] = useState(true);
 
@@ -38,11 +38,12 @@ export default function App() {
         {status === 'ready' && <SummaryBar totals={totals} year={filters.year} />}
         <button
           type="button"
-          className="topbar__toggle"
+          className="pill-button"
           aria-expanded={panelOpen}
+          aria-controls="sidebar"
           onClick={() => setPanelOpen((open) => !open)}
         >
-          {panelOpen ? '收合篩選' : '展開篩選'}
+          {panelOpen ? '收合側欄' : '展開側欄'}
         </button>
       </header>
 
@@ -54,27 +55,43 @@ export default function App() {
         )}
 
         {status === 'error' && (
-          <p className="state state--error" role="alert">
-            {error?.message ?? '資料載入失敗'}
-            <br />
-            <small>請先執行 <code>npm run fetch:data</code> 取得資料集。</small>
-          </p>
+          <div className="state state--error" role="alert">
+            <p>{error?.message ?? '資料載入失敗'}</p>
+            <button type="button" className="pill-button" onClick={reload}>
+              重新載入
+            </button>
+          </div>
         )}
 
         {status === 'ready' && (
-          <>
+          <ErrorBoundary>
             <SchoolMap schools={visible} year={filters.year} layers={layers} />
-            <aside className="sidebar">
+
+            {visible.length === 0 && (
+              <p className="stage__empty" role="status">
+                目前的篩選條件沒有符合的學校。
+                <button
+                  type="button"
+                  className="stage__empty-reset"
+                  onClick={resetFilters}
+                >
+                  清除篩選
+                </button>
+              </p>
+            )}
+
+            <aside id="sidebar" className="sidebar">
               <ControlPanel
                 filters={filters}
                 counties={counties}
                 layers={layers}
                 onChange={setFilters}
                 onLayers={setLayers}
+                onReset={resetFilters}
               />
               <Legend year={filters.year} />
             </aside>
-          </>
+          </ErrorBoundary>
         )}
       </main>
 

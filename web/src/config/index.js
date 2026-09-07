@@ -69,8 +69,6 @@ export const RISK_TIERS = [
   },
 ];
 
-export const TIER_BY_ID = Object.fromEntries(RISK_TIERS.map((tier) => [tier.id, tier]));
-
 /** Schools at or below this projected headcount feed the density heatmap. */
 export const HEATMAP_THRESHOLD = 100;
 
@@ -78,6 +76,15 @@ export const HEATMAP_OPTIONS = {
   radius: 45,
   blur: 22,
   minOpacity: 0.35,
-  maxZoom: 12,
+  /** Zoom at which a point reaches full intensity; past MAP.markerZoom the
+   *  individual markers take over, so the heat stops gaining contrast. */
+  maxZoom: MAP.markerZoom,
   gradient: { 0.2: '#ffd166', 0.5: '#f07300', 0.85: '#d7263d' },
 };
+
+/**
+ * How the projections were produced upstream, stated in the UI so the numbers
+ * are not read as a forecast of actual school closures.
+ */
+export const METHODOLOGY =
+  '推估值取自上游資料集，以 113 與 107 學年度的學生人數變化趨勢外推，未計入遷徙、新生兒數與學區調整。僅供風險排序參考，非廢校預測。';

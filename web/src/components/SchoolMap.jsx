@@ -11,7 +11,6 @@ export default function SchoolMap({ schools, year, layers }) {
       zoom={MAP.zoom}
       minZoom={MAP.minZoom}
       maxZoom={MAP.maxZoom}
-      preferCanvas
       scrollWheelZoom
     >
       <TileLayer
