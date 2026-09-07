@@ -47,6 +47,12 @@ npm run coverage   # 覆蓋率報告
 
 測試設定放在 `vitest.config.js`，與 `vite.config.js` 分開：這些是純函式，不需要 React plugin 也不需要 Pages 的 base path。`markerIcons.js` 不列入覆蓋率，它只是把 `shapes.js` 接到 Leaflet，需要 DOM 才跑得起來。
 
+## Lint
+
+`eslint.config.js` 把瀏覽器與 Node 兩組 globals 分開，元件裡誤用 `process.env`、或建置腳本裡誤用 `document` 都會被抓到。
+
+另外開了 `react/jsx-uses-vars`：`no-unused-vars` 看不懂 `<Foo />` 算不算用到 `Foo`，少了這條規則，每個元件 import 都會被判成死碼。有了它，`varsIgnorePattern` 才能維持嚴格的 `'^_'`，而不必退回「凡是大寫開頭一律放行」——後者會讓真正沒用到的元件 import 永遠不被發現。
+
 ## 資料來源
 
 `scripts/fetch-data.js` 會抓 `113-107.csv`（約 2,600 所國小）到 `public/data/`，因此 CSV 不進版控。

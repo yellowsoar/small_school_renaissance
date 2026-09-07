@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
@@ -10,7 +10,7 @@ import { HEATMAP_OPTIONS, HEATMAP_THRESHOLD } from '../config/index.js';
  */
 export default function HeatmapLayer({ schools, year, visible }) {
   const map = useMap();
-  const layerRef = useRef(null);
+  const [layer, setLayer] = useState(null);
 
   const points = useMemo(() => {
     const result = [];
@@ -23,25 +23,26 @@ export default function HeatmapLayer({ schools, year, visible }) {
     return result;
   }, [schools, year]);
 
-  // Create once, then feed it new points. Rebuilding the layer on every year
-  // change makes the slider flicker as the canvas is torn down and re-added.
+  // Create the layer once per toggle, empty. Holding it in state rather than a
+  // ref is what lets the effect below depend on the actual instance, so a
+  // re-shown layer gets repopulated without lying about its dependencies.
   useEffect(() => {
     if (!visible) return undefined;
 
-    const layer = L.heatLayer([], HEATMAP_OPTIONS).addTo(map);
-    layerRef.current = layer;
+    const heat = L.heatLayer([], HEATMAP_OPTIONS).addTo(map);
+    setLayer(heat);
 
     return () => {
-      layerRef.current = null;
-      layer.remove();
+      setLayer(null);
+      heat.remove();
     };
   }, [map, visible]);
 
-  // `visible` belongs in these deps: re-showing the layer creates a fresh,
-  // empty one, and only this effect puts the points back into it.
+  // Feed points in separately: rebuilding the layer on every year change tears
+  // down and re-adds the canvas, which makes the slider flicker.
   useEffect(() => {
-    layerRef.current?.setLatLngs(points);
-  }, [points, visible]);
+    layer?.setLatLngs(points);
+  }, [layer, points]);
 
   return null;
 }
