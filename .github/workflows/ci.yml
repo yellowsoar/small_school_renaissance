@@ -23,11 +23,14 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version-file: web/.nvmrc
+          # v5 auto-caches when package.json declares a packageManager.
+          # There is no lockfile here yet, so opt out explicitly.
+          package-manager-cache: false
 
       # No lockfile is committed yet, so `npm ci` is not usable.
       # Switch to `npm ci` once web/package-lock.json lands.
