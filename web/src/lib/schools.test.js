@@ -271,6 +271,12 @@ describe('filterSchools', () => {
     expect(ids({ search: '不存在的學校' })).toEqual([]);
   });
 
+  it('does not let a search term straddle two fields', () => {
+    // 'c' is 市立插角國小 in 南投縣: the term spans the end of the name and the
+    // start of the county, which a naive concatenation would match.
+    expect(ids({ search: '插角國小南投縣' })).toEqual([]);
+  });
+
   it('combines filters as AND', () => {
     expect(ids({ counties: new Set(['新北市']), tiers: new Set(['closed']) })).toEqual(['a']);
     expect(ids({ counties: new Set(['南投縣']), tiers: new Set(['closed']) })).toEqual([]);
