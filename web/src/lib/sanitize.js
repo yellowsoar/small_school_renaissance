@@ -5,7 +5,7 @@
  * schemes when rendering user-supplied or upstream-sourced URLs as
  * href attributes.
  *
- * @param {string} url
+ * @param {*} url - any value; non-strings are rejected gracefully.
  * @returns {boolean}
  */
 export const isSafeUrl = (url) => {

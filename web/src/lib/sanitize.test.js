@@ -10,6 +10,7 @@ describe('isSafeUrl', () => {
     ['https://school.ntpc.edu.tw/path?q=1&r=2#anchor'],
     ['HTTP://EXAMPLE.COM'],
     ['https://example.com:8080/'],
+    ['https://user:pass@example.com/dashboard'],
   ])('allows safe URL: %s', (url) => {
     expect(isSafeUrl(url)).toBe(true);
   });
@@ -23,6 +24,8 @@ describe('isSafeUrl', () => {
     ['data:text/html,<script>alert(1)</script>'],
     ['vbscript:MsgBox("xss")'],
     ['blob:https://example.com/some-uuid'],
+    ['file:///etc/passwd'],
+    ['ftp://example.com/pub/file.txt'],
   ])('rejects dangerous scheme: %s', (url) => {
     expect(isSafeUrl(url)).toBe(false);
   });
