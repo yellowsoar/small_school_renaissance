@@ -2,9 +2,10 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ command, mode }) => {
-  // The '' prefix loads unprefixed vars from .env (see .env.example).
-  // A real environment variable always wins over the file.
-  const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+  // Only load BASE_* vars from .env — avoid pulling in every variable,
+  // which would bypass Vite's VITE_ security boundary and risk leaking
+  // secrets added to .env in the future (see #4).
+  const env = { ...loadEnv(mode, process.cwd(), 'BASE_'), ...process.env };
 
   // GitHub Pages serves yellowsoar/small_school_renaissance under /<repo-name>/.
   // Set BASE_PATH=/ for a custom domain or a differently named fork.
