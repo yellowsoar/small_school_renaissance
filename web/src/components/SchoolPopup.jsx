@@ -1,4 +1,5 @@
 import { BASE_YEAR, REFERENCE_YEAR } from '../config/index.js';
+import { isSafeUrl } from '../lib/sanitize.js';
 import TrendSparkline from './TrendSparkline.jsx';
 
 const integer = new Intl.NumberFormat('zh-Hant-TW');
@@ -71,7 +72,7 @@ export default function SchoolPopup({ school, year, tier }) {
       {school.address && <p className="popup__meta">{school.address}</p>}
 
       <p className="popup__links">
-        {school.website && (
+        {school.website && isSafeUrl(school.website) && (
           <a href={school.website} target="_blank" rel="noreferrer">
             學校網站 ↗
           </a>
