@@ -56,18 +56,17 @@ convert_ods_to_csv() {
 }
 
 remove_rows_mismatch_header() {
+	local tmpfile
+	tmpfile=$(mktemp "${1}.XXXXXX")
+	trap 'rm -f "$tmpfile"' RETURN
+
+	local expected_commas
+	expected_commas=$(head -n 1 "${1}" | tr -dc ',' | wc -c)
+
 	echo "⚙️ Removing rows that its column mismatches the header..." \
-		&& sed -n '/\(.*,\)\{'"$(
-			head -n 1 "${1}" \
-				| tr -dc ',' \
-				| wc -c
-		)"',\}/p' \
-			"${1}" \
-			>temp.csv \
-		&& mv -f \
-			temp.csv \
-			"${1}" \
-			&& echo "✅ Done for ${1}"
+		&& sed -n "/\(.*,\)\{${expected_commas},\}/p" "${1}" > "$tmpfile" \
+		&& mv -f "$tmpfile" "${1}" \
+		&& echo "✅ Done for ${1}"
 }
 
 main() {
