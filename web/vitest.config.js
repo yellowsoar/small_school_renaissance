@@ -1,17 +1,24 @@
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 
-// Kept separate from vite.config.js: the tests target pure modules and do not
-// need the React plugin or the GitHub Pages base path.
+// Includes the React plugin and happy-dom so that Hook and Component tests
+// can use renderHook / render with a simulated DOM.
 export default defineConfig({
+  plugins: [react()],
   test: {
-    environment: 'node',
-    include: ['src/**/*.test.js', 'scripts/**/*.test.js'],
+    environment: 'happy-dom',
+    // Explicit setup replaces globals: true — auto-cleanup without polluting
+    // the global namespace.  Every test file keeps its own vitest imports.
+    setupFiles: ['./vitest.setup.js'],
+    include: ['src/**/*.test.{js,jsx}', 'scripts/**/*.test.js'],
+    // Build-time scripts stay in Node where process and fs are native.
+    environmentMatchGlobs: [['scripts/**', 'node']],
     coverage: {
       provider: 'v8',
-      include: ['src/lib/**'],
+      include: ['src/**'],
       // markerIcons only wires shapes.js into Leaflet, which needs a DOM.
       // Its geometry is covered by shapes.test.js.
-      exclude: ['src/lib/markerIcons.js'],
+      exclude: ['src/lib/markerIcons.js', 'src/**/*.test.{js,jsx}'],
       reporter: ['text', 'html'],
     },
   },
