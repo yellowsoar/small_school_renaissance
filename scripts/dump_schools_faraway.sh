@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 NAME_DIR=school_list_far
 FILE_NAME=faraway_new
