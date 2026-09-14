@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 NAME_DIR=school_base_stat
 FILE_NAME=_basec
