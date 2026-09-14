@@ -39,4 +39,12 @@ describe('SummaryBar', () => {
 
     expect(screen.getAllByText('0')).toHaveLength(4);
   });
+
+  it('formats large numbers with thousands separators', () => {
+    const large = { schools: 1234567, closing: 0, atRisk: 0, students: 9876543 };
+    render(<SummaryBar totals={large} year={130} />);
+
+    expect(screen.getByText('1,234,567')).toBeTruthy();
+    expect(screen.getByText('9,876,543')).toBeTruthy();
+  });
 });

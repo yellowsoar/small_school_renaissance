@@ -37,6 +37,22 @@ describe('useUrlFilters', () => {
     expect(filters.search).toBe('國小');
   });
 
+  it('reads multiple comma-separated counties from the URL', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?county=%E8%87%BA%E5%8C%97%E5%B8%82,%E6%96%B0%E5%8C%97%E5%B8%82,%E5%8D%97%E6%8A%95%E7%B8%A3',
+    );
+
+    const { result } = renderHook(() => useUrlFilters());
+    const [filters] = result.current;
+
+    expect(filters.counties.size).toBe(3);
+    expect(filters.counties.has('臺北市')).toBe(true);
+    expect(filters.counties.has('新北市')).toBe(true);
+    expect(filters.counties.has('南投縣')).toBe(true);
+  });
+
   it('falls back to defaults for out-of-range year', () => {
     window.history.replaceState(null, '', '/?year=999');
 
@@ -122,5 +138,18 @@ describe('useUrlFilters', () => {
       expect(result.current[0].counties.has('不存在')).toBe(false);
     });
     expect(result.current[0].counties.has('臺北市')).toBe(true);
+  });
+
+  it('syncs filters on popstate (back/forward navigation)', () => {
+    const { result } = renderHook(() => useUrlFilters());
+
+    // Simulate the browser landing on a URL with filters via back/forward.
+    window.history.replaceState(null, '', '/?year=118&q=烏來');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(result.current[0].year).toBe(118);
+    expect(result.current[0].search).toBe('烏來');
   });
 });

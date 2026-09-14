@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import SchoolPopup from './SchoolPopup.jsx';
+import { BASE_YEAR, REFERENCE_YEAR } from '../config/index.js';
 
-// Stub the sparkline so this suite stays focused on SchoolPopup logic.
 vi.mock('./TrendSparkline.jsx', () => ({
   default: () => <div data-testid="sparkline" />,
 }));
@@ -25,25 +25,9 @@ const makeSchool = (overrides = {}) => ({
   reference: 180,
   delta: -30,
   deltaRatio: -0.167,
-  projections: new Map([
-    [114, 140],
-    [115, 130],
-    [116, 120],
-    [117, 110],
-    [118, 100],
-    [119, 90],
-    [120, 80],
-    [121, 70],
-    [122, 60],
-    [123, 50],
-    [124, 40],
-    [125, 30],
-    [126, 20],
-    [127, 10],
-    [128, 5],
-    [129, 2],
-    [130, 0],
-  ]),
+  projections: new Map(
+    Array.from({ length: 17 }, (_, i) => [114 + i, Math.max(0, 150 - i * 10)]),
+  ),
   unprojected: false,
   ...overrides,
 });
@@ -55,19 +39,20 @@ const tier = { id: 'critical', label: '極高風險', color: '#d7263d', max: 30 
 /* ------------------------------------------------------------------ */
 
 describe('SchoolPopup', () => {
-  it('displays school name and location', () => {
+  it('displays school name, location, and remoteness', () => {
     render(<SchoolPopup school={makeSchool()} year={130} tier={tier} />);
 
     expect(screen.getByText('測試國小')).toBeTruthy();
     expect(screen.getByText(/臺北市/)).toBeTruthy();
     expect(screen.getByText(/信義區/)).toBeTruthy();
+    expect(screen.getByText(/一般地區/)).toBeTruthy();
   });
 
   it('shows the projected headcount for the selected year', () => {
     render(<SchoolPopup school={makeSchool()} year={125} tier={tier} />);
 
-    // year 125 → projected = 30
-    expect(screen.getByText('30')).toBeTruthy();
+    // year 125 → index 11 → 150 - 110 = 40
+    expect(screen.getByText('40')).toBeTruthy();
     expect(screen.getByText('125 學年推估')).toBeTruthy();
   });
 
@@ -81,7 +66,46 @@ describe('SchoolPopup', () => {
 
     render(<SchoolPopup school={school} year={130} tier={null} />);
 
-    expect(screen.getByText(/缺少.*學年對照資料/)).toBeTruthy();
+    expect(screen.getByText(new RegExp(`缺少 ${REFERENCE_YEAR} 學年對照資料`))).toBeTruthy();
+  });
+
+  it('shows "無推估" when tier is null but school is projected', () => {
+    render(<SchoolPopup school={makeSchool()} year={130} tier={null} />);
+
+    expect(screen.getByText(/無推估/)).toBeTruthy();
+  });
+
+  it('renders enrollment and reference stats in the detail grid', () => {
+    render(<SchoolPopup school={makeSchool()} year={130} tier={tier} />);
+
+    expect(screen.getByText(`${BASE_YEAR} 學年`)).toBeTruthy();
+    expect(screen.getByText('150')).toBeTruthy();
+    expect(screen.getByText(`${REFERENCE_YEAR} 學年`)).toBeTruthy();
+    expect(screen.getByText('180')).toBeTruthy();
+  });
+
+  it('renders negative delta with sign and ratio as percentage', () => {
+    render(<SchoolPopup school={makeSchool()} year={130} tier={tier} />);
+
+    // delta = -30 → "-30", deltaRatio = -0.167 → "-16.7%"
+    expect(screen.getByText('-30')).toBeTruthy();
+    expect(screen.getByText('-16.7%')).toBeTruthy();
+  });
+
+  it('renders positive delta with "+" prefix', () => {
+    const school = makeSchool({ delta: 25, deltaRatio: 0.167 });
+    render(<SchoolPopup school={school} year={130} tier={tier} />);
+
+    expect(screen.getByText('+25')).toBeTruthy();
+    expect(screen.getByText('+16.7%')).toBeTruthy();
+  });
+
+  it('shows "—" dash when delta values are null', () => {
+    const school = makeSchool({ delta: null, deltaRatio: null, reference: null });
+    render(<SchoolPopup school={school} year={130} tier={tier} />);
+
+    const dashes = screen.getAllByText('—');
+    expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders a safe website link', () => {

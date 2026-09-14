@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ControlPanel from './ControlPanel.jsx';
+import { RISK_TIERS, PROJECTION_YEARS } from '../config/index.js';
 
 /* ------------------------------------------------------------------ */
 /*  Fixtures                                                           */
@@ -41,14 +42,12 @@ describe('ControlPanel', () => {
     expect(output.textContent).toBe('130');
   });
 
-  it('renders all five tier chips', () => {
+  it('renders all tier chips from config', () => {
     renderPanel();
 
-    expect(screen.getByText('推估歸零')).toBeTruthy();
-    expect(screen.getByText('極高風險')).toBeTruthy();
-    expect(screen.getByText('高風險')).toBeTruthy();
-    expect(screen.getByText('需關注')).toBeTruthy();
-    expect(screen.getByText('相對穩定')).toBeTruthy();
+    for (const tier of RISK_TIERS) {
+      expect(screen.getByText(tier.label)).toBeTruthy();
+    }
   });
 
   it('calls onChange when a tier chip is clicked', () => {
@@ -60,6 +59,18 @@ describe('ControlPanel', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     const patch = onChange.mock.calls[0][0];
     expect(patch.tiers.has('critical')).toBe(true);
+  });
+
+  it('marks an active tier chip with aria-pressed', () => {
+    renderPanel({
+      filters: { ...defaultFilters, tiers: new Set(['critical']) },
+    });
+
+    const chip = screen.getByText('極高風險');
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+
+    const stable = screen.getByText('相對穩定');
+    expect(stable.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('renders county chips', () => {
@@ -81,6 +92,36 @@ describe('ControlPanel', () => {
     expect(patch.counties.has('新北市')).toBe(true);
   });
 
+  it('marks an active county chip with aria-pressed', () => {
+    renderPanel({
+      filters: { ...defaultFilters, counties: new Set(['桃園市']) },
+    });
+
+    const active = screen.getByText('桃園市');
+    expect(active.getAttribute('aria-pressed')).toBe('true');
+
+    const inactive = screen.getByText('臺北市');
+    expect(inactive.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('calls onChange with numeric year when the slider changes', () => {
+    const onChange = vi.fn();
+    renderPanel({ onChange });
+
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '120' } });
+
+    expect(onChange).toHaveBeenCalledWith({ year: 120 });
+  });
+
+  it('constrains the slider range to projection years', () => {
+    renderPanel();
+
+    const slider = screen.getByRole('slider');
+    expect(slider.getAttribute('min')).toBe(String(PROJECTION_YEARS.at(0)));
+    expect(slider.getAttribute('max')).toBe(String(PROJECTION_YEARS.at(-1)));
+  });
+
   it('shows reset button when search filter is active', () => {
     renderPanel({ filters: { ...defaultFilters, search: '國小' } });
 
@@ -90,6 +131,14 @@ describe('ControlPanel', () => {
   it('shows reset button when tier filter is active', () => {
     renderPanel({
       filters: { ...defaultFilters, tiers: new Set(['critical']) },
+    });
+
+    expect(screen.getByText('清除篩選')).toBeTruthy();
+  });
+
+  it('shows reset button when county filter is active', () => {
+    renderPanel({
+      filters: { ...defaultFilters, counties: new Set(['臺北市']) },
     });
 
     expect(screen.getByText('清除篩選')).toBeTruthy();
@@ -133,8 +182,6 @@ describe('ControlPanel', () => {
     const onLayers = vi.fn();
     renderPanel({ onLayers });
 
-    // Target the checkbox directly. Using the exact accessible name
-    // derived from the wrapping <label> text.
     const heatmapCheckbox = screen.getByRole('checkbox', {
       name: '熱區圖',
     });

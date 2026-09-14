@@ -66,6 +66,41 @@ describe('useSchoolData', () => {
     );
   });
 
+  it('transitions to error when parseSchools throws', async () => {
+    fetchWithTimeout.mockResolvedValue({
+      text: () => Promise.resolve('bad-csv'),
+    });
+    parseSchools.mockImplementation(() => {
+      throw new TypeError('Unexpected column header');
+    });
+
+    const { result } = renderHook(() => useSchoolData('/fake.csv'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error.message).toContain('資料載入失敗');
+    expect(result.current.error.message).toContain('Unexpected column header');
+  });
+
+  it('re-fetches when the URL changes', async () => {
+    fetchWithTimeout.mockResolvedValue({
+      text: () => Promise.resolve('csv'),
+    });
+    parseSchools.mockReturnValue({ schools: mockSchools, counties: mockCounties });
+
+    const { result, rerender } = renderHook(
+      ({ url }) => useSchoolData(url),
+      { initialProps: { url: '/a.csv' } },
+    );
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+
+    rerender({ url: '/b.csv' });
+
+    await waitFor(() => expect(fetchWithTimeout).toHaveBeenCalledTimes(2));
+    expect(fetchWithTimeout.mock.calls[1][0]).toBe('/b.csv');
+  });
+
   it('reload triggers a new fetch attempt', async () => {
     fetchWithTimeout
       .mockRejectedValueOnce(new TypeError('fail'))

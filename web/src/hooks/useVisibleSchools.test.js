@@ -47,8 +47,13 @@ describe('useVisibleSchools', () => {
     vi.clearAllMocks();
     mockMap.getZoom.mockReturnValue(12);
     mockBounds.pad.mockReturnValue(mockBounds);
-    // Only schools at lat >= 24.0 are "in bounds".
     mockBounds.contains.mockImplementation((pos) => pos[0] >= 24.0);
+    mockMap.on.mockImplementation((event, handler) => {
+      listeners[event] = handler;
+    });
+    mockMap.off.mockImplementation((event) => {
+      delete listeners[event];
+    });
     Object.keys(listeners).forEach((key) => delete listeners[key]);
   });
 
@@ -57,6 +62,18 @@ describe('useVisibleSchools', () => {
 
     expect(result.current).toHaveLength(2);
     expect(result.current.map((s) => s.id)).toEqual(['1', '2']);
+  });
+
+  it('pads the bounding box by the default padding value', () => {
+    renderHook(() => useVisibleSchools(schools, 11));
+
+    expect(mockBounds.pad).toHaveBeenCalledWith(0.25);
+  });
+
+  it('pads the bounding box by a custom padding value', () => {
+    renderHook(() => useVisibleSchools(schools, 11, 0.5));
+
+    expect(mockBounds.pad).toHaveBeenCalledWith(0.5);
   });
 
   it('returns an empty array below minZoom', () => {
@@ -71,7 +88,6 @@ describe('useVisibleSchools', () => {
     const { result } = renderHook(() => useVisibleSchools(schools, 11));
     expect(result.current).toHaveLength(2);
 
-    // Simulate zoom out below minZoom.
     mockMap.getZoom.mockReturnValue(9);
     act(() => {
       listeners.moveend?.();
@@ -95,7 +111,6 @@ describe('useVisibleSchools', () => {
     );
     expect(result.current).toHaveLength(2);
 
-    // Pass only the out-of-bounds school.
     rerender({ s: [schools[2]] });
     expect(result.current).toHaveLength(0);
   });

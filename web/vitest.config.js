@@ -7,9 +7,9 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'happy-dom',
-    // Expose describe/it/expect/afterEach as globals so that
-    // @testing-library/react’s auto-cleanup registers correctly.
-    globals: true,
+    // Explicit setup replaces globals: true — auto-cleanup without polluting
+    // the global namespace.  Every test file keeps its own vitest imports.
+    setupFiles: ['./vitest.setup.js'],
     include: ['src/**/*.test.{js,jsx}', 'scripts/**/*.test.js'],
     // Build-time scripts stay in Node where process and fs are native.
     environmentMatchGlobs: [['scripts/**', 'node']],
