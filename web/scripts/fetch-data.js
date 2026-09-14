@@ -17,6 +17,8 @@ import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { fetchWithRetry } from './fetch-utils.js';
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 // Node >= 20.12 can read .env natively; missing file is not an error here.
@@ -47,19 +49,20 @@ const exists = async (path) => {
 };
 
 if (!force && (await exists(target))) {
-  console.log('✅ dataset already present, skipping download (use --force to refresh)');
+  console.log('\u2705 dataset already present, skipping download (use --force to refresh)');
   process.exit(0);
 }
 
-console.log(`⚙️  downloading ${SOURCE_URL}`);
+console.log(`\u2699\ufe0f  downloading ${SOURCE_URL}`);
 
-const response = await fetch(SOURCE_URL);
-if (!response.ok) {
-  console.error(`❌ download failed: ${response.status} ${response.statusText}`);
+try {
+  const response = await fetchWithRetry(SOURCE_URL);
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, Buffer.from(await response.arrayBuffer()));
+  console.log(`\u2705 saved to ${target}`);
+} catch (err) {
+  const detail =
+    err.name === 'TimeoutError' ? 'timeout after 30s' : err.message;
+  console.error(`\u274c download failed after 3 attempts: ${detail}`);
   process.exit(1);
 }
-
-await mkdir(dirname(target), { recursive: true });
-await writeFile(target, Buffer.from(await response.arrayBuffer()));
-
-console.log(`✅ saved to ${target}`);
