@@ -32,13 +32,17 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: web/.nvmrc
-          # v5 auto-caches when package.json declares a packageManager.
-          # There is no lockfile here yet, so opt out explicitly.
-          package-manager-cache: false
+          # v5 auto-caches when a lockfile is present.
 
-      # No lockfile is committed yet, so `npm ci` is not usable.
-      # Switch to `npm ci` once web/package-lock.json lands.
-      - run: npm install --no-audit --no-fund
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "::warning::package-lock.json not found; generating before install"
+            npm install --package-lock-only --no-audit
+            npm ci
+          fi
 
       - run: npm run lint
 
