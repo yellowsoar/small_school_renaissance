@@ -32,7 +32,6 @@ check_file() {
 
 download_file() {
 	wget \
-		-N \
 		-O "${2}" \
 		--quiet \
 		"${1}"
