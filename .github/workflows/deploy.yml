@@ -32,7 +32,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: web/.nvmrc
-          # v5 auto-caches when a lockfile is present.
+          # v5 auto-caches when package.json declares a packageManager field.
+          # Add "packageManager": "npm@<version>" to enable caching.
 
       - name: Install dependencies
         run: |
