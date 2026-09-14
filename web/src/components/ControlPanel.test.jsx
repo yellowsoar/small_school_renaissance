@@ -129,11 +129,15 @@ describe('ControlPanel', () => {
     expect(screen.getByText('學校點位')).toBeTruthy();
   });
 
-  it('calls onLayers when a layer toggle is clicked', () => {
+  it('calls onLayers when a layer checkbox is toggled', () => {
     const onLayers = vi.fn();
     renderPanel({ onLayers });
 
-    fireEvent.click(screen.getByText('熱區圖'));
+    // Click the actual checkbox, not the label span, because fireEvent
+    // does not trigger the browser’s implicit label activation.
+    const heatmapCheckbox = screen.getByRole('checkbox', { name: /熱區圖/ });
+    fireEvent.click(heatmapCheckbox);
+
     expect(onLayers).toHaveBeenCalledTimes(1);
   });
 });
