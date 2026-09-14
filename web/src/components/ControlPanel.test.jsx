@@ -133,9 +133,11 @@ describe('ControlPanel', () => {
     const onLayers = vi.fn();
     renderPanel({ onLayers });
 
-    // Click the actual checkbox, not the label span, because fireEvent
-    // does not trigger the browser’s implicit label activation.
-    const heatmapCheckbox = screen.getByRole('checkbox', { name: /熱區圖/ });
+    // Target the checkbox directly. Using the exact accessible name
+    // derived from the wrapping <label> text.
+    const heatmapCheckbox = screen.getByRole('checkbox', {
+      name: '熱區圖',
+    });
     fireEvent.click(heatmapCheckbox);
 
     expect(onLayers).toHaveBeenCalledTimes(1);

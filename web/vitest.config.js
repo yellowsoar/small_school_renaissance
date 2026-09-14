@@ -7,6 +7,9 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'happy-dom',
+    // Expose describe/it/expect/afterEach as globals so that
+    // @testing-library/react’s auto-cleanup registers correctly.
+    globals: true,
     include: ['src/**/*.test.{js,jsx}', 'scripts/**/*.test.js'],
     // Build-time scripts stay in Node where process and fs are native.
     environmentMatchGlobs: [['scripts/**', 'node']],
