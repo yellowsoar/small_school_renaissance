@@ -44,3 +44,23 @@ export const normalizeUrl = (url) => {
  * @returns {boolean}
  */
 export const isSafeUrl = (url) => normalizeUrl(url) !== null;
+
+/**
+ * Extracts the dialable main phone number from a phone string,
+ * stripping extension markers (#, \uFF03, \u5206\u6A5F, ext) and everything after.
+ *
+ * Upstream CSV data from the Ministry of Education frequently includes
+ * extension information in the phone field using markers like #, \uFF03,
+ * \u5206\u6A5F, or ext. Including extension digits in a tel: link produces an
+ * unreachable number on mobile devices.
+ *
+ * @param {*} phone - any value; non-strings are rejected gracefully.
+ * @returns {string|null} Digits-only main number (may contain leading +),
+ *   or null if the input yields no digits.
+ */
+export const dialable = (phone) => {
+  if (typeof phone !== 'string' || !phone.trim()) return null;
+  const main = phone.split(/[#\uFF03]|\u5206\u6A5F|ext\.?\s*/i)[0];
+  const digits = main.replace(/[^\d+]/g, '');
+  return digits || null;
+};
