@@ -44,3 +44,29 @@ export const normalizeUrl = (url) => {
  * @returns {boolean}
  */
 export const isSafeUrl = (url) => normalizeUrl(url) !== null;
+
+/**
+ * Extracts the dialable main phone number from a phone string,
+ * stripping extension markers (#, ＃, 分機, ext) and everything after.
+ *
+ * Upstream CSV data from the Ministry of Education frequently includes
+ * extension information in the phone field using markers like #, ＃,
+ * 分機, or ext. Including extension digits in a tel: link produces an
+ * unreachable number on mobile devices.
+ *
+ * Note: RFC 3966 defines tel:+1234;ext=302 as the standard extension
+ * syntax, but Android and iOS support is inconsistent (Android treats
+ * the letters as dial-pad keys; iOS shows a non-obvious UI). Stripping
+ * the extension from the dialable number is the safest cross-platform
+ * approach.
+ *
+ * @param {*} phone - any value; non-strings are rejected gracefully.
+ * @returns {string|null} Digits-only main number (may contain leading +),
+ *   or null if the input yields no digits.
+ */
+export const dialable = (phone) => {
+  if (typeof phone !== 'string' || !phone.trim()) return null;
+  const main = phone.split(/[#＃]|分機|\bext\.?\s*/i)[0];
+  const digits = main.replace(/[^\d+]/g, '');
+  return digits || null;
+};

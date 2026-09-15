@@ -130,6 +130,31 @@ describe('SchoolPopup', () => {
     expect(phoneLink.getAttribute('href')).toBe('tel:0212345678');
   });
 
+  it('strips extension marker # from phone tel: link', () => {
+    const school = makeSchool({ phone: '(02) 2345-6789#302' });
+    render(<SchoolPopup school={school} year={130} tier={tier} />);
+
+    const phoneLink = screen.getByText('(02) 2345-6789#302');
+    expect(phoneLink.getAttribute('href')).toBe('tel:0223456789');
+  });
+
+  it('strips extension marker 分機 from phone tel: link', () => {
+    const school = makeSchool({ phone: '(02) 2345-6789 分機 302' });
+    render(<SchoolPopup school={school} year={130} tier={tier} />);
+
+    const phoneLink = screen.getByText('(02) 2345-6789 分機 302');
+    expect(phoneLink.getAttribute('href')).toBe('tel:0223456789');
+  });
+
+  it('hides phone link when phone yields no dialable digits', () => {
+    const school = makeSchool({ phone: '無電話' });
+    const { container } = render(
+      <SchoolPopup school={school} year={130} tier={tier} />,
+    );
+
+    expect(container.querySelector('a[href^="tel:"]')).toBeNull();
+  });
+
   it('displays the address', () => {
     render(<SchoolPopup school={makeSchool()} year={130} tier={tier} />);
 

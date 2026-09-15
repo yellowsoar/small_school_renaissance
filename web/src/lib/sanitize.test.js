@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSafeUrl, normalizeUrl } from './sanitize.js';
+import { isSafeUrl, normalizeUrl, dialable } from './sanitize.js';
 
 describe('isSafeUrl', () => {
   it.each([
@@ -101,5 +101,43 @@ describe('normalizeUrl', () => {
     ['/relative/path'],
   ])('returns null for an unparseable or relative URL: %s', (url) => {
     expect(normalizeUrl(url)).toBeNull();
+  });
+});
+
+describe('dialable', () => {
+  it.each([
+    ['02-12345678', '0212345678'],
+    ['(02) 2345-6789', '0223456789'],
+    ['+886-2-2345-6789', '+886223456789'],
+    ['0912345678', '0912345678'],
+  ])('extracts digits from plain phone: %s', (phone, expected) => {
+    expect(dialable(phone)).toBe(expected);
+  });
+
+  it.each([
+    ['(02) 2345-6789#302', '0223456789'],
+    ['(02) 2345-6789＃302', '0223456789'],
+    ['(02) 2345-6789 分機 302', '0223456789'],
+    ['(02) 2345-6789 ext 302', '0223456789'],
+    ['(02) 2345-6789 ext. 302', '0223456789'],
+    ['(02) 2345-6789 EXT 302', '0223456789'],
+    ['02-23456789#', '0223456789'],
+  ])('strips extension from phone: %s', (phone, expected) => {
+    expect(dialable(phone)).toBe(expected);
+  });
+
+  it.each([
+    [null],
+    [undefined],
+    [''],
+    ['   '],
+    [42],
+    [true],
+  ])('returns null for non-string or empty input: %j', (phone) => {
+    expect(dialable(phone)).toBeNull();
+  });
+
+  it('returns null when phone contains only non-digit characters', () => {
+    expect(dialable('無電話')).toBeNull();
   });
 });

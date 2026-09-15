@@ -1,5 +1,5 @@
 import { BASE_YEAR, REFERENCE_YEAR } from '../config/index.js';
-import { isSafeUrl, normalizeUrl } from '../lib/sanitize.js';
+import { isSafeUrl, normalizeUrl, dialable } from '../lib/sanitize.js';
 import TrendSparkline from './TrendSparkline.jsx';
 
 const integer = new Intl.NumberFormat('zh-Hant-TW');
@@ -77,9 +77,12 @@ export default function SchoolPopup({ school, year, tier }) {
             學校網站 ↗
           </a>
         )}
-        {school.phone && (
-          <a href={`tel:${school.phone.replace(/[^\d+]/g, '')}`}>{school.phone}</a>
-        )}
+        {school.phone && (() => {
+          const number = dialable(school.phone);
+          return number ? (
+            <a href={`tel:${number}`}>{school.phone}</a>
+          ) : null;
+        })()}
       </p>
     </div>
   );
