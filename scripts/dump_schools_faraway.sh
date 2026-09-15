@@ -41,18 +41,33 @@ wait_a_second() {
 	sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
 }
 
-convert_ods_to_csv() {
-	echo "⚙️ Converting ods to csv for ./${NAME_DIR}/${1}.ods" \
-		&& soffice \
-			--convert-to csv \
-			--outdir "./${NAME_DIR}" \
-			"./${NAME_DIR}/${1}.ods" \
-		&& echo "✅ File converted to ./${NAME_DIR}/${1}.csv" \
-		&& echo "⚙️ Handling csv header..." \
-		&& sed \
-			-i '/,,,,,/d' \
-			"./${NAME_DIR}/${1}.csv" \
-		&& echo "✅ Non header Content removed"
+# Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
+# Skips if CSV already exists. soffice supports all three formats.
+convert_to_csv_if_needed() {
+	local base="$1"
+	local csv_path="./${NAME_DIR}/${base}.csv"
+
+	[ -f "$csv_path" ] && return 0
+
+	local ext src
+	for ext in ods xlsx xls; do
+		src="./${NAME_DIR}/${base}.${ext}"
+		if [ -f "$src" ]; then
+			echo "⚙️ Converting ${ext} to csv for ${src}" \
+				&& soffice \
+					--convert-to csv \
+					--outdir "./${NAME_DIR}" \
+					"$src" \
+				&& echo "✅ File converted to ${csv_path}" \
+				&& echo "⚙️ Handling csv header..." \
+				&& sed \
+					-i '/,,,,,/d' \
+					"$csv_path" \
+				&& echo "✅ Non header Content removed"
+			return $?
+		fi
+	done
+	return 1
 }
 
 remove_rows_mismatch_header() {
@@ -85,11 +100,7 @@ main() {
 			wait_a_second
 		done
 
-		if [ -f "./${NAME_DIR}/${FULL_FILE_NAME}.ods" ] \
-			&& [ ! -f "./${NAME_DIR}/${FULL_FILE_NAME}.csv" ]; then
-			convert_ods_to_csv \
-				"${FULL_FILE_NAME}"
-		fi
+		convert_to_csv_if_needed "${FULL_FILE_NAME}" || true
 
 		if [ -f "./${NAME_DIR}/${FULL_FILE_NAME}.csv" ]; then
 			remove_rows_mismatch_header \
