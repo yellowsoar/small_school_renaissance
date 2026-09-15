@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithTimeout } from './fetchWithTimeout.js';
 
 /* ------------------------------------------------------------------ */
@@ -31,6 +31,7 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
 });
 
 /* ------------------------------------------------------------------ */
@@ -38,6 +39,11 @@ afterEach(() => {
 /* ------------------------------------------------------------------ */
 
 describe('fetchWithTimeout', () => {
+  // Minimise backoff delays in non-backoff tests so they complete quickly.
+  beforeEach(() => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+  });
+
   it('returns a successful response on the first attempt', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(okResponse('hello'));
 
@@ -141,5 +147,187 @@ describe('fetchWithTimeout', () => {
     ).rejects.toThrow();
     // initial + 3 retries = 4 calls
     expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Backoff behavior (fake timers for precise control)                   */
+/* ------------------------------------------------------------------ */
+
+describe('backoff behavior', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('does not sleep when the first attempt succeeds', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    globalThis.fetch = vi.fn().mockResolvedValue(okResponse('ok'));
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    const res = await fetchWithTimeout('https://example.com/data.csv');
+    expect(res.ok).toBe(true);
+
+    // Only the per-request timeout timer should be scheduled, not a backoff sleep.
+    const backoffCalls = setTimeoutSpy.mock.calls.filter(
+      ([, ms]) => ms !== 15_000,
+    );
+    expect(backoffCalls).toHaveLength(0);
+  });
+
+  it('sleeps between retries with full-jitter delay', async () => {
+    // Math.random() = 0.5  →  delay = 0.5 * min(10000, 1000 * 2^0) = 500ms
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(errorResponse(502))
+      .mockResolvedValueOnce(okResponse('ok'));
+
+    const promise = fetchWithTimeout('https://example.com/data.csv', {
+      retries: 2,
+    });
+
+    // Let the first fetch resolve (error) and schedule the backoff timer.
+    await vi.advanceTimersByTimeAsync(0);
+
+    // The backoff sleep (500ms) should be pending; fetch not called again yet.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Advance just short of the delay — still waiting.
+    await vi.advanceTimersByTimeAsync(499);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Advance the final millisecond — retry fires.
+    await vi.advanceTimersByTimeAsync(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+
+    const res = await promise;
+    expect(res.ok).toBe(true);
+  });
+
+  it('increases backoff ceiling on successive retries', async () => {
+    // Math.random() = 1 (edge: maximum delay)
+    // attempt 0: 1.0 * min(10000, 1000 * 1) = 1000ms
+    // attempt 1: 1.0 * min(10000, 1000 * 2) = 2000ms
+    vi.spyOn(Math, 'random').mockReturnValue(1);
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    globalThis.fetch = vi.fn().mockResolvedValue(errorResponse(500));
+
+    const promise = fetchWithTimeout('https://example.com/data.csv', {
+      retries: 2,
+    });
+
+    // Attach rejection handler BEFORE draining timers to prevent unhandled rejection.
+    const assertion = expect(promise).rejects.toThrow('HTTP 500');
+
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    // Extract backoff sleep durations (exclude the 15 000 ms request timeouts).
+    const backoffDelays = setTimeoutSpy.mock.calls
+      .map(([, ms]) => ms)
+      .filter((ms) => ms !== 15_000);
+
+    // Two retries → two backoff sleeps.
+    expect(backoffDelays).toHaveLength(2);
+    expect(backoffDelays[0]).toBe(1000); // min(10000, 1000 * 2^0) * 1.0
+    expect(backoffDelays[1]).toBe(2000); // min(10000, 1000 * 2^1) * 1.0
+  });
+
+  it('caps the backoff ceiling at 10 000 ms', async () => {
+    // With attempt = 4, uncapped = 1000 * 2^4 = 16000, capped = 10000
+    vi.spyOn(Math, 'random').mockReturnValue(1);
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    globalThis.fetch = vi.fn().mockResolvedValue(errorResponse(500));
+
+    const promise = fetchWithTimeout('https://example.com/data.csv', {
+      retries: 5,
+    });
+
+    const assertion = expect(promise).rejects.toThrow();
+
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    const backoffDelays = setTimeoutSpy.mock.calls
+      .map(([, ms]) => ms)
+      .filter((ms) => ms !== 15_000);
+
+    // Last delays should be capped at 10 000.
+    expect(backoffDelays[3]).toBe(8000); // 1000 * 2^3 = 8000 (under cap)
+    expect(backoffDelays[4]).toBe(10000); // 1000 * 2^4 = 16000 → capped 10000
+  });
+
+  it('does not sleep after the last failed attempt', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    globalThis.fetch = vi.fn().mockResolvedValue(errorResponse(500));
+
+    const promise = fetchWithTimeout('https://example.com/data.csv', {
+      retries: 1,
+    });
+
+    const assertion = expect(promise).rejects.toThrow();
+
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    // Only 1 backoff sleep (between attempt 0 and 1), not after the final failure.
+    const backoffDelays = setTimeoutSpy.mock.calls
+      .map(([, ms]) => ms)
+      .filter((ms) => ms !== 15_000);
+    expect(backoffDelays).toHaveLength(1);
+  });
+
+  it('aborts backoff sleep when the external signal fires', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const externalController = new AbortController();
+
+    globalThis.fetch = vi.fn().mockResolvedValue(errorResponse(500));
+
+    const promise = fetchWithTimeout('https://example.com/data.csv', {
+      retries: 2,
+      signal: externalController.signal,
+    });
+
+    // Let the first fetch resolve (error) and enter the backoff sleep.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Abort during the backoff sleep.
+    externalController.abort();
+
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+    // No second fetch attempt — sleep was aborted.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not sleep when retries is 0', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    globalThis.fetch = vi.fn().mockResolvedValue(errorResponse(500));
+
+    const promise = fetchWithTimeout('https://example.com/data.csv', {
+      retries: 0,
+    });
+
+    const assertion = expect(promise).rejects.toThrow();
+
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    const backoffDelays = setTimeoutSpy.mock.calls
+      .map(([, ms]) => ms)
+      .filter((ms) => ms !== 15_000);
+    expect(backoffDelays).toHaveLength(0);
   });
 });
