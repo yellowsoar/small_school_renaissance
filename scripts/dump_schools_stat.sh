@@ -32,10 +32,33 @@ download_file() {
 		"${1}"
 }
 
-convert_ods_to_csv() {
-	soffice \
-		--convert-to csv \
-		"${1}"
+# Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
+# Skips if CSV already exists. soffice supports all three formats.
+convert_to_csv_if_needed() {
+	local base="$1"
+	local csv_path="./${NAME_DIR}/${base}.csv"
+
+	[ -f "$csv_path" ] && return 0
+
+	local ext src
+	for ext in ods xlsx xls; do
+		src="./${NAME_DIR}/${base}.${ext}"
+		if [ -f "$src" ]; then
+			echo "⚙️ Converting ${ext} to csv for ${src}" \
+				&& soffice \
+					--convert-to csv \
+					--outdir "./${NAME_DIR}" \
+					"$src" \
+				&& echo "✅ File converted to ${csv_path}" \
+				&& echo "⚙️ Handling csv header..." \
+				&& sed \
+					-i '/,,,,,/d' \
+					"$csv_path" \
+				&& echo "✅ Non header Content removed"
+			return $?
+		fi
+	done
+	return 1
 }
 
 main() {
@@ -50,21 +73,7 @@ main() {
 			sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
 		done
 
-		# Convert ods to csv if missing
-		if [ -f "./${NAME_DIR}/${YEAR_CURRENT}${FILE_NAME}.ods" ] \
-			&& [ ! -f "./${NAME_DIR}/${YEAR_CURRENT}${FILE_NAME}.csv" ]; then
-			echo "⚙️ Converting ods to csv for ./${NAME_DIR}/${YEAR_CURRENT}${FILE_NAME}.ods" \
-				&& soffice \
-					--convert-to csv \
-					--outdir "./${NAME_DIR}" \
-					"./${NAME_DIR}/${YEAR_CURRENT}${FILE_NAME}.ods" \
-				&& echo "✅ File converted to ./${NAME_DIR}/${YEAR_CURRENT}${FILE_NAME}.csv" \
-				&& echo "⚙️ Handling csv header..." \
-				&& sed \
-					-i '/,,,,,/d' \
-					"./${NAME_DIR}/${YEAR_CURRENT}${FILE_NAME}.csv" \
-				&& echo "✅ Non header Content removed"
-		fi
+		convert_to_csv_if_needed "${YEAR_CURRENT}${FILE_NAME}" || true
 	done
 }
 
