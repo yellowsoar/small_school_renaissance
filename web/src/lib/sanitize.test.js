@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { isSafeUrl } from './sanitize.js';
+import { isSafeUrl, normalizeUrl } from './sanitize.js';
 
 describe('isSafeUrl', () => {
-  // --- safe URLs ---------------------------------------------------------
-
   it.each([
     ['https://www.cgps.ntpc.edu.tw'],
     ['http://example.com'],
@@ -11,11 +9,12 @@ describe('isSafeUrl', () => {
     ['HTTP://EXAMPLE.COM'],
     ['https://example.com:8080/'],
     ['https://user:pass@example.com/dashboard'],
+    ['www.school.edu.tw'],
+    ['school.edu.tw'],
+    ['www.school.edu.tw/path?q=1'],
   ])('allows safe URL: %s', (url) => {
     expect(isSafeUrl(url)).toBe(true);
   });
-
-  // --- dangerous schemes (regression for #3) -----------------------------
 
   it.each([
     ['javascript:alert(1)'],
@@ -30,8 +29,6 @@ describe('isSafeUrl', () => {
     expect(isSafeUrl(url)).toBe(false);
   });
 
-  // --- non-string / empty ------------------------------------------------
-
   it.each([
     [null],
     [undefined],
@@ -43,14 +40,66 @@ describe('isSafeUrl', () => {
     expect(isSafeUrl(url)).toBe(false);
   });
 
-  // --- malformed / relative ----------------------------------------------
-
   it.each([
     ['/relative/path'],
-    ['example.com'],
     ['://missing-scheme'],
     ['not a url at all'],
   ])('rejects malformed or relative URL: %s', (url) => {
     expect(isSafeUrl(url)).toBe(false);
+  });
+});
+
+describe('normalizeUrl', () => {
+  it.each([
+    ['https://example.com', 'https://example.com'],
+    ['http://example.com', 'http://example.com'],
+    ['HTTP://EXAMPLE.COM', 'HTTP://EXAMPLE.COM'],
+  ])('preserves an existing HTTP(S) URL: %s', (url, expected) => {
+    expect(normalizeUrl(url)).toBe(expected);
+  });
+
+  it.each([
+    ['www.school.edu.tw', 'https://www.school.edu.tw'],
+    ['school.edu.tw', 'https://school.edu.tw'],
+    ['www.school.edu.tw/path?q=1', 'https://www.school.edu.tw/path?q=1'],
+  ])('prepends https:// to a bare domain: %s', (url, expected) => {
+    expect(normalizeUrl(url)).toBe(expected);
+  });
+
+  it.each([
+    ['javascript:alert(1)'],
+    ['javascript:alert(document.cookie)'],
+    ['JAVASCRIPT:alert(1)'],
+    ['data:text/html,<script>alert(1)</script>'],
+    ['vbscript:MsgBox("xss")'],
+    ['blob:https://example.com/some-uuid'],
+  ])('rejects a dangerous scheme: %s', (url) => {
+    expect(normalizeUrl(url)).toBeNull();
+  });
+
+  it.each([
+    ['ftp://example.com'],
+    ['file:///etc/passwd'],
+  ])('rejects a non-http(s) scheme: %s', (url) => {
+    expect(normalizeUrl(url)).toBeNull();
+  });
+
+  it.each([
+    [''],
+    [null],
+    [undefined],
+    ['   '],
+    [42],
+    [true],
+  ])('returns null for non-string or empty input: %j', (url) => {
+    expect(normalizeUrl(url)).toBeNull();
+  });
+
+  it.each([
+    ['://missing-scheme'],
+    ['not a url at all'],
+    ['/relative/path'],
+  ])('returns null for an unparseable or relative URL: %s', (url) => {
+    expect(normalizeUrl(url)).toBeNull();
   });
 });
