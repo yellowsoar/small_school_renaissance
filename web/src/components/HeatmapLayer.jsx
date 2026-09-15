@@ -17,7 +17,8 @@ export default function HeatmapLayer({ schools, year, visible }) {
     for (const school of schools) {
       const projected = school.projections.get(year);
       if (projected == null || projected > HEATMAP_THRESHOLD) continue;
-      const intensity = Math.max(0.15, 1 - projected / HEATMAP_THRESHOLD);
+      const clamped = Math.max(0, projected);
+      const intensity = Math.max(0.15, 1 - clamped / HEATMAP_THRESHOLD);
       result.push([...school.position, intensity]);
     }
     return result;
