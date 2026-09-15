@@ -8,6 +8,66 @@
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 2;
 
+/* ------------------------------------------------------------------ */
+/*  Backoff helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+const BACKOFF_BASE_MS = 1_000;
+const BACKOFF_CAP_MS = 10_000;
+
+/**
+ * Full-jitter exponential backoff (AWS Architecture Blog recommended).
+ *
+ * Returns a uniformly distributed random delay in
+ * `[0, min(cap, base * 2^attempt)]`.
+ *
+ * @param {number} attempt  Zero-based retry index
+ * @param {number} [base]   Base delay in ms (default 1 000)
+ * @param {number} [cap]    Maximum ceiling in ms (default 10 000)
+ * @returns {number} Delay in ms
+ */
+function fullJitter(attempt, base = BACKOFF_BASE_MS, cap = BACKOFF_CAP_MS) {
+  const ceiling = Math.min(cap, base * 2 ** attempt);
+  return Math.random() * ceiling;
+}
+
+/**
+ * Sleep that respects an external AbortSignal.
+ *
+ * Resolves after `ms` milliseconds, or rejects with AbortError if `signal`
+ * fires first.  Both paths clean up the other listener to avoid memory leaks
+ * (see openai-node #2151, anthropic-sdk-typescript #895).
+ *
+ * @param {number} ms        Duration in milliseconds
+ * @param {AbortSignal} [signal]  Optional external signal (e.g. React unmount)
+ * @returns {Promise<void>}
+ */
+function abortableSleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    // Already aborted — fail fast without scheduling a timer.
+    if (signal?.aborted) {
+      reject(new DOMException('The operation was aborted.', 'AbortError'));
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    function onAbort() {
+      clearTimeout(timer);
+      reject(new DOMException('The operation was aborted.', 'AbortError'));
+    }
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main fetch wrapper                                                  */
+/* ------------------------------------------------------------------ */
+
 /**
  * Fetch a URL with timeout and automatic retry, optionally linked to an
  * external AbortSignal (e.g. from a React useEffect cleanup).
@@ -59,7 +119,9 @@ export async function fetchWithTimeout(
           : err;
 
       if (attempt === retries) throw normalised;
-      // else: retry silently
+
+      // Back off before the next attempt (full-jitter exponential backoff).
+      await abortableSleep(fullJitter(attempt), signal);
     } finally {
       clearTimeout(timeoutId);
       signal?.removeEventListener('abort', onExternalAbort);
