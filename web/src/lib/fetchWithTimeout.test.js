@@ -223,9 +223,11 @@ describe('backoff behavior', () => {
       retries: 2,
     });
 
-    // Drain all timers to let the retries complete and the promise settle.
+    // Attach rejection handler BEFORE draining timers to prevent unhandled rejection.
+    const assertion = expect(promise).rejects.toThrow('HTTP 500');
+
     await vi.runAllTimersAsync();
-    await expect(promise).rejects.toThrow('HTTP 500');
+    await assertion;
 
     // Extract backoff sleep durations (exclude the 15 000 ms request timeouts).
     const backoffDelays = setTimeoutSpy.mock.calls
@@ -249,8 +251,10 @@ describe('backoff behavior', () => {
       retries: 5,
     });
 
+    const assertion = expect(promise).rejects.toThrow();
+
     await vi.runAllTimersAsync();
-    await expect(promise).rejects.toThrow();
+    await assertion;
 
     const backoffDelays = setTimeoutSpy.mock.calls
       .map(([, ms]) => ms)
@@ -271,8 +275,10 @@ describe('backoff behavior', () => {
       retries: 1,
     });
 
+    const assertion = expect(promise).rejects.toThrow();
+
     await vi.runAllTimersAsync();
-    await expect(promise).rejects.toThrow();
+    await assertion;
 
     // Only 1 backoff sleep (between attempt 0 and 1), not after the final failure.
     const backoffDelays = setTimeoutSpy.mock.calls
@@ -314,8 +320,10 @@ describe('backoff behavior', () => {
       retries: 0,
     });
 
+    const assertion = expect(promise).rejects.toThrow();
+
     await vi.runAllTimersAsync();
-    await expect(promise).rejects.toThrow();
+    await assertion;
 
     const backoffDelays = setTimeoutSpy.mock.calls
       .map(([, ms]) => ms)
