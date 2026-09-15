@@ -6,7 +6,7 @@ import TrendSparkline from './TrendSparkline.jsx';
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-/** Builds a 17-year projection Map (114-130) from a simple array. */
+/** Builds a 17-year projection Map (114–130) from a simple array. */
 const makeProjections = (values) =>
   new Map(values.map((v, i) => [114 + i, v]));
 
@@ -43,7 +43,7 @@ describe('TrendSparkline', () => {
   });
 
   it('returns null when fewer than 2 non-null values exist', () => {
-    const projections = makeProjections([100, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]);
+    const projections = makeProjections([100, ...Array(16).fill(null)]);
 
     const { container } = render(
       <TrendSparkline projections={projections} year={114} color="#000" />,
@@ -59,7 +59,7 @@ describe('TrendSparkline', () => {
       <TrendSparkline projections={projections} year={120} color="#000" />,
     );
 
-    expect(container.innerHTML).toBe('');
+    expect(container.firstChild).toBeNull();
   });
 
   it('provides an accessible aria-label with trend summary', () => {
