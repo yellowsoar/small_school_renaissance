@@ -51,9 +51,40 @@ describe('sparkline', () => {
     expect(curve.points.at(-1)[1]).toBeCloseTo(opts.height, 5);
   });
 
-  it('clamps negative projections to the zero baseline', () => {
+  it('draws negative projections below the zero line (#19)', () => {
+    // Regression: before this fix, Math.max(value, 0) clamped negatives to
+    // the baseline, making the chart flat while text showed negative numbers.
     const curve = sparkline(curveOf([60, -20]), opts);
+    // Zero line must sit between top and bottom, not at the bottom edge
+    expect(curve.zeroY).toBeGreaterThan(0);
+    expect(curve.zeroY).toBeLessThan(opts.height);
+    // The negative point must be below (larger y than) the zero line
+    expect(curve.points.at(-1)[1]).toBeGreaterThan(curve.zeroY);
+    expect(curve.hasNegative).toBe(true);
+  });
+
+  it('places the zero line at the correct coordinate for mixed curves', () => {
+    const curve = sparkline(curveOf([60, -20]), opts);
+    // lo = -20, hi = 60, span = 80
+    // zeroY = height - ((0 - (-20)) / 80) * height = 0.75 * height
+    expect(curve.zeroY).toBeCloseTo(opts.height * 0.75, 5);
+  });
+
+  it('keeps zeroY at the bottom for positive-only curves', () => {
+    const curve = sparkline(curveOf([80, 40]), opts);
+    expect(curve.zeroY).toBeCloseTo(opts.height, 5);
+    expect(curve.hasNegative).toBe(false);
+  });
+
+  it('handles an all-negative curve with zero at the top', () => {
+    const curve = sparkline(curveOf([-10, -50]), opts);
+    // lo = -50, hi = 0, span = 50 → zero is at the very top
+    expect(curve.zeroY).toBeCloseTo(0, 5);
+    // -10 is closer to zero → near the top; -50 is at the bottom
+    expect(curve.points.at(0)[1]).toBeCloseTo(opts.height * 0.2, 5);
     expect(curve.points.at(-1)[1]).toBeCloseTo(opts.height, 5);
+    expect(curve.hasNegative).toBe(true);
+    expect(curve.points.every(([, y]) => Number.isFinite(y))).toBe(true);
   });
 
   it('survives a curve that is flat at zero', () => {

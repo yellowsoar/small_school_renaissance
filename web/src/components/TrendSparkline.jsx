@@ -32,6 +32,18 @@ export default function TrendSparkline({ projections, year, color }) {
           `${integer.format(Math.round(curve.last))} 人`
         }
       >
+        {curve.hasNegative && (
+          <line
+            x1="0"
+            y1={curve.zeroY}
+            x2={WIDTH}
+            y2={curve.zeroY}
+            stroke={stroke}
+            strokeWidth="0.5"
+            strokeDasharray="3 2"
+            opacity="0.4"
+          />
+        )}
         <polyline
           points={toPolyline(curve.points)}
           fill="none"
