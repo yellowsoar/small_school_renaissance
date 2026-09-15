@@ -9,7 +9,7 @@ const percent = new Intl.NumberFormat('zh-Hant-TW', {
   signDisplay: 'exceptZero',
 });
 
-const show = (value) => (value == null ? '\u2014' : integer.format(Math.round(value)));
+const show = (value) => (value == null ? '—' : integer.format(Math.round(value)));
 
 export default function SchoolPopup({ school, year, tier }) {
   const projected = school.projections.get(year);
@@ -21,20 +21,20 @@ export default function SchoolPopup({ school, year, tier }) {
       <header className="popup__head">
         <h3>{school.name}</h3>
         <p>
-          {school.county} {school.town} \u30FB {school.remoteness}
+          {school.county} {school.town} ・ {school.remoteness}
         </p>
       </header>
 
       {school.unprojected ? (
         <p className="popup__headline popup__headline--muted">
-          \u7F3A\u5C11 {REFERENCE_YEAR} \u5B78\u5E74\u5C0D\u7167\u8CC7\u6599\uFF0C\u7121\u6CD5\u63A8\u4F30
+          缺少 {REFERENCE_YEAR} 學年對照資料，無法推估
         </p>
       ) : (
         <>
           <p className="popup__headline" style={{ '--tier': tier?.color }}>
-            <span>{year} \u5B78\u5E74\u63A8\u4F30</span>
+            <span>{year} 學年推估</span>
             <strong>{show(projected)}</strong>
-            <span>\u4EBA \u30FB {tier?.label ?? '\u7121\u63A8\u4F30'}</span>
+            <span>人 ・ {tier?.label ?? '無推估'}</span>
           </p>
           <TrendSparkline
             projections={school.projections}
@@ -46,25 +46,25 @@ export default function SchoolPopup({ school, year, tier }) {
 
       <dl className="popup__grid">
         <div>
-          <dt>{BASE_YEAR} \u5B78\u5E74</dt>
+          <dt>{BASE_YEAR} 學年</dt>
           <dd>{show(school.enrollment)}</dd>
         </div>
         <div>
-          <dt>{REFERENCE_YEAR} \u5B78\u5E74</dt>
+          <dt>{REFERENCE_YEAR} 學年</dt>
           <dd>{show(school.reference)}</dd>
         </div>
         <div>
-          <dt>\u4EBA\u6578\u5DEE\u7570</dt>
+          <dt>人數差異</dt>
           <dd className={`popup__trend${trendClass}`}>
             {school.delta == null
-              ? '\u2014'
+              ? '—'
               : `${school.delta > 0 ? '+' : ''}${integer.format(school.delta)}`}
           </dd>
         </div>
         <div>
-          <dt>\u8B8A\u5316\u5E45\u5EA6</dt>
+          <dt>變化幅度</dt>
           <dd className={`popup__trend${trendClass}`}>
-            {school.deltaRatio == null ? '\u2014' : percent.format(school.deltaRatio)}
+            {school.deltaRatio == null ? '—' : percent.format(school.deltaRatio)}
           </dd>
         </div>
       </dl>
@@ -74,7 +74,7 @@ export default function SchoolPopup({ school, year, tier }) {
       <p className="popup__links">
         {school.website && isSafeUrl(school.website) && (
           <a href={normalizeUrl(school.website)} target="_blank" rel="noreferrer">
-            \u5B78\u6821\u7DB2\u7AD9 \u2197
+            學校網站 ↗
           </a>
         )}
         {school.phone && (() => {

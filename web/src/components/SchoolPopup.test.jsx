@@ -13,13 +13,13 @@ vi.mock('./TrendSparkline.jsx', () => ({
 
 const makeSchool = (overrides = {}) => ({
   id: '123456',
-  name: '\u6E2C\u8A66\u570B\u5C0F',
-  county: '\u81FA\u5317\u5E02',
-  town: '\u4FE1\u7FA9\u5340',
-  address: '\u53F0\u5317\u5E02\u4FE1\u7FA9\u8DEF\u4E00\u865F',
+  name: '測試國小',
+  county: '臺北市',
+  town: '信義區',
+  address: '台北市信義路一號',
   phone: '02-12345678',
   website: 'https://example.edu.tw',
-  remoteness: '\u4E00\u822C\u5730\u5340',
+  remoteness: '一般地區',
   position: [25.033, 121.565],
   enrollment: 150,
   reference: 180,
@@ -32,7 +32,7 @@ const makeSchool = (overrides = {}) => ({
   ...overrides,
 });
 
-const tier = { id: 'critical', label: '\u6975\u9AD8\u98A8\u96AA', color: '#d7263d', max: 30 };
+const tier = { id: 'critical', label: '極高風險', color: '#d7263d', max: 30 };
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -42,10 +42,10 @@ describe('SchoolPopup', () => {
   it('displays school name, location, and remoteness', () => {
     render(<SchoolPopup school={makeSchool()} year={130} tier={tier} />);
 
-    expect(screen.getByText('\u6E2C\u8A66\u570B\u5C0F')).toBeTruthy();
-    expect(screen.getByText(/\u81FA\u5317\u5E02/)).toBeTruthy();
-    expect(screen.getByText(/\u4FE1\u7FA9\u5340/)).toBeTruthy();
-    expect(screen.getByText(/\u4E00\u822C\u5730\u5340/)).toBeTruthy();
+    expect(screen.getByText('測試國小')).toBeTruthy();
+    expect(screen.getByText(/臺北市/)).toBeTruthy();
+    expect(screen.getByText(/信義區/)).toBeTruthy();
+    expect(screen.getByText(/一般地區/)).toBeTruthy();
   });
 
   it('shows the projected headcount for the selected year', () => {
@@ -53,7 +53,7 @@ describe('SchoolPopup', () => {
 
     // year 125 -> index 11 -> 150 - 110 = 40
     expect(screen.getByText('40')).toBeTruthy();
-    expect(screen.getByText('125 \u5B78\u5E74\u63A8\u4F30')).toBeTruthy();
+    expect(screen.getByText('125 學年推估')).toBeTruthy();
   });
 
   it('shows the unprojected message when reference data is missing', () => {
@@ -66,21 +66,21 @@ describe('SchoolPopup', () => {
 
     render(<SchoolPopup school={school} year={130} tier={null} />);
 
-    expect(screen.getByText(new RegExp(`\u7F3A\u5C11 ${REFERENCE_YEAR} \u5B78\u5E74\u5C0D\u7167\u8CC7\u6599`))).toBeTruthy();
+    expect(screen.getByText(new RegExp(`缺少 ${REFERENCE_YEAR} 學年對照資料`))).toBeTruthy();
   });
 
-  it('shows "\u7121\u63A8\u4F30" when tier is null but school is projected', () => {
+  it('shows "無推估" when tier is null but school is projected', () => {
     render(<SchoolPopup school={makeSchool()} year={130} tier={null} />);
 
-    expect(screen.getByText(/\u7121\u63A8\u4F30/)).toBeTruthy();
+    expect(screen.getByText(/無推估/)).toBeTruthy();
   });
 
   it('renders enrollment and reference stats in the detail grid', () => {
     render(<SchoolPopup school={makeSchool()} year={130} tier={tier} />);
 
-    expect(screen.getByText(`${BASE_YEAR} \u5B78\u5E74`)).toBeTruthy();
+    expect(screen.getByText(`${BASE_YEAR} 學年`)).toBeTruthy();
     expect(screen.getByText('150')).toBeTruthy();
-    expect(screen.getByText(`${REFERENCE_YEAR} \u5B78\u5E74`)).toBeTruthy();
+    expect(screen.getByText(`${REFERENCE_YEAR} 學年`)).toBeTruthy();
     expect(screen.getByText('180')).toBeTruthy();
   });
 
@@ -104,14 +104,14 @@ describe('SchoolPopup', () => {
     const school = makeSchool({ delta: null, deltaRatio: null, reference: null });
     render(<SchoolPopup school={school} year={130} tier={tier} />);
 
-    const dashes = screen.getAllByText('\u2014');
+    const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders a safe website link', () => {
     render(<SchoolPopup school={makeSchool()} year={130} tier={tier} />);
 
-    const link = screen.getByText('\u5B78\u6821\u7DB2\u7AD9 \u2197');
+    const link = screen.getByText('學校網站 ↗');
     expect(link.getAttribute('href')).toBe('https://example.edu.tw');
     expect(link.getAttribute('target')).toBe('_blank');
   });
@@ -120,7 +120,7 @@ describe('SchoolPopup', () => {
     const school = makeSchool({ website: 'javascript:alert(1)' });
     render(<SchoolPopup school={school} year={130} tier={tier} />);
 
-    expect(screen.queryByText('\u5B78\u6821\u7DB2\u7AD9 \u2197')).toBeNull();
+    expect(screen.queryByText('學校網站 ↗')).toBeNull();
   });
 
   it('renders a phone link with digits only in the href', () => {
@@ -138,16 +138,16 @@ describe('SchoolPopup', () => {
     expect(phoneLink.getAttribute('href')).toBe('tel:0223456789');
   });
 
-  it('strips extension marker \u5206\u6A5F from phone tel: link', () => {
-    const school = makeSchool({ phone: '(02) 2345-6789 \u5206\u6A5F 302' });
+  it('strips extension marker 分機 from phone tel: link', () => {
+    const school = makeSchool({ phone: '(02) 2345-6789 分機 302' });
     render(<SchoolPopup school={school} year={130} tier={tier} />);
 
-    const phoneLink = screen.getByText('(02) 2345-6789 \u5206\u6A5F 302');
+    const phoneLink = screen.getByText('(02) 2345-6789 分機 302');
     expect(phoneLink.getAttribute('href')).toBe('tel:0223456789');
   });
 
   it('hides phone link when phone yields no dialable digits', () => {
-    const school = makeSchool({ phone: '\u7121\u96FB\u8A71' });
+    const school = makeSchool({ phone: '無電話' });
     const { container } = render(
       <SchoolPopup school={school} year={130} tier={tier} />,
     );
@@ -158,7 +158,7 @@ describe('SchoolPopup', () => {
   it('displays the address', () => {
     render(<SchoolPopup school={makeSchool()} year={130} tier={tier} />);
 
-    expect(screen.getByText('\u53F0\u5317\u5E02\u4FE1\u7FA9\u8DEF\u4E00\u865F')).toBeTruthy();
+    expect(screen.getByText('台北市信義路一號')).toBeTruthy();
   });
 
   it('omits address when not available', () => {
