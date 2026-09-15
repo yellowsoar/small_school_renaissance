@@ -249,14 +249,21 @@ describe('parseSchools', () => {
     expect(() => parseSchools(badData)).toThrow('2 筆資料');
   });
 
-  it('throws when only some required headers are present', () => {
+  it('only reports missing headers in the error, not present ones', () => {
     // Has 緯度 and 經度 but missing 學校名稱
     const partialHeaders = '緯度,經度,其他欄位\n24.0,121.0,test';
 
-    expect(() => parseSchools(partialHeaders)).toThrow('CSV 欄位不符');
-    expect(() => parseSchools(partialHeaders)).toThrow('學校名稱');
-    // Should NOT mention headers that ARE present
-    expect(() => parseSchools(partialHeaders)).not.toThrow('緯度');
+    try {
+      parseSchools(partialHeaders);
+      expect.fail('should have thrown');
+    } catch (error) {
+      expect(error.message).toContain('CSV 欄位不符');
+      // The "缺少" section should mention only the missing header
+      const missingLine = error.message.split('\n')[0];
+      expect(missingLine).toContain('學校名稱');
+      expect(missingLine).not.toContain('緯度');
+      expect(missingLine).not.toContain('經度');
+    }
   });
 
   it('truncates long header lists in the error with an ellipsis', () => {
@@ -341,8 +348,6 @@ describe('filterSchools', () => {
   });
 
   it('does not let a search term straddle two fields', () => {
-    // 'c' is 市立插角國小 in 南投縣: the term spans the end of the name and the
-    // start of the county, which a naive concatenation would match.
     expect(ids({ search: '插角國小南投縣' })).toEqual([]);
   });
 
@@ -430,9 +435,9 @@ describe('summarize', () => {
     ).schools;
 
     const result = summarize(withNegative, 130);
-    expect(result.students).toBe(100); // -12 clamped to 0, not subtracted
-    expect(result.closing).toBe(1);    // negative still counts as closing
-    expect(result.atRisk).toBe(1);     // only the negative school is ≤50
+    expect(result.students).toBe(100);
+    expect(result.closing).toBe(1);
+    expect(result.atRisk).toBe(1);
   });
 
   it('returns zero students when all projections are negative', () => {
