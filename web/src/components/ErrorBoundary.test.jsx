@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ErrorBoundary from './ErrorBoundary.jsx';
 
@@ -44,7 +44,7 @@ describe('ErrorBoundary', () => {
     );
 
     expect(screen.getByRole('alert')).toBeTruthy();
-    expect(screen.getByText('畫面發生錯誤，無法繼續顯示。')).toBeTruthy();
+    expect(screen.getByText('\u756b\u9762\u767c\u751f\u932f\u8aa4\uff0c\u7121\u6cd5\u7e7c\u7e8c\u986f\u793a\u3002')).toBeTruthy();
   });
 
   it('shows a retry button in error state', () => {
@@ -54,7 +54,7 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>,
     );
 
-    expect(screen.getByText('重新嘗試')).toBeTruthy();
+    expect(screen.getByText('\u91cd\u65b0\u5617\u8a66')).toBeTruthy();
   });
 
   it('recovers when retry button is clicked and child stops throwing', () => {
@@ -74,7 +74,7 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>,
     );
 
-    fireEvent.click(screen.getByText('重新嘗試'));
+    fireEvent.click(screen.getByText('\u91cd\u65b0\u5617\u8a66'));
 
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText('all good')).toBeTruthy();
