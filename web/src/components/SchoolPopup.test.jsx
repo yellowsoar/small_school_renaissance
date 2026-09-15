@@ -51,7 +51,7 @@ describe('SchoolPopup', () => {
   it('shows the projected headcount for the selected year', () => {
     render(<SchoolPopup school={makeSchool()} year={125} tier={tier} />);
 
-    // year 125 -> index 11 -> 150 - 110 = 40
+    // year 125 → index 11 → 150 - 110 = 40
     expect(screen.getByText('40')).toBeTruthy();
     expect(screen.getByText('125 學年推估')).toBeTruthy();
   });
@@ -87,7 +87,7 @@ describe('SchoolPopup', () => {
   it('renders negative delta with sign and ratio as percentage', () => {
     render(<SchoolPopup school={makeSchool()} year={130} tier={tier} />);
 
-    // delta = -30 -> "-30", deltaRatio = -0.167 -> "-16.7%"
+    // delta = -30 → "-30", deltaRatio = -0.167 → "-16.7%"
     expect(screen.getByText('-30')).toBeTruthy();
     expect(screen.getByText('-16.7%')).toBeTruthy();
   });
@@ -100,7 +100,7 @@ describe('SchoolPopup', () => {
     expect(screen.getByText('+16.7%')).toBeTruthy();
   });
 
-  it('shows dash when delta values are null', () => {
+  it('shows "—" dash when delta values are null', () => {
     const school = makeSchool({ delta: null, deltaRatio: null, reference: null });
     render(<SchoolPopup school={school} year={130} tier={tier} />);
 
