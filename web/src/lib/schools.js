@@ -49,6 +49,13 @@ const toSchool = (row) => {
   };
 };
 
+/**
+ * Required CSV headers — if any of these are missing, the dataset is
+ * structurally incompatible and we should fail loudly rather than
+ * returning an empty school list that masquerades as "no matches".
+ */
+const REQUIRED_HEADERS = ['緯度', '經度', '學校名稱'];
+
 /** Parses the CSV text into a normalized, map-ready dataset. */
 export const parseSchools = (csvText) => {
   const { data, errors } = Papa.parse(csvText, {
@@ -61,7 +68,27 @@ export const parseSchools = (csvText) => {
     console.warn(`CSV parsed with ${errors.length} recoverable issue(s)`, errors[0]);
   }
 
+  // --- Header validation ---------------------------------------------------
+  if (data.length > 0) {
+    const headers = Object.keys(data[0]);
+    const missing = REQUIRED_HEADERS.filter((col) => !headers.includes(col));
+    if (missing.length > 0) {
+      throw new Error(
+        `CSV 欄位不符：缺少 ${missing.join('、')}\n` +
+          `實際欄位：${headers.slice(0, 5).join('、')}${headers.length > 5 ? '…' : ''}`,
+      );
+    }
+  }
+
   const schools = data.map(toSchool).filter(Boolean);
+
+  // --- Parse-result validation ---------------------------------------------
+  if (schools.length === 0 && data.length > 0) {
+    throw new Error(
+      `CSV 包含 ${data.length} 筆資料但無法解析出任何學校，請檢查欄位格式`,
+    );
+  }
+
   const counties = [...new Set(schools.map((school) => school.county))].sort((a, b) =>
     a.localeCompare(b, 'zh-Hant'),
   );
