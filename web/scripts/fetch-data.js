@@ -17,7 +17,7 @@ import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchWithRetry } from './fetch-utils.js';
+import { fetchWithRetry, validateCsvContent } from './fetch-utils.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -57,8 +57,25 @@ console.log(`\u2699\ufe0f  downloading ${SOURCE_URL}`);
 
 try {
   const response = await fetchWithRetry(SOURCE_URL);
+
+  // Warn on unexpected Content-Type (GitHub raw sometimes returns
+  // application/octet-stream, so this is non-fatal).
+  const contentType = response.headers.get('content-type') ?? '';
+  if (
+    contentType &&
+    !contentType.includes('text/') &&
+    !contentType.includes('application/octet-stream')
+  ) {
+    console.warn(
+      `\u26a0\ufe0f  unexpected Content-Type: ${contentType} (expected text/csv or text/plain)`,
+    );
+  }
+
+  const body = await response.text();
+  validateCsvContent(body);
+
   await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, Buffer.from(await response.arrayBuffer()));
+  await writeFile(target, body, 'utf-8');
   console.log(`\u2705 saved to ${target}`);
 } catch (err) {
   const detail =
