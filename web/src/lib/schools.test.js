@@ -209,10 +209,86 @@ describe('parseSchools', () => {
 
   it('respects quoted fields containing commas', () => {
     const { schools } = parseSchools(
-      csv([row({ projected: 10, 學校名稱: '"市立插角國小, 分校"' })]),
+      csv([row({ projected: 10, 學校名稱: '"\u5e02\u7acb\u63d2\u89d2\u570b\u5c0f, \u5206\u6821"' })]),
     );
 
     expect(schools[0].name).toBe('市立插角國小, 分校');
+  });
+
+  // --- CSV schema validation (regression tests for #16) --------------------
+
+  it('throws when required headers are missing', () => {
+    const wrongHeaders = 'id,name,lat,lng\n1,test,24.0,121.0';
+
+    expect(() => parseSchools(wrongHeaders)).toThrow('CSV 欄位不符');
+    expect(() => parseSchools(wrongHeaders)).toThrow('緯度');
+    expect(() => parseSchools(wrongHeaders)).toThrow('經度');
+    expect(() => parseSchools(wrongHeaders)).toThrow('學校名稱');
+  });
+
+  it('includes actual headers in the error message for debugging', () => {
+    const wrongHeaders = 'id,name,lat,lng,extra\n1,test,24.0,121.0,x';
+
+    try {
+      parseSchools(wrongHeaders);
+      expect.fail('should have thrown');
+    } catch (error) {
+      expect(error.message).toContain('id');
+      expect(error.message).toContain('實際欄位');
+    }
+  });
+
+  it('throws when CSV has data rows but all schools are unparseable', () => {
+    // Has required headers but every row has invalid lat/lng
+    const badData = csv([
+      row({ projected: 10, 學校代碼: 'a', 緯度: '', 經度: '' }),
+      row({ projected: 10, 學校代碼: 'b', 緯度: 'N/A', 經度: 'N/A' }),
+    ]);
+
+    expect(() => parseSchools(badData)).toThrow('無法解析出任何學校');
+    expect(() => parseSchools(badData)).toThrow('2 筆資料');
+  });
+
+  it('only reports missing headers in the error, not present ones', () => {
+    // Has 緯度 and 經度 but missing 學校名稱
+    const partialHeaders = '緯度,經度,其他欄位\n24.0,121.0,test';
+
+    try {
+      parseSchools(partialHeaders);
+      expect.fail('should have thrown');
+    } catch (error) {
+      expect(error.message).toContain('CSV 欄位不符');
+      // The "缺少" section should mention only the missing header
+      const missingLine = error.message.split('\n')[0];
+      expect(missingLine).toContain('學校名稱');
+      expect(missingLine).not.toContain('緯度');
+      expect(missingLine).not.toContain('經度');
+    }
+  });
+
+  it('truncates long header lists in the error with an ellipsis', () => {
+    const manyHeaders = 'a,b,c,d,e,f,g\n1,2,3,4,5,6,7';
+
+    try {
+      parseSchools(manyHeaders);
+      expect.fail('should have thrown');
+    } catch (error) {
+      // Only first 5 headers shown, followed by ellipsis
+      expect(error.message).toContain('…');
+      expect(error.message).not.toContain('f');
+    }
+  });
+
+  it('does not throw for valid headers even with some unparseable rows', () => {
+    // Mix of valid and invalid rows — at least one parses, so no throw
+    const mixed = csv([
+      row({ projected: 10, 學校代碼: 'good' }),
+      row({ projected: 10, 學校代碼: 'bad', 緯度: '', 經度: '' }),
+    ]);
+
+    const { schools } = parseSchools(mixed);
+    expect(schools).toHaveLength(1);
+    expect(schools[0].id).toBe('good');
   });
 });
 
@@ -272,8 +348,6 @@ describe('filterSchools', () => {
   });
 
   it('does not let a search term straddle two fields', () => {
-    // 'c' is 市立插角國小 in 南投縣: the term spans the end of the name and the
-    // start of the county, which a naive concatenation would match.
     expect(ids({ search: '插角國小南投縣' })).toEqual([]);
   });
 
@@ -361,9 +435,9 @@ describe('summarize', () => {
     ).schools;
 
     const result = summarize(withNegative, 130);
-    expect(result.students).toBe(100); // -12 clamped to 0, not subtracted
-    expect(result.closing).toBe(1);    // negative still counts as closing
-    expect(result.atRisk).toBe(1);     // only the negative school is ≤50
+    expect(result.students).toBe(100);
+    expect(result.closing).toBe(1);
+    expect(result.atRisk).toBe(1);
   });
 
   it('returns zero students when all projections are negative', () => {
