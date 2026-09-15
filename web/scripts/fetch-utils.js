@@ -14,6 +14,33 @@ const DEFAULT_RETRIES = 2;
  */
 const DEFAULT_REQUIRED_HEADERS = ['學校代碼', '學校名稱', '緯度', '經度'];
 
+/* ------------------------------------------------------------------ */
+/*  Backoff helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+const BACKOFF_BASE_MS = 1_000;
+const BACKOFF_CAP_MS = 10_000;
+
+/**
+ * Full-jitter exponential backoff (AWS Architecture Blog recommended).
+ *
+ * @param {number} attempt  Zero-based retry index
+ * @param {number} [base]   Base delay in ms (default 1 000)
+ * @param {number} [cap]    Maximum ceiling in ms (default 10 000)
+ * @returns {number} Delay in ms
+ */
+function fullJitter(attempt, base = BACKOFF_BASE_MS, cap = BACKOFF_CAP_MS) {
+  const ceiling = Math.min(cap, base * 2 ** attempt);
+  return Math.random() * ceiling;
+}
+
+/** Simple sleep for Node.js (no AbortSignal needed). */
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/* ------------------------------------------------------------------ */
+/*  Fetch with retry                                                    */
+/* ------------------------------------------------------------------ */
+
 /**
  * Fetch a URL with timeout and automatic retry.
  *
@@ -34,9 +61,11 @@ export async function fetchWithRetry(
     } catch (err) {
       if (attempt === retries) throw err;
       const label = err.name === 'TimeoutError' ? 'timeout' : err.message;
+      const delay = fullJitter(attempt);
       console.warn(
-        `\u26a0\ufe0f  attempt ${attempt + 1}/${retries + 1} failed (${label}), retrying\u2026`,
+        `\u26a0\ufe0f  attempt ${attempt + 1}/${retries + 1} failed (${label}), retrying in ${Math.round(delay)}ms\u2026`,
       );
+      await sleep(delay);
     }
   }
 }
