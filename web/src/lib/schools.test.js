@@ -351,4 +351,32 @@ describe('summarize', () => {
   it('reports zeroes for a year outside the projection range', () => {
     expect(summarize(dataset, 999)).toMatchObject({ schools: 4, students: 0, closing: 0 });
   });
+
+  it('clamps negative projections to zero in the student total', () => {
+    const withNegative = parseSchools(
+      csv([
+        row({ projected: -12, 學校代碼: 'neg' }),
+        row({ projected: 100, 學校代碼: 'pos' }),
+      ]),
+    ).schools;
+
+    const result = summarize(withNegative, 130);
+    expect(result.students).toBe(100); // -12 clamped to 0, not subtracted
+    expect(result.closing).toBe(1);    // negative still counts as closing
+    expect(result.atRisk).toBe(1);     // only the negative school is ≤50
+  });
+
+  it('returns zero students when all projections are negative', () => {
+    const allNegative = parseSchools(
+      csv([
+        row({ projected: -5, 學校代碼: 'x' }),
+        row({ projected: -20, 學校代碼: 'y' }),
+      ]),
+    ).schools;
+
+    const result = summarize(allNegative, 130);
+    expect(result.students).toBe(0);
+    expect(result.closing).toBe(2);
+    expect(result.atRisk).toBe(2);
+  });
 });
