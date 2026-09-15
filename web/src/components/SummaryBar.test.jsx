@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
 import SummaryBar from './SummaryBar.jsx';
 
 const totals = { schools: 2634, closing: 42, atRisk: 187, students: 98765 };
 
 describe('SummaryBar', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
   it('displays formatted summary statistics', () => {
     render(<SummaryBar totals={totals} year={130} />);
 
@@ -23,14 +26,53 @@ describe('SummaryBar', () => {
     expect(screen.getByText('推估學生總數')).toBeTruthy();
   });
 
-  it('has aria-live="polite" for screen reader accessibility', () => {
+  it('uses a hidden live region instead of aria-live on the dl', () => {
     const { container } = render(
       <SummaryBar totals={totals} year={130} />,
     );
 
+    // The visible <dl> should no longer have aria-live
     const dl = container.querySelector('dl');
-    expect(dl.getAttribute('aria-live')).toBe('polite');
-    expect(dl.getAttribute('aria-atomic')).toBe('true');
+    expect(dl.getAttribute('aria-live')).toBeNull();
+    expect(dl.getAttribute('aria-atomic')).toBeNull();
+
+    // A separate hidden div carries the live region
+    const liveRegion = container.querySelector('[aria-live="polite"]');
+    expect(liveRegion).toBeTruthy();
+    expect(liveRegion.classList.contains('sr-only')).toBe(true);
+    expect(liveRegion.getAttribute('aria-atomic')).toBe('true');
+  });
+
+  it('debounces the live region text (not updated before delay)', () => {
+    const { container, rerender } = render(
+      <SummaryBar totals={totals} year={125} />,
+    );
+
+    const liveRegion = container.querySelector('[aria-live="polite"]');
+    const initialText = liveRegion.textContent;
+
+    // Re-render with a different year (simulating slider move)
+    const newTotals = { ...totals, closing: 50 };
+    rerender(<SummaryBar totals={newTotals} year={126} />);
+
+    // Before the debounce delay, the live region should still hold old text
+    act(() => vi.advanceTimersByTime(200));
+    expect(liveRegion.textContent).toBe(initialText);
+  });
+
+  it('updates the live region text after the debounce delay', () => {
+    const { container, rerender } = render(
+      <SummaryBar totals={totals} year={125} />,
+    );
+
+    const liveRegion = container.querySelector('[aria-live="polite"]');
+
+    const newTotals = { schools: 100, closing: 10, atRisk: 30, students: 5000 };
+    rerender(<SummaryBar totals={newTotals} year={126} />);
+
+    act(() => vi.advanceTimersByTime(400));
+    expect(liveRegion.textContent).toContain('126 學年');
+    expect(liveRegion.textContent).toContain('100');
   });
 
   it('handles zero values without crashing', () => {
