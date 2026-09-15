@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchWithRetry } from './fetch-utils.js';
+import { fetchWithRetry, validateCsvContent } from './fetch-utils.js';
 
 describe('fetchWithRetry', () => {
   const url = 'https://example.com/data.csv';
@@ -100,5 +100,78 @@ describe('fetchWithRetry', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(url, {
       signal: expect.any(AbortSignal),
     });
+  });
+});
+
+describe('validateCsvContent', () => {
+  const VALID_HEADER =
+    '學校代碼,學校名稱,縣市名稱,鄉鎮市區,地址,電話,網址,地區屬性,緯度,經度,學生人數';
+  const VALID_CSV = `${VALID_HEADER}\n013501,大同國小,臺北市,中山區,中山北路,02-1234,http://example.com,一般地區,25.05,121.52,300`;
+
+  it('accepts a valid CSV with required headers and data rows', () => {
+    expect(() => validateCsvContent(VALID_CSV)).not.toThrow();
+  });
+
+  it('throws on empty string', () => {
+    expect(() => validateCsvContent('')).toThrow('downloaded content is empty');
+  });
+
+  it('throws on whitespace-only string', () => {
+    expect(() => validateCsvContent('   \n  ')).toThrow('downloaded content is empty');
+  });
+
+  it('throws on null/undefined', () => {
+    expect(() => validateCsvContent(null)).toThrow('downloaded content is empty');
+    expect(() => validateCsvContent(undefined)).toThrow('downloaded content is empty');
+  });
+
+  it('throws when content is HTML (error page)', () => {
+    const html = '<!DOCTYPE html><html><body>404 Not Found</body></html>';
+    expect(() => validateCsvContent(html)).toThrow('appears to be HTML');
+  });
+
+  it('throws when content is HTML with leading whitespace', () => {
+    const html = '  <html><body>Login required</body></html>';
+    expect(() => validateCsvContent(html)).toThrow('appears to be HTML');
+  });
+
+  it('throws when required headers are missing', () => {
+    const bad = 'col_a,col_b,col_c\n1,2,3';
+    expect(() => validateCsvContent(bad)).toThrow('CSV header missing required columns');
+    expect(() => validateCsvContent(bad)).toThrow('學校代碼');
+  });
+
+  it('throws when only some required headers are present', () => {
+    const partial = '學校代碼,學校名稱,foo\n1,test,bar';
+    expect(() => validateCsvContent(partial)).toThrow('緯度');
+  });
+
+  it('throws when CSV has a header but no data rows', () => {
+    expect(() => validateCsvContent(VALID_HEADER)).toThrow('no data rows');
+  });
+
+  it('accepts custom required headers', () => {
+    const csv = 'alpha,beta\n1,2';
+    expect(() => validateCsvContent(csv, ['alpha', 'beta'])).not.toThrow();
+  });
+
+  it('includes the actual header in the error message for diagnosis', () => {
+    const bad = 'wrong_col_1,wrong_col_2\n1,2';
+    try {
+      validateCsvContent(bad);
+    } catch (err) {
+      expect(err.message).toContain('wrong_col_1');
+    }
+  });
+
+  it('truncates long headers to 120 chars in the error message', () => {
+    const longHeader = 'x'.repeat(200);
+    const csv = `${longHeader}\ndata`;
+    try {
+      validateCsvContent(csv);
+    } catch (err) {
+      // The truncated portion should end with … and not contain the full 200-char string
+      expect(err.message.length).toBeLessThan(400);
+    }
   });
 });
