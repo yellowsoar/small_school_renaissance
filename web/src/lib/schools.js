@@ -102,7 +102,7 @@ export const summarize = (schools, year) => {
   for (const school of schools) {
     const projected = school.projections.get(year);
     if (projected == null) continue;
-    totals.students += projected;
+    totals.students += Math.max(0, projected);
     if (projected <= 0) totals.closing += 1;
     if (projected <= 50) totals.atRisk += 1;
   }
