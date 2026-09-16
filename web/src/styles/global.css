@@ -40,6 +40,26 @@ a {
   color: var(--accent);
 }
 
+/* ---------- skip navigation ---------- */
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 1rem;
+  z-index: 9999;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: var(--card);
+  background: var(--accent);
+  border-radius: 0 0 var(--radius) var(--radius);
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
 /* ---------- utilities ---------- */
 
 .sr-only {
@@ -132,6 +152,10 @@ a {
 .stage {
   position: relative;
   overflow: hidden;
+}
+
+.stage:focus {
+  outline: none;
 }
 
 .map {
@@ -555,6 +579,10 @@ a {
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar {
+    transition: none;
+  }
+
+  .skip-link {
     transition: none;
   }
 }
