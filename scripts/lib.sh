@@ -16,6 +16,10 @@ sed_inplace() {
 # Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
 # Skips if CSV already exists. soffice supports all three formats.
 # Requires NAME_DIR to be set by the caller.
+#
+# Security: soffice runs with --headless, --norestore and an isolated
+# UserInstallation directory so that no embedded macros can execute and
+# no trusted-macro certificates from the host profile are honoured.
 convert_to_csv_if_needed() {
 	local base="$1"
 	local csv_path="./${NAME_DIR:?NAME_DIR not set}/${base}.csv"
@@ -26,8 +30,17 @@ convert_to_csv_if_needed() {
 	for ext in ods xlsx xls; do
 		src="./${NAME_DIR}/${base}.${ext}"
 		if [ -f "$src" ]; then
+			# Sandboxed profile: empty UserInstallation ensures zero
+			# trusted macro certificates and no user-level config.
+			local soffice_sandbox
+			soffice_sandbox=$(mktemp -d "${TMPDIR:-/tmp}/soffice-sandbox.XXXXXX")
+			trap 'rm -rf "$soffice_sandbox"' RETURN
+
 			echo "⚙️ Converting ${ext} to csv for ${src}" \
 				&& soffice \
+					--headless \
+					--norestore \
+					--env:UserInstallation="file://${soffice_sandbox}" \
 					--convert-to csv \
 					--outdir "./${NAME_DIR}" \
 					"$src" \
