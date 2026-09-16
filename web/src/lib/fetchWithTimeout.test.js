@@ -148,6 +148,44 @@ describe('fetchWithTimeout', () => {
     // initial + 3 retries = 4 calls
     expect(globalThis.fetch).toHaveBeenCalledTimes(4);
   });
+
+  /* -------------------------------------------------------------- */
+  /*  4xx non-retriable behavior (#43)                                */
+  /* -------------------------------------------------------------- */
+
+  it('does not retry on 404 Not Found', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response('', { status: 404, statusText: 'Not Found' }),
+    );
+
+    await expect(
+      fetchWithTimeout('https://example.com/data.csv', { retries: 2 }),
+    ).rejects.toThrow('HTTP 404 Not Found');
+    // No retries — only the initial attempt.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry on 403 Forbidden', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response('', { status: 403, statusText: 'Forbidden' }),
+    );
+
+    await expect(
+      fetchWithTimeout('https://example.com/data.csv', { retries: 2 }),
+    ).rejects.toThrow('HTTP 403 Forbidden');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still retries on 5xx server error after 4xx skip logic', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(errorResponse(502))
+      .mockResolvedValueOnce(okResponse('recovered'));
+
+    const res = await fetchWithTimeout('https://example.com/data.csv');
+    expect(res.ok).toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
 });
 
 /* ------------------------------------------------------------------ */

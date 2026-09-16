@@ -102,12 +102,24 @@ export async function fetchWithTimeout(
     try {
       const res = await fetch(url, { signal: controller.signal });
       if (res.ok) return res;
+
+      // 4xx client errors are not retriable — fail immediately.
+      if (res.status >= 400 && res.status < 500) {
+        throw Object.assign(
+          new Error(`HTTP ${res.status} ${res.statusText}`),
+          { retriable: false },
+        );
+      }
+
       throw new Error(`HTTP ${res.status} ${res.statusText}`);
     } catch (err) {
       // External abort (React unmount) takes priority — propagate immediately.
       if (signal?.aborted) {
         throw new DOMException('The operation was aborted.', 'AbortError');
       }
+
+      // Non-retriable errors (e.g. 4xx client errors) skip retry.
+      if (err.retriable === false) throw err;
 
       // Normalise a timeout-caused AbortError into a TimeoutError so callers
       // can distinguish it from an external abort.

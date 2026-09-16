@@ -101,6 +101,34 @@ describe('fetchWithRetry', () => {
       signal: expect.any(AbortSignal),
     });
   });
+
+  /* -------------------------------------------------------------- */
+  /*  4xx non-retriable behavior (#43)                                */
+  /* -------------------------------------------------------------- */
+
+  it('does not retry on 4xx client error (e.g. 404)', async () => {
+    const notFound = { ok: false, status: 404, statusText: 'Not Found' };
+    globalThis.fetch = vi.fn().mockResolvedValue(notFound);
+
+    await expect(fetchWithRetry(url, { retries: 2, timeout: 1000 })).rejects.toThrow(
+      'HTTP 404 Not Found',
+    );
+    // No retries — only the initial attempt.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('still retries on 5xx server error after 4xx skip logic', async () => {
+    const fail = { ok: false, status: 502, statusText: 'Bad Gateway' };
+    const ok = { ok: true, status: 200 };
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(fail).mockResolvedValueOnce(ok);
+
+    const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
+
+    expect(res).toBe(ok);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('validateCsvContent', () => {
