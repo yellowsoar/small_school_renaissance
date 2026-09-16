@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import HeatmapLayer from './HeatmapLayer.jsx';
-import { HEATMAP_OPTIONS, HEATMAP_THRESHOLD } from '../config/index.js';
+import { HEATMAP_OPTIONS } from '../config/index.js';
 
 /* ------------------------------------------------------------------ */
 /*  Mocks                                                              */
