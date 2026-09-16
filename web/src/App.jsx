@@ -27,6 +27,9 @@ export default function App() {
 
   return (
     <div className="app" data-panel={panelOpen ? 'open' : 'closed'}>
+      <a href="#main-content" className="skip-link">
+        跳到主內容
+      </a>
       <header className="topbar">
         <div className="topbar__brand">
           <h1>廢校預警</h1>
@@ -47,7 +50,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="stage">
+      <main id="main-content" className="stage" tabIndex={-1}>
         {status === 'loading' && (
           <p className="state" role="status">
             載入全台國小資料中…
