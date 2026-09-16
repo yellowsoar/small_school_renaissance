@@ -44,6 +44,7 @@ jobs:
           DATA_OWNER: ${{ vars.DATA_OWNER || 'g0v' }}
           DATA_REPO: ${{ vars.DATA_REPO || 'small_school_renaissance' }}
           DATA_BRANCH: ${{ vars.DATA_BRANCH || 'gh-pages' }}
+          BASE_PATH: ${{ vars.BASE_PATH || '/small_school_renaissance/' }}
 
       - uses: actions/configure-pages@v5
         if: ${{ inputs.with-pages-upload }}
