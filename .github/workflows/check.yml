@@ -1,0 +1,52 @@
+name: Check
+
+on:
+  workflow_call:
+    inputs:
+      with-pages-upload:
+        description: Upload build output as a GitHub Pages artifact
+        type: boolean
+        default: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: web/.nvmrc
+          # v5 auto-caches when package.json declares a packageManager field.
+          # Add "packageManager": "npm@<version>" to enable caching.
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "::warning::package-lock.json not found; generating before install"
+            npm install --package-lock-only --no-audit
+            npm ci
+          fi
+
+      - run: npm run lint
+
+      - run: npm test
+
+      - run: npm run build
+        env:
+          DATA_OWNER: ${{ vars.DATA_OWNER || 'g0v' }}
+          DATA_REPO: ${{ vars.DATA_REPO || 'small_school_renaissance' }}
+          DATA_BRANCH: ${{ vars.DATA_BRANCH || 'gh-pages' }}
+
+      - uses: actions/configure-pages@v5
+        if: ${{ inputs.with-pages-upload }}
+
+      - uses: actions/upload-pages-artifact@v3
+        if: ${{ inputs.with-pages-upload }}
+        with:
+          path: web/dist
