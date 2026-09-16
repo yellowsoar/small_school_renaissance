@@ -16,6 +16,9 @@ YEAR_END=$(($(date +%Y) - 1911))
 WAIT_MIN=3
 WAIT_MAX=5
 
+# shellcheck source=lib.sh
+source "$(dirname "$0")/lib.sh"
+
 check_directory() {
 	if [ ! -d ${NAME_DIR} ]; then
 		mkdir ${NAME_DIR}
@@ -39,46 +42,6 @@ download_file() {
 
 wait_a_second() {
 	sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
-}
-
-# Cross-platform sed in-place edit using mktemp + mv.
-# Usage: sed_inplace <file> <sed-args...>
-sed_inplace() {
-	local file="$1"
-	shift
-	local tmpfile
-	tmpfile=$(mktemp "${file}.XXXXXX")
-	trap 'rm -f "$tmpfile"' RETURN
-	sed "$@" "$file" > "$tmpfile" && mv -f "$tmpfile" "$file"
-}
-
-# Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
-# Skips if CSV already exists. soffice supports all three formats.
-convert_to_csv_if_needed() {
-	local base="$1"
-	local csv_path="./${NAME_DIR}/${base}.csv"
-
-	[ -f "$csv_path" ] && return 0
-
-	local ext src
-	for ext in ods xlsx xls; do
-		src="./${NAME_DIR}/${base}.${ext}"
-		if [ -f "$src" ]; then
-			echo "⚙️ Converting ${ext} to csv for ${src}" \
-				&& soffice \
-					--convert-to csv \
-					--outdir "./${NAME_DIR}" \
-					"$src" \
-				&& echo "✅ File converted to ${csv_path}" \
-				&& echo "⚙️ Handling csv header..." \
-				&& sed_inplace \
-					"$csv_path" \
-					'/,,,,,/d' \
-				&& echo "✅ Non header Content removed"
-			return $?
-		fi
-	done
-	return 1
 }
 
 remove_rows_mismatch_header() {
