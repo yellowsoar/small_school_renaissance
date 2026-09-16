@@ -80,7 +80,7 @@ export default function App() {
               </p>
             )}
 
-            <aside id="sidebar" className="sidebar">
+            <aside id="sidebar" className="sidebar" inert={!panelOpen || undefined}>
               <ControlPanel
                 filters={filters}
                 counties={counties}

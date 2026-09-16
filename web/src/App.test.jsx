@@ -228,4 +228,22 @@ describe('App', () => {
 
     expect(screen.getByText('\u6536\u5408\u5074\u6b04')).toBeTruthy();
   });
+
+  it('sets inert on sidebar when panel is collapsed', () => {
+    setupReady();
+    render(<App />);
+
+    fireEvent.click(screen.getByText('\u6536\u5408\u5074\u6b04'));
+
+    const sidebar = document.getElementById('sidebar');
+    expect(sidebar.hasAttribute('inert')).toBe(true);
+  });
+
+  it('does not set inert on sidebar when panel is open', () => {
+    setupReady();
+    render(<App />);
+
+    const sidebar = document.getElementById('sidebar');
+    expect(sidebar.hasAttribute('inert')).toBe(false);
+  });
 });
