@@ -57,8 +57,20 @@ export async function fetchWithRetry(
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
       if (res.ok) return res;
+
+      // 4xx client errors are not retriable — fail immediately.
+      if (res.status >= 400 && res.status < 500) {
+        throw Object.assign(
+          new Error(`HTTP ${res.status} ${res.statusText}`),
+          { retriable: false },
+        );
+      }
+
       throw new Error(`HTTP ${res.status} ${res.statusText}`);
     } catch (err) {
+      // Non-retriable errors (e.g. 4xx client errors) skip retry.
+      if (err.retriable === false) throw err;
+
       if (attempt === retries) throw err;
       const label = err.name === 'TimeoutError' ? 'timeout' : err.message;
       const delay = fullJitter(attempt);
