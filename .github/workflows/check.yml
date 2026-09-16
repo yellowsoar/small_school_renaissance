@@ -39,6 +39,8 @@ jobs:
 
       - run: npm run build
         env:
+          # Override in repo Settings > Secrets and variables > Variables
+          # once this repo hosts the dataset itself.
           DATA_OWNER: ${{ vars.DATA_OWNER || 'g0v' }}
           DATA_REPO: ${{ vars.DATA_REPO || 'small_school_renaissance' }}
           DATA_BRANCH: ${{ vars.DATA_BRANCH || 'gh-pages' }}
