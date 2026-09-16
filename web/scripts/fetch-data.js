@@ -38,8 +38,10 @@ const DATA_REPO = process.env.DATA_REPO ?? 'small_school_renaissance';
 const DATA_BRANCH = process.env.DATA_BRANCH ?? 'gh-pages';
 const DATA_PATH = process.env.DATA_PATH ?? 'docs/113-107.csv';
 
+// Use || instead of ?? so an empty string (injected by GitHub Actions when
+// vars.DATA_SOURCE_URL is unset) also falls back to the composed URL.
 const SOURCE_URL =
-  process.env.DATA_SOURCE_URL ??
+  process.env.DATA_SOURCE_URL ||
   `https://raw.githubusercontent.com/${DATA_OWNER}/${DATA_REPO}/${DATA_BRANCH}/${DATA_PATH}`;
 
 const target = resolve(root, 'public/data/113-107.csv');
