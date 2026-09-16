@@ -41,6 +41,17 @@ wait_a_second() {
 	sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
 }
 
+# Cross-platform sed in-place edit using mktemp + mv.
+# Usage: sed_inplace <file> <sed-args...>
+sed_inplace() {
+	local file="$1"
+	shift
+	local tmpfile
+	tmpfile=$(mktemp "${file}.XXXXXX")
+	trap 'rm -f "$tmpfile"' RETURN
+	sed "$@" "$file" > "$tmpfile" && mv -f "$tmpfile" "$file"
+}
+
 # Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
 # Skips if CSV already exists. soffice supports all three formats.
 convert_to_csv_if_needed() {
@@ -60,9 +71,9 @@ convert_to_csv_if_needed() {
 					"$src" \
 				&& echo "✅ File converted to ${csv_path}" \
 				&& echo "⚙️ Handling csv header..." \
-				&& sed \
-					-i '/,,,,,/d' \
+				&& sed_inplace \
 					"$csv_path" \
+					'/,,,,,/d' \
 				&& echo "✅ Non header Content removed"
 			return $?
 		fi
