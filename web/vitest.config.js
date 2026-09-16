@@ -18,13 +18,15 @@ export default defineConfig({
       include: ['src/**'],
       // markerIcons only wires shapes.js into Leaflet, which needs a DOM.
       // Its geometry is covered by shapes.test.js.
-      exclude: ['src/lib/markerIcons.js', 'src/**/*.test.{js,jsx}'],
+      // main.jsx is the ReactDOM entry point (3-line boilerplate) that
+      // cannot be meaningfully unit-tested in Vitest.
+      exclude: ['src/lib/markerIcons.js', 'src/main.jsx', 'src/**/*.test.{js,jsx}'],
       reporter: ['text', 'html'],
       thresholds: {
-        lines: 50,
-        branches: 50,
-        functions: 50,
-        statements: 50,
+        lines: 60,
+        branches: 60,
+        functions: 60,
+        statements: 60,
       },
     },
   },
