@@ -176,6 +176,58 @@ describe('parseSchools', () => {
     });
   });
 
+  // --- Duplicate ID disambiguation (regression tests for #45) --------------
+
+  it('disambiguates duplicate fallback IDs when multiple schools share coordinates and lack a school code', () => {
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: '', 學校名稱: '甲校', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 20, 學校代碼: '', 學校名稱: '乙校', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 30, 學校代碼: '', 學校名稱: '丙校', 緯度: '24.9', 經度: '121.5' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(3);
+    expect(schools[0].id).toBe('24.9,121.5');
+    expect(schools[1].id).toBe('24.9,121.5#2');
+    expect(schools[2].id).toBe('24.9,121.5#3');
+  });
+
+  it('does not add a suffix when only one school uses a fallback ID', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: '', 學校名稱: '孤獨校' })]),
+    );
+
+    expect(schools[0].id).toBe('24.87235152,121.40522708');
+    expect(schools[0].id).not.toContain('#');
+  });
+
+  it('disambiguates explicit duplicate school codes the same way', () => {
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'DUP001', 學校名稱: '甲校' }),
+        row({ projected: 20, 學校代碼: 'DUP001', 學校名稱: '乙校' }),
+      ]),
+    );
+
+    expect(schools[0].id).toBe('DUP001');
+    expect(schools[1].id).toBe('DUP001#2');
+  });
+
+  it('does not affect summarize() totals after disambiguation', () => {
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: '', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 20, 學校代碼: '', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 30, 學校代碼: '', 緯度: '24.9', 經度: '121.5' }),
+      ]),
+    );
+
+    const totals = summarize(schools, 130);
+    expect(totals.schools).toBe(3);
+    expect(totals.students).toBe(60);
+  });
+
   it('returns unique counties, sorted for zh-Hant', () => {
     const { counties } = parseSchools(
       csv([

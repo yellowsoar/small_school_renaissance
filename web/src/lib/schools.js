@@ -86,6 +86,20 @@ export const parseSchools = (csvText) => {
 
   const schools = data.map(toSchool).filter(Boolean);
 
+  // --- Duplicate ID disambiguation (#45) -----------------------------------
+  // When multiple schools share the same fallback ID (e.g. same coordinates
+  // with no school code), append #2, #3, … to subsequent duplicates so every
+  // React key stays unique. The first occurrence keeps its original ID for
+  // backward compatibility.
+  const idCounts = new Map();
+  for (const school of schools) {
+    const count = (idCounts.get(school.id) ?? 0) + 1;
+    idCounts.set(school.id, count);
+    if (count > 1) {
+      school.id = `${school.id}#${count}`;
+    }
+  }
+
   // --- Parse-result validation ---------------------------------------------
   if (schools.length === 0 && data.length > 0) {
     throw new Error(
