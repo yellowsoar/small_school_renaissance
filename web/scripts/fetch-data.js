@@ -24,8 +24,13 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Node >= 20.12 can read .env natively; missing file is not an error here.
 try {
   process.loadEnvFile(resolve(root, '.env'));
-} catch {
-  /* no .env — defaults below apply */
+} catch (err) {
+  // ENOENT = .env does not exist, safe to ignore (CI / production).
+  // Any other error (parse failure, EACCES, etc.) deserves a warning
+  // so the developer knows their .env was not applied.
+  if (err.code !== 'ENOENT') {
+    console.warn(`\u26a0\ufe0f  .env load error: ${err.message}`);
+  }
 }
 
 const DATA_OWNER = process.env.DATA_OWNER ?? 'g0v';
