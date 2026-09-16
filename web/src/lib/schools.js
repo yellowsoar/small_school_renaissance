@@ -18,6 +18,10 @@ export const tierFor = (headcount) =>
 /**
  * Turns one raw CSV row into the shape the UI actually consumes.
  * Returns `null` for rows we cannot place on the map.
+ *
+ * `deltaRatio` is stored as a ratio (e.g. -0.0643 means -6.43%).
+ * SchoolPopup formats it with `Intl.NumberFormat({ style: 'percent' })`,
+ * which internally multiplies by 100 (ECMA-402 PartitionNumberPattern step 2).
  */
 const toSchool = (row) => {
   const lat = num(row['緯度']);
@@ -87,6 +91,37 @@ export const parseSchools = (csvText) => {
     throw new Error(
       `CSV 包含 ${data.length} 筆資料但無法解析出任何學校，請檢查欄位格式`,
     );
+  }
+
+  // --- deltaRatio format detection (#32) -----------------------------------
+  // The upstream CSV column「學生人數變化百分比」stores values as ratios
+  // (e.g. -0.0643 = -6.43%). If upstream ever switches to percentage numbers
+  // (e.g. -5.2 = -5.2%), Intl.NumberFormat({ style: 'percent' }) would
+  // display -520% instead of -5.2%. Detect this at the batch level.
+  const ratios = schools.map((s) => s.deltaRatio).filter((v) => v != null);
+  if (ratios.length > 0) {
+    const outliers = ratios.filter((v) => Math.abs(v) > 1);
+    const outlierRatio = outliers.length / ratios.length;
+
+    if (outlierRatio > 0.5) {
+      throw new Error(
+        `deltaRatio 格式異常：${outliers.length}/${ratios.length} 筆的絕對值超過 1，` +
+          `疑似上游 CSV「學生人數變化百分比」已改為百分比數值格式（如 -5.2 代表 -5.2%）。` +
+          `本系統預期比率格式（如 -0.052 代表 -5.2%），因 Intl.NumberFormat({ style: "percent" }) ` +
+          `會內部乘以 100。請檢查上游資料格式。`,
+      );
+    }
+
+    if (outliers.length > 0) {
+      const sampleNames = schools
+        .filter((s) => s.deltaRatio != null && Math.abs(s.deltaRatio) > 1)
+        .slice(0, 3)
+        .map((s) => s.name);
+      console.warn(
+        `deltaRatio 離群值：${outliers.length} 筆學校的 |deltaRatio| > 1` +
+          `（${sampleNames.join('、')}），可能為合併或學區調整導致的大幅變化。`,
+      );
+    }
   }
 
   const counties = [...new Set(schools.map((school) => school.county))].sort((a, b) =>

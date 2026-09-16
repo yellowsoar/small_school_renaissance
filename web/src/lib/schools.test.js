@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PROJECTION_YEARS } from '../config/index.js';
 import { filterSchools, parseSchools, summarize, tierFor } from './schools.js';
 
@@ -289,6 +289,84 @@ describe('parseSchools', () => {
     const { schools } = parseSchools(mixed);
     expect(schools).toHaveLength(1);
     expect(schools[0].id).toBe('good');
+  });
+
+  // --- deltaRatio batch format detection (regression tests for #32) --------
+
+  it('throws when majority of deltaRatio values exceed |1| (percentage format)', () => {
+    const percentageFormat = csv([
+      row({ projected: 10, 學校代碼: 'a', 學生人數變化百分比: '-5.2' }),
+      row({ projected: 10, 學校代碼: 'b', 學生人數變化百分比: '-12.8' }),
+      row({ projected: 10, 學校代碼: 'c', 學生人數變化百分比: '3.1' }),
+      row({ projected: 10, 學校代碼: 'd', 學生人數變化百分比: '-0.5' }),
+    ]);
+
+    expect(() => parseSchools(percentageFormat)).toThrow('百分比數值');
+    expect(() => parseSchools(percentageFormat)).toThrow('3/4');
+  });
+
+  it('warns but does not throw for a few outlier deltaRatio values above |1|', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const fewOutliers = csv([
+      row({ projected: 10, 學校代碼: 'a', 學生人數變化百分比: '-0.064' }),
+      row({ projected: 10, 學校代碼: 'b', 學生人數變化百分比: '-0.15' }),
+      row({ projected: 10, 學校代碼: 'c', 學生人數變化百分比: '1.5' }),
+      row({ projected: 10, 學校代碼: 'd', 學生人數變化百分比: '-0.30' }),
+    ]);
+
+    const { schools } = parseSchools(fewOutliers);
+    expect(schools).toHaveLength(4);
+    // Filter for deltaRatio-specific warnings (CSV parse warnings may also fire)
+    const deltaWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('deltaRatio'),
+    );
+    expect(deltaWarns).toHaveLength(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('stays silent when all deltaRatio values are within |1|', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const normalFormat = csv([
+      row({ projected: 10, 學校代碼: 'a', 學生人數變化百分比: '-0.064' }),
+      row({ projected: 10, 學校代碼: 'b', 學生人數變化百分比: '-0.15' }),
+      row({ projected: 10, 學校代碼: 'c', 學生人數變化百分比: '0.02' }),
+    ]);
+
+    parseSchools(normalFormat);
+    const deltaWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('deltaRatio'),
+    );
+    expect(deltaWarns).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  it('excludes null deltaRatio values from the format check', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const withNulls = csv([
+      row({ projected: 10, 學校代碼: 'a', 學生人數變化百分比: '-0.064' }),
+      row({ projected: 10, 學校代碼: 'b', 學生人數變化百分比: '' }),
+      row({ projected: 10, 學校代碼: 'c', 學生人數變化百分比: '' }),
+      row({ projected: 10, 學校代碼: 'd', 學生人數變化百分比: '0.02' }),
+    ]);
+
+    const { schools } = parseSchools(withNulls);
+    expect(schools).toHaveLength(4);
+    const deltaWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('deltaRatio'),
+    );
+    expect(deltaWarns).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not alter existing deltaRatio assertions for current data format', () => {
+    const { schools } = parseSchools(csv([row({ projected: 126 })]));
+    expect(schools[0].deltaRatio).toBeCloseTo(-0.0643, 4);
   });
 });
 
