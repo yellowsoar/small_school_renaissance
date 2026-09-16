@@ -246,4 +246,24 @@ describe('App', () => {
     const sidebar = document.getElementById('sidebar');
     expect(sidebar.hasAttribute('inert')).toBe(false);
   });
+
+  it('renders a skip-to-content link with correct href', () => {
+    setupLoading();
+    render(<App />);
+
+    const skipLink = screen.getByText('\u8df3\u5230\u4e3b\u5167\u5bb9');
+    expect(skipLink.tagName).toBe('A');
+    expect(skipLink.getAttribute('href')).toBe('#main-content');
+    expect(skipLink.classList.contains('skip-link')).toBe(true);
+  });
+
+  it('renders main element with id="main-content" and tabIndex=-1', () => {
+    setupReady();
+    render(<App />);
+
+    const main = document.getElementById('main-content');
+    expect(main).toBeTruthy();
+    expect(main.tagName).toBe('MAIN');
+    expect(main.getAttribute('tabindex')).toBe('-1');
+  });
 });
