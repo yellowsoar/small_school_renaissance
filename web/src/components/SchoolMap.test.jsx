@@ -75,6 +75,18 @@ describe('SchoolMap', () => {
     );
   });
 
+  it('passes a11y attributes to MapContainer', () => {
+    render(<SchoolMap schools={schools} year={year} layers={layers} />);
+
+    expect(mocks.mapContainerProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'application',
+        'aria-roledescription': '互動地圖',
+        'aria-label': '全台國小廢校風險地圖，可用鍵盤方向鍵平移、加減鍵縮放',
+      }),
+    );
+  });
+
   it('passes tile config to TileLayer', () => {
     render(<SchoolMap schools={schools} year={year} layers={layers} />);
 

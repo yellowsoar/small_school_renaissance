@@ -12,6 +12,9 @@ export default function SchoolMap({ schools, year, layers }) {
       minZoom={MAP.minZoom}
       maxZoom={MAP.maxZoom}
       scrollWheelZoom
+      role="application"
+      aria-roledescription="互動地圖"
+      aria-label="全台國小廢校風險地圖，可用鍵盤方向鍵平移、加減鍵縮放"
     >
       <TileLayer
         url={MAP.tileUrl}
