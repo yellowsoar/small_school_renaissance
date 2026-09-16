@@ -20,6 +20,12 @@ export default defineConfig({
       // Its geometry is covered by shapes.test.js.
       exclude: ['src/lib/markerIcons.js', 'src/**/*.test.{js,jsx}'],
       reporter: ['text', 'html'],
+      thresholds: {
+        lines: 50,
+        branches: 50,
+        functions: 50,
+        statements: 50,
+      },
     },
   },
 });
