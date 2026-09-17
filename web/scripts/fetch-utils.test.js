@@ -129,6 +129,76 @@ describe('fetchWithRetry', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     expect(console.warn).toHaveBeenCalledTimes(1);
   });
+
+  /* -------------------------------------------------------------- */
+  /*  429 retriable behavior (#110)                                    */
+  /* -------------------------------------------------------------- */
+
+  it('retries on 429 Too Many Requests', async () => {
+    const rateLimited = new Response('', {
+      status: 429,
+      statusText: 'Too Many Requests',
+    });
+    const ok = new Response('ok', { status: 200, statusText: 'OK' });
+    ok.ok = true;
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(rateLimited)
+      .mockResolvedValueOnce(ok);
+
+    const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
+
+    expect(res.ok).toBe(true);
+    // 429 is retriable — two calls (initial + retry).
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws after retries exhausted on repeated 429', async () => {
+    globalThis.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response('', { status: 429, statusText: 'Too Many Requests' }),
+      ),
+    );
+
+    await expect(
+      fetchWithRetry(url, { retries: 1, timeout: 1000 }),
+    ).rejects.toThrow('HTTP 429');
+    // initial + 1 retry = 2 calls (not 1 like non-retriable 4xx).
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('still does not retry on other 4xx after 429 carve-out', async () => {
+    const forbidden = { ok: false, status: 403, statusText: 'Forbidden' };
+    globalThis.fetch = vi.fn().mockResolvedValue(forbidden);
+
+    await expect(
+      fetchWithRetry(url, { retries: 2, timeout: 1000 }),
+    ).rejects.toThrow('HTTP 403 Forbidden');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('includes Retry-After delay in console.warn message on 429', async () => {
+    const rateLimited = new Response('', {
+      status: 429,
+      statusText: 'Too Many Requests',
+      headers: { 'Retry-After': '60' },
+    });
+    const ok = new Response('ok', { status: 200, statusText: 'OK' });
+    ok.ok = true;
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(rateLimited)
+      .mockResolvedValueOnce(ok);
+
+    await fetchWithRetry(url, { retries: 2, timeout: 1000 });
+
+    // The delay should be at least 60000ms (Retry-After: 60 seconds).
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('60000'),
+    );
+  });
 });
 
 describe('validateCsvContent', () => {

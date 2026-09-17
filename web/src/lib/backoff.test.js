@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fullJitter, BACKOFF_BASE_MS, BACKOFF_CAP_MS } from './backoff.js';
+import { fullJitter, parseRetryAfter, BACKOFF_BASE_MS, BACKOFF_CAP_MS } from './backoff.js';
 
 describe('fullJitter', () => {
   it('returns 0 when Math.random() returns 0', () => {
@@ -49,6 +49,50 @@ describe('fullJitter', () => {
     // attempt 3: min(3000, 500 * 8) = 3000 (capped)
     expect(fullJitter(3, 500, 3000)).toBe(3000);
     vi.restoreAllMocks();
+  });
+});
+
+describe('parseRetryAfter', () => {
+  it('returns 0 for null, undefined, or empty string', () => {
+    expect(parseRetryAfter(null)).toBe(0);
+    expect(parseRetryAfter(undefined)).toBe(0);
+    expect(parseRetryAfter('')).toBe(0);
+    expect(parseRetryAfter('  ')).toBe(0);
+  });
+
+  it('parses integer seconds into milliseconds', () => {
+    expect(parseRetryAfter('0')).toBe(0);
+    expect(parseRetryAfter('1')).toBe(1_000);
+    expect(parseRetryAfter('60')).toBe(60_000);
+    expect(parseRetryAfter('120')).toBe(120_000);
+  });
+
+  it('rounds fractional seconds', () => {
+    expect(parseRetryAfter('1.5')).toBe(2_000);
+  });
+
+  it('returns 0 for negative values', () => {
+    expect(parseRetryAfter('-1')).toBe(0);
+    expect(parseRetryAfter('-60')).toBe(0);
+  });
+
+  it('parses a future HTTP-date into positive milliseconds', () => {
+    const futureDate = new Date(Date.now() + 30_000);
+    const header = futureDate.toUTCString();
+    const result = parseRetryAfter(header);
+    // Allow small timing tolerance.
+    expect(result).toBeGreaterThan(28_000);
+    expect(result).toBeLessThanOrEqual(31_000);
+  });
+
+  it('returns 0 for a past HTTP-date', () => {
+    const pastDate = new Date(Date.now() - 60_000);
+    expect(parseRetryAfter(pastDate.toUTCString())).toBe(0);
+  });
+
+  it('returns 0 for unparseable strings', () => {
+    expect(parseRetryAfter('not-a-number-or-date')).toBe(0);
+    expect(parseRetryAfter('abc')).toBe(0);
   });
 });
 

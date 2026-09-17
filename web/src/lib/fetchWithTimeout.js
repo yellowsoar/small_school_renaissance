@@ -5,7 +5,7 @@
  * for broad browser compatibility instead of AbortSignal.timeout().
  */
 
-import { fullJitter } from './backoff.js';
+import { fullJitter, parseRetryAfter } from './backoff.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 2;
@@ -86,7 +86,16 @@ export async function fetchWithTimeout(
       const res = await fetch(url, { signal: controller.signal });
       if (res.ok) return res;
 
-      // 4xx client errors are not retriable — fail immediately.
+      // 429 Too Many Requests is a transient rate-limit — retriable
+      // with optional Retry-After delay.
+      if (res.status === 429) {
+        throw Object.assign(
+          new Error(`HTTP ${res.status} ${res.statusText}`),
+          { retryAfterMs: parseRetryAfter(res.headers.get('Retry-After')) },
+        );
+      }
+
+      // Other 4xx client errors are not retriable — fail immediately.
       if (res.status >= 400 && res.status < 500) {
         throw Object.assign(
           new Error(`HTTP ${res.status} ${res.statusText}`),
@@ -116,7 +125,11 @@ export async function fetchWithTimeout(
       if (attempt === retries) throw normalised;
 
       // Back off before the next attempt (full-jitter exponential backoff).
-      await abortableSleep(fullJitter(attempt), signal);
+      // If the server sent Retry-After, use at least that delay.
+      await abortableSleep(
+        Math.max(fullJitter(attempt), normalised.retryAfterMs ?? 0),
+        signal,
+      );
     } finally {
       clearTimeout(timeoutId);
       signal?.removeEventListener('abort', onExternalAbort);
