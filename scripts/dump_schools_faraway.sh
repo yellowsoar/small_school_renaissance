@@ -51,20 +51,6 @@ wait_a_second() {
 	sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
 }
 
-remove_rows_mismatch_header() {
-	local tmpfile
-	tmpfile=$(mktemp "${1}.XXXXXX")
-	trap 'rm -f "$tmpfile"' RETURN
-
-	local expected_commas
-	expected_commas=$(head -n 1 "${1}" | tr -dc ',' | wc -c)
-
-	echo "⚙️ Removing rows that its column mismatches the header..." \
-		&& sed -n "/\(.*,\)\{${expected_commas},\}/p" "${1}" > "$tmpfile" \
-		&& mv -f "$tmpfile" "${1}" \
-		&& echo "✅ Done for ${1}"
-}
-
 main() {
 	check_directory
 	for YEAR_CURRENT in $(seq ${YEAR_START} ${YEAR_END}); do
@@ -88,11 +74,6 @@ main() {
 
 		if ! convert_to_csv_if_needed "${FULL_FILE_NAME}"; then
 			echo "⚠️  no convertible file found for ${FULL_FILE_NAME}" >&2
-		fi
-
-		if [ -f "./${NAME_DIR}/${FULL_FILE_NAME}.csv" ]; then
-			remove_rows_mismatch_header \
-				"./${NAME_DIR}/${FULL_FILE_NAME}.csv"
 		fi
 
 	done
