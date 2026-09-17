@@ -23,13 +23,21 @@ remove_rows_mismatch_header() {
 	tmpfile=$(mktemp "${file}.XXXXXX")
 	trap 'rm -f "$tmpfile"' RETURN
 
-	local expected_commas
+	local expected_commas before_count after_count removed
 	expected_commas=$(head -n 1 "${file}" | tr -dc ',' | wc -c)
+	before_count=$(wc -l < "${file}")
 
 	echo "⚙️ Removing rows that its column mismatches the header..." \
 		&& sed -n "/\(.*,\)\{${expected_commas},\}/p" "${file}" > "$tmpfile" \
-		&& mv -f "$tmpfile" "${file}" \
-		&& echo "✅ Done for ${file}"
+		&& mv -f "$tmpfile" "${file}"
+
+	after_count=$(wc -l < "${file}")
+	removed=$((before_count - after_count))
+	if [ "$removed" -gt 0 ]; then
+		echo "⚠️  Removed ${removed} row(s) from ${file}"
+	else
+		echo "✅ All rows match header for ${file}"
+	fi
 }
 
 # Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
