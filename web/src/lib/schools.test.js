@@ -261,7 +261,7 @@ describe('parseSchools', () => {
 
   it('respects quoted fields containing commas', () => {
     const { schools } = parseSchools(
-      csv([row({ projected: 10, 學校名稱: '"\u5e02\u7acb\u63d2\u89d2\u570b\u5c0f, \u5206\u6821"' })]),
+      csv([row({ projected: 10, 學校名稱: '"市立插角國小, 分校"' })]),
     );
 
     expect(schools[0].name).toBe('市立插角國小, 分校');
@@ -623,6 +623,55 @@ describe('parseSchools', () => {
     expect(dropWarns[0][0]).toContain('座標缺失或超出範圍');
 
     warnSpy.mockRestore();
+  });
+
+  // --- Strict numeric parsing (regression tests for #113) ------------------
+
+  it('rejects numeric fields with trailing non-numeric characters (#113)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: 'test', 學生人數: '123人' })]),
+    );
+
+    expect(schools[0].enrollment).toBeNull();
+  });
+
+  it('rejects percentage-suffixed values in numeric fields (#113)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: 'test', 學生人數變化百分比: '0.5%' })]),
+    );
+
+    expect(schools[0].deltaRatio).toBeNull();
+
+    warnSpy.mockRestore();
+  });
+
+  it('rejects annotation-suffixed numeric fields (#113)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: 'test', 學生人數: '50(含分校)' })]),
+    );
+
+    expect(schools[0].enrollment).toBeNull();
+  });
+
+  it('parses pure numeric strings correctly with strict coercion (#113)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 126, 學校代碼: 'test' })]),
+    );
+
+    expect(schools[0].enrollment).toBe(160);
+    expect(schools[0].reference).toBe(171);
+    expect(schools[0].delta).toBe(-11);
+    expect(schools[0].deltaRatio).toBeCloseTo(-0.0643, 4);
+  });
+
+  it('returns null for whitespace-only numeric fields (#113)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: 'test', 學生人數: '   ' })]),
+    );
+
+    expect(schools[0].enrollment).toBeNull();
   });
 });
 
