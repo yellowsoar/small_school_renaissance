@@ -163,13 +163,18 @@ export const filterSchools = (schools, { year, counties, tiers, search }) => {
     }
 
     if (needle) {
-      // Each field is tested on its own. Concatenating them first would let a
-      // term straddle two fields, so "插角國小南投縣" would match a 南投縣 school
-      // named 插角國小 even though nobody would ever type that as one name.
-      const matches = [school.name, school.county, school.town].some((field) =>
-        field.toLowerCase().includes(needle),
+      // Split on whitespace for multi-token AND search (#90).
+      // Each token must appear in at least one field (OR across fields).
+      // Each field is tested on its own — concatenating them would let a
+      // term straddle two fields ("插角國小南投縣" should not match).
+      const tokens = needle.split(/\s+/).filter(Boolean);
+      const fields = [school.name, school.county, school.town].map((f) =>
+        f.toLowerCase(),
       );
-      if (!matches) return false;
+      const allMatch = tokens.every((token) =>
+        fields.some((field) => field.includes(token)),
+      );
+      if (!allMatch) return false;
     }
 
     return true;
