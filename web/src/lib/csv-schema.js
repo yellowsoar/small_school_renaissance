@@ -4,5 +4,23 @@
  * Both the build-time download validator (fetch-utils.js) and the browser-side
  * parser (schools.js) import this list, so a rename in the upstream dataset
  * triggers a single update here instead of a scattered hunt-and-sync.
+ *
+ * @see config/index.js for PROJECTION_YEARS (browser-only, uses import.meta.env)
  */
-export const REQUIRED_HEADERS = ['學校代碼', '學校名稱', '緯度', '經度'];
+
+/**
+ * The first projection year in the upstream CSV dataset (民國 year).
+ * Used as a sentinel in REQUIRED_HEADERS to detect projection column renames.
+ *
+ * Defined here instead of importing from config/index.js because that module
+ * uses import.meta.env (Vite-only), which Node build scripts cannot resolve.
+ */
+export const FIRST_PROJECTION_YEAR = 114;
+
+export const REQUIRED_HEADERS = [
+  '學校代碼',
+  '學校名稱',
+  '緯度',
+  '經度',
+  `推估${FIRST_PROJECTION_YEAR}年人數`,
+];
