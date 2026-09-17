@@ -14,11 +14,18 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('react-leaflet', () => ({
-  Marker: ({ children, title, alt }) => (
-    <div data-testid="marker" data-title={title} data-alt={alt}>
-      {children}
-    </div>
-  ),
+  Marker: ({ children, title, alt, eventHandlers }) => {
+    const refCb = (node) => {
+      if (node && eventHandlers?.add) {
+        eventHandlers.add({ target: { getElement: () => node } });
+      }
+    };
+    return (
+      <div ref={refCb} data-testid="marker" data-title={title} data-alt={alt}>
+        {children}
+      </div>
+    );
+  },
   Popup: ({ children }) => <div data-testid="popup">{children}</div>,
 }));
 
@@ -122,5 +129,42 @@ describe('SchoolMarkers', () => {
     render(<SchoolMarkers schools={[school]} year={130} visible={true} />);
 
     expect(mocks.iconFor).toHaveBeenCalledWith(tier);
+  });
+
+  it('sets role="img" on the marker element via eventHandlers.add', () => {
+    const school = makeSchool();
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(tier);
+
+    render(<SchoolMarkers schools={[school]} year={130} visible={true} />);
+
+    const marker = screen.getByTestId('marker');
+    expect(marker.getAttribute('role')).toBe('img');
+  });
+
+  it('sets aria-label with school name and tier label via eventHandlers.add', () => {
+    const school = makeSchool();
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(tier);
+
+    render(<SchoolMarkers schools={[school]} year={130} visible={true} />);
+
+    const marker = screen.getByTestId('marker');
+    expect(marker.getAttribute('aria-label')).toBe('\u6e2c\u8a66\u570b\u5c0f\uff08\u6975\u9ad8\u98a8\u96aa\uff09');
+  });
+
+  it('sets correct aria-label for each school in a multi-marker render', () => {
+    const schools = [
+      makeSchool(),
+      makeSchool({ id: 'school-2', name: '\u53e6\u4e00\u570b\u5c0f' }),
+    ];
+    mocks.useVisibleSchools.mockReturnValue(schools);
+    mocks.tierFor.mockReturnValue(tier);
+
+    render(<SchoolMarkers schools={schools} year={130} visible={true} />);
+
+    const markers = screen.getAllByTestId('marker');
+    expect(markers[0].getAttribute('aria-label')).toBe('\u6e2c\u8a66\u570b\u5c0f\uff08\u6975\u9ad8\u98a8\u96aa\uff09');
+    expect(markers[1].getAttribute('aria-label')).toBe('\u53e6\u4e00\u570b\u5c0f\uff08\u6975\u9ad8\u98a8\u96aa\uff09');
   });
 });
