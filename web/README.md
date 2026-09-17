@@ -1,3 +1,5 @@
+![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/yellowsoar/small_school_renaissance/badges/coverage.json)
+
 # 廢校預警 ・ React 版
 
 [`yellowsoar/small_school_renaissance`](https://github.com/yellowsoar/small_school_renaissance) 的前端。把原本的單檔 `docs/index.html`（Leaflet + PapaParse + 全域 script tag）重寫成一個現代 JavaScript 的 React 專案。
