@@ -202,4 +202,20 @@ describe('validateCsvContent', () => {
       expect(err.message.length).toBeLessThan(400);
     }
   });
+
+  /* -------------------------------------------------------------- */
+  /*  Column-level match regression tests (#67)                       */
+  /* -------------------------------------------------------------- */
+
+  it('rejects substring collision: “大緯度計” does not satisfy “緯度” requirement', () => {
+    // “大緯度計” contains “緯度” as a substring but is a different column.
+    // The old `firstLine.includes(col)` would pass; column-level match must reject.
+    const csv = '學校代碼,學校名稱,大緯度計,經度,推估114年人數\n1,test,25,121,100';
+    expect(() => validateCsvContent(csv)).toThrow('緯度');
+  });
+
+  it('accepts quoted CSV headers after unquoting', () => {
+    const csv = '"學校代碼","學校名稱","緯度","經度","推估114年人數"\n1,test,25,121,100';
+    expect(() => validateCsvContent(csv)).not.toThrow();
+  });
 });

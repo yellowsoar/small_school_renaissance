@@ -83,7 +83,7 @@ export async function fetchWithRetry(
  * Checks:
  * 1. Content is non-empty.
  * 2. Content does not look like HTML (error pages, login pages).
- * 3. The header line contains all `requiredHeaders`.
+ * 3. The header line contains all `requiredHeaders` (column-level match).
  * 4. At least one data row exists beyond the header.
  *
  * @param {string} body - The raw response body text
@@ -110,7 +110,10 @@ export function validateCsvContent(
     );
   }
 
-  const missing = requiredHeaders.filter((col) => !firstLine.includes(col));
+  // Column-level match: split by comma, trim, strip enclosing quotes.
+  // Aligned with parseSchools() which uses Array.includes() on parsed keys.
+  const headers = firstLine.split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
+  const missing = requiredHeaders.filter((col) => !headers.includes(col));
   if (missing.length > 0) {
     throw new Error(
       `CSV header missing required columns: ${missing.join(', ')}` +
