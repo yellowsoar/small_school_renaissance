@@ -173,11 +173,11 @@ export const filterSchools = (schools, { year, counties, tiers, search }) => {
 
 /** Headline numbers for the summary strip. */
 export const summarize = (schools, year) => {
-  const totals = { schools: schools.length, students: 0, closing: 0, atRisk: 0 };
+  const totals = { schools: schools.length, students: 0, closing: 0, atRisk: 0, unprojected: 0 };
 
   for (const school of schools) {
     const projected = school.projections.get(year);
-    if (projected == null) continue;
+    if (projected == null) { totals.unprojected += 1; continue; }
     totals.students += Math.max(0, projected);
     if (projected <= 0) totals.closing += 1;
     if (projected <= 50) totals.atRisk += 1;
