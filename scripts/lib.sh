@@ -13,6 +13,25 @@ sed_inplace() {
 	sed "$@" "$file" > "$tmpfile" && mv -f "$tmpfile" "$file"
 }
 
+# Remove rows whose column count does not match the header row.
+# Replaces the heuristic sed '/,,,,,/d' which could false-positive on
+# legitimate rows with many empty fields (#83).
+# Usage: remove_rows_mismatch_header <csv-file>
+remove_rows_mismatch_header() {
+	local file="$1"
+	local tmpfile
+	tmpfile=$(mktemp "${file}.XXXXXX")
+	trap 'rm -f "$tmpfile"' RETURN
+
+	local expected_commas
+	expected_commas=$(head -n 1 "${file}" | tr -dc ',' | wc -c)
+
+	echo "⚙️ Removing rows that its column mismatches the header..." \
+		&& sed -n "/\(.*,\)\{${expected_commas},\}/p" "${file}" > "$tmpfile" \
+		&& mv -f "$tmpfile" "${file}" \
+		&& echo "✅ Done for ${file}"
+}
+
 # Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
 # Skips if CSV already exists. soffice supports all three formats.
 # Requires NAME_DIR to be set by the caller.
@@ -45,11 +64,8 @@ convert_to_csv_if_needed() {
 					--outdir "./${NAME_DIR}" \
 					"$src" \
 				&& echo "✅ File converted to ${csv_path}" \
-				&& echo "⚙️ Handling csv header..." \
-				&& sed_inplace \
-					"$csv_path" \
-					'/,,,,,/d' \
-				&& echo "✅ Non header Content removed"
+				&& remove_rows_mismatch_header \
+					"$csv_path"
 			return $?
 		fi
 	done
