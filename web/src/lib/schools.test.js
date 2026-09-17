@@ -34,8 +34,8 @@ const row = ({ projected, ...overrides } = {}) => ({
   學校代碼: '014630',
   學校名稱: '市立插角國小',
   縣市名稱: '新北市',
-  鄉鎮市區: '三峽區',
-  地址: '[237]新北市三峽區插角里插角路39號',
+  鄉鎮市區: '三峻區',
+  地址: '[237]新北市三峻區插角里插角路39號',
   電話: '(02)26720230',
   網址: 'https://www.cgps.ntpc.edu.tw',
   地區屬性: '偏遠',
@@ -112,7 +112,7 @@ describe('parseSchools', () => {
       id: '014630',
       name: '市立插角國小',
       county: '新北市',
-      town: '三峽區',
+      town: '三峻區',
       remoteness: '偏遠',
       enrollment: 160,
       reference: 171,
@@ -549,6 +549,81 @@ describe('parseSchools', () => {
     const { schools } = parseSchools(csv([row({ projected: 126 })]));
     expect(schools[0].deltaRatio).toBeCloseTo(-0.0643, 4);
   });
+
+  // --- Drop-ratio warning (regression tests for #102) ----------------------
+
+  it('warns when more than 20% of rows are dropped due to missing coordinates (#102)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 1 valid + 4 invalid = 80% drop rate → should warn
+    parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'valid' }),
+        row({ projected: 10, 學校代碼: 'bad1', 緯度: '', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'bad2', 緯度: '', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'bad3', 緯度: 'N/A', 經度: 'N/A' }),
+        row({ projected: 10, 學校代碼: 'bad4', 緯度: '', 經度: '' }),
+      ]),
+    );
+
+    const dropWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
+    );
+    expect(dropWarns).toHaveLength(1);
+    expect(dropWarns[0][0]).toContain('5 筆資料');
+    expect(dropWarns[0][0]).toContain('4 筆');
+    expect(dropWarns[0][0]).toContain('80.0%');
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn when drop ratio is at or below 20% (#102)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 4 valid + 1 invalid = 20% drop rate → should NOT warn
+    parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'a' }),
+        row({ projected: 10, 學校代碼: 'b', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 10, 學校代碼: 'c', 緯度: '24.8', 經度: '121.4' }),
+        row({ projected: 10, 學校代碼: 'd', 緯度: '25.0', 經度: '121.3' }),
+        row({ projected: 10, 學校代碼: 'bad', 緯度: '', 經度: '' }),
+      ]),
+    );
+
+    const dropWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
+    );
+    expect(dropWarns).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  it('includes drop count and percentage in the warning message (#102)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 2 valid + 8 invalid = 80% drop rate
+    const rows = [
+      row({ projected: 10, 學校代碼: 'ok1' }),
+      row({ projected: 10, 學校代碼: 'ok2', 緯度: '24.9', 經度: '121.5' }),
+    ];
+    for (let i = 0; i < 8; i++) {
+      rows.push(row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }));
+    }
+
+    parseSchools(csv(rows));
+
+    const dropWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
+    );
+    expect(dropWarns).toHaveLength(1);
+    expect(dropWarns[0][0]).toMatch(/10 筆資料/);
+    expect(dropWarns[0][0]).toMatch(/8 筆/);
+    expect(dropWarns[0][0]).toMatch(/80\.0%/);
+    expect(dropWarns[0][0]).toContain('座標缺失或超出範圍');
+
+    warnSpy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -558,8 +633,8 @@ describe('parseSchools', () => {
 describe('filterSchools', () => {
   const dataset = parseSchools(
     csv([
-      row({ projected: 0, 學校代碼: 'a', 學校名稱: '市立大成國小', 縣市名稱: '新北市', 鄉鎮市區: '三峽區' }),
-      row({ projected: 26, 學校代碼: 'b', 學校名稱: '市立建安國小', 縣市名稱: '新北市', 鄉鎮市區: '三峽區' }),
+      row({ projected: 0, 學校代碼: 'a', 學校名稱: '市立大成國小', 縣市名稱: '新北市', 鄉鎮市區: '三峻區' }),
+      row({ projected: 26, 學校代碼: 'b', 學校名稱: '市立建安國小', 縣市名稱: '新北市', 鄉鎮市區: '三峻區' }),
       row({ projected: 126, 學校代碼: 'c', 學校名稱: '市立插角國小', 縣市名稱: '南投縣', 鄉鎮市區: '仁愛鄉' }),
       row({ projected: null, 學校代碼: 'd', 學校名稱: '市立淡海國小', 縣市名稱: '臺東縣', 鄉鎮市區: '海端鄉' }),
     ]),
@@ -594,7 +669,7 @@ describe('filterSchools', () => {
 
   it('searches across name, county and town', () => {
     expect(ids({ search: '插角' })).toEqual(['c']);
-    expect(ids({ search: '三峽區' })).toEqual(['a', 'b']);
+    expect(ids({ search: '三峻區' })).toEqual(['a', 'b']);
     expect(ids({ search: '臺東縣' })).toEqual(['d']);
   });
 
@@ -618,8 +693,8 @@ describe('filterSchools', () => {
   });
 
   it('matches when space-separated tokens hit the same field', () => {
-    // '三峽' matches town, '建安' matches name → school 'b'
-    expect(ids({ search: '三峽 建安' })).toEqual(['b']);
+    // '三峻' matches town, '建安' matches name → school 'b'
+    expect(ids({ search: '三峻 建安' })).toEqual(['b']);
   });
 
   it('handles multiple consecutive spaces between tokens', () => {
