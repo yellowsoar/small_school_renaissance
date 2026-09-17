@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import SummaryBar from './SummaryBar.jsx';
 
-const totals = { schools: 2634, closing: 42, atRisk: 187, students: 98765 };
+const totals = { schools: 2634, closing: 42, atRisk: 187, students: 98765, unprojected: 0 };
 
 describe('SummaryBar', () => {
   beforeEach(() => vi.useFakeTimers());
@@ -67,7 +67,7 @@ describe('SummaryBar', () => {
 
     const liveRegion = container.querySelector('[aria-live="polite"]');
 
-    const newTotals = { schools: 100, closing: 10, atRisk: 30, students: 5000 };
+    const newTotals = { schools: 100, closing: 10, atRisk: 30, students: 5000, unprojected: 0 };
     rerender(<SummaryBar totals={newTotals} year={126} />);
 
     act(() => vi.advanceTimersByTime(400));
@@ -76,17 +76,33 @@ describe('SummaryBar', () => {
   });
 
   it('handles zero values without crashing', () => {
-    const zeros = { schools: 0, closing: 0, atRisk: 0, students: 0 };
+    const zeros = { schools: 0, closing: 0, atRisk: 0, students: 0, unprojected: 0 };
     render(<SummaryBar totals={zeros} year={130} />);
 
     expect(screen.getAllByText('0')).toHaveLength(4);
   });
 
   it('formats large numbers with thousands separators', () => {
-    const large = { schools: 1234567, closing: 0, atRisk: 0, students: 9876543 };
+    const large = { schools: 1234567, closing: 0, atRisk: 0, students: 9876543, unprojected: 0 };
     render(<SummaryBar totals={large} year={130} />);
 
     expect(screen.getByText('1,234,567')).toBeTruthy();
     expect(screen.getByText('9,876,543')).toBeTruthy();
+  });
+
+  // --- Unprojected display (regression tests for #59) ----------------------
+
+  it('shows the unprojected stat line when unprojected > 0', () => {
+    const withUnprojected = { schools: 500, closing: 10, atRisk: 50, students: 30000, unprojected: 15 };
+    render(<SummaryBar totals={withUnprojected} year={130} />);
+
+    expect(screen.getByText('其中無推估資料')).toBeTruthy();
+    expect(screen.getByText('15')).toBeTruthy();
+  });
+
+  it('does not show the unprojected stat line when unprojected is 0', () => {
+    render(<SummaryBar totals={totals} year={130} />);
+
+    expect(screen.queryByText('其中無推估資料')).toBeNull();
   });
 });
