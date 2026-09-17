@@ -21,6 +21,9 @@ WGET_TIMEOUT="--connect-timeout=10 --read-timeout=30"
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
+# Accumulator for failed downloads
+FAILED_DOWNLOADS=()
+
 check_directory() {
 	if [ ! -d ${NAME_DIR} ]; then
 		mkdir ${NAME_DIR}
@@ -69,16 +72,23 @@ main() {
 		FULL_FILE_NAME="${YEAR_CURRENT}_${FILE_NAME}"
 		for FILE_EXT in "${NAME_EXT[@]}"; do
 			URL_TARGET="https://stats.moe.gov.tw/files/school/${YEAR_CURRENT}/${FILE_NAME}.${FILE_EXT}"
-			echo "⚙️ Checking URL: ${URL_TARGET}" \
-				&& check_file "${URL_TARGET}" \
-				&& download_file \
+			echo "⚙️ Checking URL: ${URL_TARGET}"
+			if check_file "${URL_TARGET}"; then
+				if download_file \
 					"${URL_TARGET}" \
-					"./${NAME_DIR}/${FULL_FILE_NAME}.${FILE_EXT}" \
-				&& echo "✅ File Downloaded: ${FULL_FILE_NAME}.${FILE_EXT}"
+					"./${NAME_DIR}/${FULL_FILE_NAME}.${FILE_EXT}"; then
+					echo "✅ File Downloaded: ${FULL_FILE_NAME}.${FILE_EXT}"
+				else
+					echo "⚠️  download failed: ${URL_TARGET}" >&2
+					FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
+				fi
+			fi
 			wait_a_second
 		done
 
-		convert_to_csv_if_needed "${FULL_FILE_NAME}" || true
+		if ! convert_to_csv_if_needed "${FULL_FILE_NAME}"; then
+			echo "⚠️  no convertible file found for ${FULL_FILE_NAME}" >&2
+		fi
 
 		if [ -f "./${NAME_DIR}/${FULL_FILE_NAME}.csv" ]; then
 			remove_rows_mismatch_header \
@@ -86,6 +96,12 @@ main() {
 		fi
 
 	done
+
+	if [ ${#FAILED_DOWNLOADS[@]} -gt 0 ]; then
+		echo "⚠️  ${#FAILED_DOWNLOADS[@]} download(s) failed:" >&2
+		printf '  - %s\n' "${FAILED_DOWNLOADS[@]}" >&2
+		exit 1
+	fi
 }
 
 main
