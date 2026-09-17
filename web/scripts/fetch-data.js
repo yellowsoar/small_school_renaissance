@@ -62,6 +62,7 @@ if (!force && (await exists(target))) {
 
 console.log(`\u2699\ufe0f  downloading ${SOURCE_URL}`);
 
+let body;
 try {
   const response = await fetchWithRetry(SOURCE_URL);
 
@@ -78,15 +79,21 @@ try {
     );
   }
 
-  const body = await response.text();
-  validateCsvContent(body);
-
-  await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, body, 'utf-8');
-  console.log(`\u2705 saved to ${target}`);
+  body = await response.text();
 } catch (err) {
   const detail =
     err.name === 'TimeoutError' ? 'timeout after 30s' : err.message;
   console.error(`\u274c download failed after 3 attempts: ${detail}`);
   process.exit(1);
 }
+
+try {
+  validateCsvContent(body);
+} catch (err) {
+  console.error(`\u274c downloaded file is not valid CSV: ${err.message}`);
+  process.exit(1);
+}
+
+await mkdir(dirname(target), { recursive: true });
+await writeFile(target, body, 'utf-8');
+console.log(`\u2705 saved to ${target}`);
