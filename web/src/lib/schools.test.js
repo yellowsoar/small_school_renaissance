@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PROJECTION_YEARS } from '../config/index.js';
+import { PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
 import { filterSchools, parseSchools, summarize, tierFor } from './schools.js';
 
 // ---------------------------------------------------------------------------
@@ -825,5 +825,36 @@ describe('summarize', () => {
     const result = summarize(allProjected, 130);
     expect(result.unprojected).toBe(0);
     expect(result.students).toBe(30);
+  });
+
+  // --- RISK_TIERS coupling (regression tests for #106) ----------------------
+
+  it('closing and atRisk thresholds correspond to RISK_TIERS boundaries (#106)', () => {
+    const closedMax = RISK_TIERS.find((t) => t.id === 'closed').max;
+    const highMax = RISK_TIERS.find((t) => t.id === 'high').max;
+
+    // A school at exactly the closed boundary counts as closing
+    const atClosedBoundary = parseSchools(
+      csv([row({ projected: closedMax, 學校代碼: 'at-closed' })]),
+    ).schools;
+    expect(summarize(atClosedBoundary, 130).closing).toBe(1);
+
+    // A school just above the closed boundary does NOT count as closing
+    const aboveClosed = parseSchools(
+      csv([row({ projected: closedMax + 1, 學校代碼: 'above-closed' })]),
+    ).schools;
+    expect(summarize(aboveClosed, 130).closing).toBe(0);
+
+    // A school at exactly the high boundary counts as atRisk
+    const atHighBoundary = parseSchools(
+      csv([row({ projected: highMax, 學校代碼: 'at-high' })]),
+    ).schools;
+    expect(summarize(atHighBoundary, 130).atRisk).toBe(1);
+
+    // A school just above the high boundary does NOT count as atRisk
+    const aboveHigh = parseSchools(
+      csv([row({ projected: highMax + 1, 學校代碼: 'above-high' })]),
+    ).schools;
+    expect(summarize(aboveHigh, 130).atRisk).toBe(0);
   });
 });

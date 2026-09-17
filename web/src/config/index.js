@@ -82,8 +82,11 @@ export const RISK_TIERS = [
   },
 ];
 
-/** Schools at or below this projected headcount feed the density heatmap. */
-export const HEATMAP_THRESHOLD = 100;
+/**
+ * Schools at or below this projected headcount feed the density heatmap.
+ * Derived from RISK_TIERS to stay in sync with the watch-tier ceiling (#106).
+ */
+export const HEATMAP_THRESHOLD = RISK_TIERS.find((t) => t.id === 'watch').max;
 
 export const HEATMAP_OPTIONS = {
   radius: 45,
