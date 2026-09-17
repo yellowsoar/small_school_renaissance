@@ -59,8 +59,13 @@ main() {
 			sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
 		done
 
-		if ! convert_to_csv_if_needed "${YEAR_CURRENT}${FILE_NAME}"; then
-			echo "⚠️  no convertible file found for ${YEAR_CURRENT}${FILE_NAME}" >&2
+		rc=0
+		convert_to_csv_if_needed "${YEAR_CURRENT}${FILE_NAME}" || rc=$?
+		if [ "$rc" -eq 2 ]; then
+			echo "⚠️  conversion failed for ${YEAR_CURRENT}${FILE_NAME}" >&2
+			FAILED_DOWNLOADS+=("${YEAR_CURRENT}/csv-conversion")
+		elif [ "$rc" -eq 1 ]; then
+			echo "ℹ️  no convertible file found for ${YEAR_CURRENT}${FILE_NAME}"
 		fi
 	done
 
