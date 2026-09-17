@@ -10,7 +10,10 @@ const CLOSED_MAX = RISK_TIERS.find((t) => t.id === 'closed').max;
 const AT_RISK_MAX = RISK_TIERS.find((t) => t.id === 'high').max;
 
 const num = (value) => {
-  const parsed = Number.parseFloat(value);
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const trimmed = typeof value === 'string' ? value.trim() : value;
+  if (trimmed === '') return null;
+  const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
