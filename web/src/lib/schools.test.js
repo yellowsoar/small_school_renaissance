@@ -261,7 +261,7 @@ describe('parseSchools', () => {
 
   it('respects quoted fields containing commas', () => {
     const { schools } = parseSchools(
-      csv([row({ projected: 10, 學校名稱: '"\u5e02\u7acb\u63d2\u89d2\u570b\u5c0f, \u5206\u6821"' })]),
+      csv([row({ projected: 10, 學校名稱: '"市立插角國小, 分校"' })]),
     );
 
     expect(schools[0].name).toBe('市立插角國小, 分校');
@@ -275,6 +275,7 @@ describe('parseSchools', () => {
     expect(() => parseSchools(wrongHeaders)).toThrow('CSV 欄位不符');
     expect(() => parseSchools(wrongHeaders)).toThrow('學校代碼');
     expect(() => parseSchools(wrongHeaders)).toThrow('學校名稱');
+    expect(() => parseSchools(wrongHeaders)).toThrow('縣市名稱');
     expect(() => parseSchools(wrongHeaders)).toThrow('緯度');
     expect(() => parseSchools(wrongHeaders)).toThrow('經度');
     expect(() => parseSchools(wrongHeaders)).toThrow('推估114年人數');
@@ -316,6 +317,7 @@ describe('parseSchools', () => {
       const missingLine = error.message.split('\n')[0];
       expect(missingLine).toContain('學校代碼');
       expect(missingLine).toContain('學校名稱');
+      expect(missingLine).toContain('縣市名稱');
       expect(missingLine).toContain('推估114年人數');
       expect(missingLine).not.toContain('緯度');
       expect(missingLine).not.toContain('經度');
@@ -350,6 +352,20 @@ describe('parseSchools', () => {
 
     expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('CSV 欄位不符');
     expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('推估114年人數');
+  });
+
+  // --- County header regression test (#88) ---------------------------------
+
+  it('throws when 縣市名稱 header is missing, preventing silent county fallback (#88)', () => {
+    // All other required headers present, but 縣市名稱 is renamed.
+    // Without the fix, parseSchools would silently fall back to '未知縣市'
+    // for every school, breaking the county filter.
+    const headersWithoutCounty = COLUMNS.filter((col) => col !== '縣市名稱');
+    const headerLine = headersWithoutCounty.join(',');
+    const dataLine = headersWithoutCounty.map(() => 'x').join(',');
+
+    expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('CSV 欄位不符');
+    expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('縣市名稱');
   });
 
   it('does not throw for valid headers even with some unparseable rows', () => {
