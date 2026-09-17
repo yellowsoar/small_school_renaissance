@@ -1,6 +1,6 @@
 import { useMemo, useReducer, useState } from 'react';
 import { BASE_YEAR, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
-import { filterSchools, summarize } from './lib/schools.js';
+import { filterSchools, summarize, tierFor } from './lib/schools.js';
 import { useSchoolData } from './hooks/useSchoolData.js';
 import { useUrlFilters } from './hooks/useUrlFilters.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
@@ -22,7 +22,31 @@ export default function App() {
   const [layers, setLayers] = useReducer(merge, { heatmap: true, markers: true });
   const [panelOpen, setPanelOpen] = useState(true);
 
-  const visible = useMemo(() => filterSchools(schools, filters), [schools, filters]);
+  const filtered = useMemo(() => filterSchools(schools, filters), [schools, filters]);
+
+  // Count closed-tier schools before the excludeClosed toggle is applied,
+  // so the toggle button always shows how many zero-out schools exist.
+  const closingCount = useMemo(
+    () =>
+      filtered.filter((s) => {
+        const tier = tierFor(s.projections?.get(filters.year));
+        return tier && tier.id === 'closed';
+      }).length,
+    [filtered, filters.year],
+  );
+
+  // Apply the excludeClosed toggle as a secondary filter (#144).
+  const visible = useMemo(
+    () =>
+      filters.excludeClosed
+        ? filtered.filter((s) => {
+            const tier = tierFor(s.projections?.get(filters.year));
+            return !tier || tier.id !== 'closed';
+          })
+        : filtered,
+    [filtered, filters.year, filters.excludeClosed],
+  );
+
   const totals = useMemo(() => summarize(visible, filters.year), [visible, filters.year]);
 
   return (
@@ -38,7 +62,17 @@ export default function App() {
             {PROJECTION_YEARS.at(-1)} 學年度國小學生人數
           </p>
         </div>
-        {status === 'ready' && <SummaryBar totals={totals} year={filters.year} />}
+        {status === 'ready' && (
+          <SummaryBar
+            totals={totals}
+            year={filters.year}
+            closingCount={closingCount}
+            excludeClosed={filters.excludeClosed}
+            onToggleClosed={() =>
+              setFilters({ excludeClosed: !filters.excludeClosed })
+            }
+          />
+        )}
         <button
           type="button"
           className="pill-button"
