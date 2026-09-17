@@ -5,29 +5,10 @@
  */
 
 import { REQUIRED_HEADERS } from '../src/lib/csv-schema.js';
+import { fullJitter } from '../src/lib/backoff.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRIES = 2;
-
-/* ------------------------------------------------------------------ */
-/*  Backoff helpers                                                     */
-/* ------------------------------------------------------------------ */
-
-const BACKOFF_BASE_MS = 1_000;
-const BACKOFF_CAP_MS = 10_000;
-
-/**
- * Full-jitter exponential backoff (AWS Architecture Blog recommended).
- *
- * @param {number} attempt  Zero-based retry index
- * @param {number} [base]   Base delay in ms (default 1 000)
- * @param {number} [cap]    Maximum ceiling in ms (default 10 000)
- * @returns {number} Delay in ms
- */
-function fullJitter(attempt, base = BACKOFF_BASE_MS, cap = BACKOFF_CAP_MS) {
-  const ceiling = Math.min(cap, base * 2 ** attempt);
-  return Math.random() * ceiling;
-}
 
 /** Simple sleep for Node.js (no AbortSignal needed). */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
