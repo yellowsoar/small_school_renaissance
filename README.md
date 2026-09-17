@@ -1,3 +1,5 @@
+![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/yellowsoar/small_school_renaissance/badges/coverage.json)
+
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 

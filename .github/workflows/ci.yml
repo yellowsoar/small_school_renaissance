@@ -18,3 +18,49 @@ concurrency:
 jobs:
   check:
     uses: ./.github/workflows/check.yml
+
+  coverage-badge:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Generate and push badge
+        env:
+          PCT: ${{ needs.check.outputs.coverage-pct }}
+        run: |
+          if [ -z "$PCT" ]; then
+            echo "::warning::Coverage percentage not available; skipping badge update"
+            exit 0
+          fi
+
+          # Determine badge color
+          if [ "$PCT" -ge 90 ]; then COLOR="brightgreen"
+          elif [ "$PCT" -ge 80 ]; then COLOR="green"
+          elif [ "$PCT" -ge 70 ]; then COLOR="yellowgreen"
+          elif [ "$PCT" -ge 60 ]; then COLOR="yellow"
+          else COLOR="red"; fi
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Switch to badges branch (create orphan if needed)
+          if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
+            git fetch origin badges
+            git checkout -B badges origin/badges
+          else
+            git checkout --orphan badges
+            git rm -rf .
+          fi
+
+          # Write shields.io endpoint JSON
+          printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$PCT" "$COLOR" > coverage.json
+
+          git add coverage.json
+          git diff --cached --quiet && echo "Badge unchanged" && exit 0
+          git commit -m "chore: update coverage badge (${PCT}%)"
+          git push origin badges
