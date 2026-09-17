@@ -2,6 +2,13 @@ import Papa from 'papaparse';
 import { PROJECTION_YEARS, RISK_TIERS, TW_BOUNDS } from '../config/index.js';
 import { REQUIRED_HEADERS } from './csv-schema.js';
 
+/**
+ * Thresholds derived from RISK_TIERS so summarize() and the tier system
+ * stay in sync when tier boundaries are adjusted (#106).
+ */
+const CLOSED_MAX = RISK_TIERS.find((t) => t.id === 'closed').max;
+const AT_RISK_MAX = RISK_TIERS.find((t) => t.id === 'high').max;
+
 const num = (value) => {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -207,8 +214,8 @@ export const summarize = (schools, year) => {
     const projected = school.projections.get(year);
     if (projected == null) { totals.unprojected += 1; continue; }
     totals.students += Math.max(0, projected);
-    if (projected <= 0) totals.closing += 1;
-    if (projected <= 50) totals.atRisk += 1;
+    if (projected <= CLOSED_MAX) totals.closing += 1;
+    if (projected <= AT_RISK_MAX) totals.atRisk += 1;
   }
 
   totals.students = Math.round(totals.students);
