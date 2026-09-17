@@ -36,6 +36,11 @@ remove_rows_mismatch_header() {
 # Skips if CSV already exists. soffice supports all three formats.
 # Requires NAME_DIR to be set by the caller.
 #
+# Return codes (#85):
+#   0 = success (CSV already exists or conversion completed)
+#   1 = no convertible spreadsheet source found (expected, not an error)
+#   2 = soffice conversion or row-cleanup failed (abnormal)
+#
 # Security: soffice runs with --headless, --norestore and an isolated
 # UserInstallation directory so that no embedded macros can execute and
 # no trusted-macro certificates from the host profile are honoured.
@@ -55,18 +60,21 @@ convert_to_csv_if_needed() {
 			soffice_sandbox=$(mktemp -d "${TMPDIR:-/tmp}/soffice-sandbox.XXXXXX")
 			trap 'rm -rf "$soffice_sandbox"' RETURN
 
-			echo "⚙️ Converting ${ext} to csv for ${src}" \
-				&& soffice \
-					--headless \
-					--norestore \
-					--env:UserInstallation="file://${soffice_sandbox}" \
-					--convert-to csv \
-					--outdir "./${NAME_DIR}" \
-					"$src" \
-				&& echo "✅ File converted to ${csv_path}" \
-				&& remove_rows_mismatch_header \
-					"$csv_path"
-			return $?
+			echo "⚙️ Converting ${ext} to csv for ${src}"
+			if soffice \
+				--headless \
+				--norestore \
+				--env:UserInstallation="file://${soffice_sandbox}" \
+				--convert-to csv \
+				--outdir "./${NAME_DIR}" \
+				"$src" \
+				&& remove_rows_mismatch_header "$csv_path"; then
+				echo "✅ File converted to ${csv_path}"
+				return 0
+			else
+				echo "❌ Conversion failed for ${src} (exit code: $?)" >&2
+				return 2
+			fi
 		fi
 	done
 	return 1
