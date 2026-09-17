@@ -21,7 +21,7 @@ export default defineConfig({
       // main.jsx is the ReactDOM entry point (3-line boilerplate) that
       // cannot be meaningfully unit-tested in Vitest.
       exclude: ['src/lib/markerIcons.js', 'src/main.jsx', 'src/**/*.test.{js,jsx}'],
-      reporter: ['text', 'html'],
+      reporter: ['text', 'html', 'json-summary'],
       thresholds: {
         lines: 80,
         branches: 80,
