@@ -5,7 +5,7 @@
  */
 
 import { REQUIRED_HEADERS } from '../src/lib/csv-schema.js';
-import { fullJitter } from '../src/lib/backoff.js';
+import { fullJitter, parseRetryAfter } from '../src/lib/backoff.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRIES = 2;
@@ -34,7 +34,16 @@ export async function fetchWithRetry(
       const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
       if (res.ok) return res;
 
-      // 4xx client errors are not retriable — fail immediately.
+      // 429 Too Many Requests is a transient rate-limit — retriable
+      // with optional Retry-After delay.
+      if (res.status === 429) {
+        throw Object.assign(
+          new Error(`HTTP ${res.status} ${res.statusText}`),
+          { retryAfterMs: parseRetryAfter(res.headers.get('Retry-After')) },
+        );
+      }
+
+      // Other 4xx client errors are not retriable — fail immediately.
       if (res.status >= 400 && res.status < 500) {
         throw Object.assign(
           new Error(`HTTP ${res.status} ${res.statusText}`),
@@ -49,7 +58,7 @@ export async function fetchWithRetry(
 
       if (attempt === retries) throw err;
       const label = err.name === 'TimeoutError' ? 'timeout' : err.message;
-      const delay = fullJitter(attempt);
+      const delay = Math.max(fullJitter(attempt), err.retryAfterMs ?? 0);
       console.warn(
         `\u26a0\ufe0f  attempt ${attempt + 1}/${retries + 1} failed (${label}), retrying in ${Math.round(delay)}ms\u2026`,
       );

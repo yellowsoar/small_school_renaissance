@@ -186,6 +186,51 @@ describe('fetchWithTimeout', () => {
     expect(res.ok).toBe(true);
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
+
+  /* -------------------------------------------------------------- */
+  /*  429 retriable behavior (#110)                                    */
+  /* -------------------------------------------------------------- */
+
+  it('retries on 429 Too Many Requests', async () => {
+    const rateLimited = new Response('', {
+      status: 429,
+      statusText: 'Too Many Requests',
+    });
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(rateLimited)
+      .mockResolvedValueOnce(okResponse('ok'));
+
+    const res = await fetchWithTimeout('https://example.com/data.csv');
+    expect(res.ok).toBe(true);
+    // 429 is retriable — two calls (initial + retry).
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws after retries exhausted on repeated 429', async () => {
+    globalThis.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response('', { status: 429, statusText: 'Too Many Requests' }),
+      ),
+    );
+
+    await expect(
+      fetchWithTimeout('https://example.com/data.csv', { retries: 1 }),
+    ).rejects.toThrow('HTTP 429');
+    // initial + 1 retry = 2 calls (not 1 like non-retriable 4xx).
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('still does not retry on other 4xx after 429 carve-out', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response('', { status: 400, statusText: 'Bad Request' }),
+    );
+
+    await expect(
+      fetchWithTimeout('https://example.com/data.csv', { retries: 2 }),
+    ).rejects.toThrow('HTTP 400 Bad Request');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -367,5 +412,83 @@ describe('backoff behavior', () => {
       .map(([, ms]) => ms)
       .filter((ms) => ms !== 15_000);
     expect(backoffDelays).toHaveLength(0);
+  });
+
+  /* -------------------------------------------------------------- */
+  /*  429 Retry-After behavior (#110)                                  */
+  /* -------------------------------------------------------------- */
+
+  it('respects Retry-After header on 429, using server delay when larger than jitter', async () => {
+    // fullJitter(0) = 0.5 * 1000 = 500ms, but Retry-After: 5 = 5000ms
+    // Math.max(500, 5000) = 5000ms effective delay
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    globalThis.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve(
+          new Response('', {
+            status: 429,
+            statusText: 'Too Many Requests',
+            headers: { 'Retry-After': '5' },
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(okResponse('ok'));
+
+    const promise = fetchWithTimeout('https://example.com/data.csv', {
+      retries: 2,
+    });
+
+    // Let the first fetch resolve (429) and schedule the backoff timer.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Advance 4999ms — still waiting (Retry-After = 5s = 5000ms).
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Advance the final millisecond — retry fires.
+    await vi.advanceTimersByTimeAsync(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+
+    const res = await promise;
+    expect(res.ok).toBe(true);
+  });
+
+  it('falls back to jitter delay on 429 without Retry-After header', async () => {
+    // fullJitter(0) = 0.5 * 1000 = 500ms, no Retry-After → 0
+    // Math.max(500, 0) = 500ms effective delay
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    globalThis.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve(
+          new Response('', {
+            status: 429,
+            statusText: 'Too Many Requests',
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(okResponse('ok'));
+
+    const promise = fetchWithTimeout('https://example.com/data.csv', {
+      retries: 2,
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Advance 499ms — still waiting.
+    await vi.advanceTimersByTimeAsync(499);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Advance the final millisecond — retry fires.
+    await vi.advanceTimersByTimeAsync(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+
+    const res = await promise;
+    expect(res.ok).toBe(true);
   });
 });

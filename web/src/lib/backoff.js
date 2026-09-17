@@ -26,3 +26,34 @@ export function fullJitter(attempt, base = BACKOFF_BASE_MS, cap = BACKOFF_CAP_MS
   const ceiling = Math.min(cap, base * 2 ** attempt);
   return Math.random() * ceiling;
 }
+
+/**
+ * Parse a Retry-After HTTP header value into milliseconds.
+ *
+ * Supports two formats defined by RFC 9110 §10.2.3:
+ * - Delay-seconds: a non-negative integer (e.g. "120" → 120 000 ms)
+ * - HTTP-date: an IMF-fixdate string (e.g. "Fri, 18 Sep 2026 01:45:00 GMT")
+ *
+ * Returns 0 when the header is absent, unparseable, or in the past.
+ *
+ * @param {string|null|undefined} header  Raw Retry-After header value
+ * @returns {number} Delay in milliseconds (≥ 0)
+ */
+export function parseRetryAfter(header) {
+  if (header == null || header.trim() === '') return 0;
+
+  // Try integer seconds first (most common for 429 responses).
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.round(seconds) * 1000;
+  }
+
+  // Try HTTP-date format.
+  const date = new Date(header);
+  if (!Number.isNaN(date.getTime())) {
+    const delay = date.getTime() - Date.now();
+    return delay > 0 ? delay : 0;
+  }
+
+  return 0;
+}

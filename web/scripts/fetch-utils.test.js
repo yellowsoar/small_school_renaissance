@@ -129,6 +129,85 @@ describe('fetchWithRetry', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     expect(console.warn).toHaveBeenCalledTimes(1);
   });
+
+  /* -------------------------------------------------------------- */
+  /*  429 retriable behavior (#110)                                    */
+  /* -------------------------------------------------------------- */
+
+  it('retries on 429 Too Many Requests', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const rateLimited = new Response('', {
+      status: 429,
+      statusText: 'Too Many Requests',
+    });
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(rateLimited)
+      .mockResolvedValueOnce(
+        new Response('ok', { status: 200, statusText: 'OK' }),
+      );
+
+    const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
+
+    expect(res.ok).toBe(true);
+    // 429 is retriable — two calls (initial + retry).
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws after retries exhausted on repeated 429', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    globalThis.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response('', { status: 429, statusText: 'Too Many Requests' }),
+      ),
+    );
+
+    await expect(
+      fetchWithRetry(url, { retries: 1, timeout: 1000 }),
+    ).rejects.toThrow('HTTP 429');
+    // initial + 1 retry = 2 calls (not 1 like non-retriable 4xx).
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('still does not retry on other 4xx after 429 carve-out', async () => {
+    const forbidden = { ok: false, status: 403, statusText: 'Forbidden' };
+    globalThis.fetch = vi.fn().mockResolvedValue(forbidden);
+
+    await expect(
+      fetchWithRetry(url, { retries: 2, timeout: 1000 }),
+    ).rejects.toThrow('HTTP 403 Forbidden');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('includes Retry-After delay in console.warn message on 429', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const rateLimited = new Response('', {
+      status: 429,
+      statusText: 'Too Many Requests',
+      headers: { 'Retry-After': '60' },
+    });
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(rateLimited)
+      .mockResolvedValueOnce(
+        new Response('ok', { status: 200, statusText: 'OK' }),
+      );
+
+    const promise = fetchWithRetry(url, { retries: 2, timeout: 1000 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    // Retry-After: 60 = 60 000 ms; Math.max(0, 60000) = 60000.
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('60000'),
+    );
+
+    vi.useRealTimers();
+  });
 });
 
 describe('validateCsvContent', () => {
@@ -208,8 +287,6 @@ describe('validateCsvContent', () => {
   /* -------------------------------------------------------------- */
 
   it('rejects substring collision: "大緯度計" does not satisfy "緯度" requirement', () => {
-    // "大緯度計" contains "緯度" as a substring but is a different column.
-    // The old `firstLine.includes(col)` would pass; column-level match must reject.
     const csv = '學校代碼,學校名稱,縣市名稱,大緯度計,經度,推估114年人數\n1,test,city,25,121,100';
     expect(() => validateCsvContent(csv)).toThrow('緯度');
   });
