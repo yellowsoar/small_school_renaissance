@@ -610,6 +610,26 @@ describe('filterSchools', () => {
     expect(ids({ search: '插角國小南投縣' })).toEqual([]);
   });
 
+  // --- Multi-token AND search (regression tests for #90) -------------------
+
+  it('matches when space-separated tokens hit different fields (#90)', () => {
+    // '南投' matches county, '國小' matches name → school 'c'
+    expect(ids({ search: '南投 國小' })).toEqual(['c']);
+  });
+
+  it('matches when space-separated tokens hit the same field', () => {
+    // '三峽' matches town, '建安' matches name → school 'b'
+    expect(ids({ search: '三峽 建安' })).toEqual(['b']);
+  });
+
+  it('handles multiple consecutive spaces between tokens', () => {
+    expect(ids({ search: '南投   國小' })).toEqual(['c']);
+  });
+
+  it('returns nothing when one token in a multi-token search has no match', () => {
+    expect(ids({ search: '南投 不存在' })).toEqual([]);
+  });
+
   it('combines filters as AND', () => {
     expect(ids({ counties: new Set(['新北市']), tiers: new Set(['closed']) })).toEqual(['a']);
     expect(ids({ counties: new Set(['南投縣']), tiers: new Set(['closed']) })).toEqual([]);
