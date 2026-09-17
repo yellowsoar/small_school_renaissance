@@ -91,6 +91,24 @@ export const parseSchools = (csvText) => {
 
   const schools = data.map(toSchool).filter(Boolean);
 
+  // --- Drop-ratio warning (#102) -------------------------------------------
+  // When a significant portion of CSV rows are silently dropped (null
+  // coordinates, out-of-bounds, etc.), warn so data maintainers notice
+  // upstream quality issues before they affect policy decisions.
+  if (data.length > 0) {
+    const dropCount = data.length - schools.length;
+    if (dropCount > 0) {
+      const dropRatio = dropCount / data.length;
+      if (dropRatio > 0.2) {
+        console.warn(
+          `parseSchools：${data.length} 筆資料中有 ${dropCount} 筆` +
+            `（${(dropRatio * 100).toFixed(1)}%）因座標缺失或超出範圍被丟棄，` +
+            `可能為上游資料格式異常`,
+        );
+      }
+    }
+  }
+
   // --- Duplicate ID disambiguation (#45) -----------------------------------
   // When multiple schools share the same fallback ID (e.g. same coordinates
   // with no school code), append #2, #3, … to subsequent duplicates so every
