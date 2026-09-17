@@ -72,8 +72,13 @@ main() {
 			wait_a_second
 		done
 
-		if ! convert_to_csv_if_needed "${FULL_FILE_NAME}"; then
-			echo "⚠️  no convertible file found for ${FULL_FILE_NAME}" >&2
+		rc=0
+		convert_to_csv_if_needed "${FULL_FILE_NAME}" || rc=$?
+		if [ "$rc" -eq 2 ]; then
+			echo "⚠️  conversion failed for ${FULL_FILE_NAME}" >&2
+			FAILED_DOWNLOADS+=("${YEAR_CURRENT}/csv-conversion")
+		elif [ "$rc" -eq 1 ]; then
+			echo "ℹ️  no convertible file found for ${FULL_FILE_NAME}"
 		fi
 
 	done
