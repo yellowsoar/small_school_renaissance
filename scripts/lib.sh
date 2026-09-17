@@ -16,6 +16,8 @@ sed_inplace() {
 # Remove rows whose column count does not match the header row.
 # Replaces the heuristic sed '/,,,,,/d' which could false-positive on
 # legitimate rows with many empty fields (#83).
+# Logs the number of removed rows so operators can detect upstream
+# format changes or download corruption (#108).
 # Usage: remove_rows_mismatch_header <csv-file>
 remove_rows_mismatch_header() {
 	local file="$1"
@@ -27,9 +29,13 @@ remove_rows_mismatch_header() {
 	expected_commas=$(head -n 1 "${file}" | tr -dc ',' | wc -c)
 	before_count=$(wc -l < "${file}")
 
-	echo "⚙️ Removing rows that its column mismatches the header..." \
-		&& sed -n "/\(.*,\)\{${expected_commas},\}/p" "${file}" > "$tmpfile" \
+	echo "⚙️ Removing rows that its column mismatches the header..."
+	sed -n "/\(.*,\)\{${expected_commas},\}/p" "${file}" > "$tmpfile" \
 		&& mv -f "$tmpfile" "${file}"
+	local rc=$?
+	if [ "$rc" -ne 0 ]; then
+		return "$rc"
+	fi
 
 	after_count=$(wc -l < "${file}")
 	removed=$((before_count - after_count))
