@@ -31,13 +31,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            echo "::warning::package-lock.json not found; generating before install"
-            npm install --package-lock-only --no-audit
-            npm ci
+          if [ ! -f package-lock.json ]; then
+            echo "::error::package-lock.json not found. Run 'npm install' locally and commit the lockfile."
+            exit 1
           fi
+          npm ci
 
       - run: npm run lint
 
