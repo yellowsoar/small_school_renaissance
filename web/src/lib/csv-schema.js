@@ -20,6 +20,7 @@ export const FIRST_PROJECTION_YEAR = 114;
 export const REQUIRED_HEADERS = [
   '學校代碼',
   '學校名稱',
+  '縣市名稱',
   '緯度',
   '經度',
   `推估${FIRST_PROJECTION_YEAR}年人數`,
