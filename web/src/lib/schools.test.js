@@ -277,6 +277,7 @@ describe('parseSchools', () => {
     expect(() => parseSchools(wrongHeaders)).toThrow('學校名稱');
     expect(() => parseSchools(wrongHeaders)).toThrow('緯度');
     expect(() => parseSchools(wrongHeaders)).toThrow('經度');
+    expect(() => parseSchools(wrongHeaders)).toThrow('推估114年人數');
   });
 
   it('includes actual headers in the error message for debugging', () => {
@@ -315,6 +316,7 @@ describe('parseSchools', () => {
       const missingLine = error.message.split('\n')[0];
       expect(missingLine).toContain('學校代碼');
       expect(missingLine).toContain('學校名稱');
+      expect(missingLine).toContain('推估114年人數');
       expect(missingLine).not.toContain('緯度');
       expect(missingLine).not.toContain('經度');
     }
@@ -331,6 +333,23 @@ describe('parseSchools', () => {
       expect(error.message).toContain('…');
       expect(error.message).not.toContain('f');
     }
+  });
+
+  // --- Projection sentinel regression test (#65) ---------------------------
+
+  it('throws when projection columns are renamed but base headers are present (#65)', () => {
+    // All base headers present, but projection columns use a different naming
+    // pattern (e.g. "114年推估人數" instead of "推估114年人數"). Without the
+    // sentinel, parseSchools would silently produce a blank map.
+    const renamedHeaders = [
+      ...COLUMNS.filter((col) => !col.startsWith('推估')),
+      ...PROJECTION_YEARS.map((year) => `${year}年推估人數`),
+    ];
+    const headerLine = renamedHeaders.join(',');
+    const dataLine = renamedHeaders.map(() => 'x').join(',');
+
+    expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('CSV 欄位不符');
+    expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('推估114年人數');
   });
 
   it('does not throw for valid headers even with some unparseable rows', () => {
