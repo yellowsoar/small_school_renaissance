@@ -135,6 +135,7 @@ describe('fetchWithRetry', () => {
   /* -------------------------------------------------------------- */
 
   it('retries on 429 Too Many Requests', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     const rateLimited = new Response('', {
       status: 429,
       statusText: 'Too Many Requests',
@@ -155,6 +156,7 @@ describe('fetchWithRetry', () => {
   });
 
   it('throws after retries exhausted on repeated 429', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     globalThis.fetch = vi.fn().mockImplementation(() =>
       Promise.resolve(
         new Response('', { status: 429, statusText: 'Too Many Requests' }),
@@ -180,6 +182,9 @@ describe('fetchWithRetry', () => {
   });
 
   it('includes Retry-After delay in console.warn message on 429', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
     const rateLimited = new Response('', {
       status: 429,
       statusText: 'Too Many Requests',
@@ -192,12 +197,16 @@ describe('fetchWithRetry', () => {
         new Response('ok', { status: 200, statusText: 'OK' }),
       );
 
-    await fetchWithRetry(url, { retries: 2, timeout: 1000 });
+    const promise = fetchWithRetry(url, { retries: 2, timeout: 1000 });
+    await vi.runAllTimersAsync();
+    await promise;
 
-    // The delay should be at least 60000ms (Retry-After: 60 seconds).
+    // Retry-After: 60 = 60 000 ms; Math.max(0, 60000) = 60000.
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('60000'),
     );
+
+    vi.useRealTimers();
   });
 });
 
