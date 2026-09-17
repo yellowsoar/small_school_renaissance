@@ -133,8 +133,8 @@ describe('fetchWithRetry', () => {
 
 describe('validateCsvContent', () => {
   const VALID_HEADER =
-    '學校代碼,學校名稱,縣市名稱,鄉鎮市區,地址,電話,網址,地區屬性,緯度,經度,學生人數';
-  const VALID_CSV = `${VALID_HEADER}\n013501,大同國小,臺北市,中山區,中山北路,02-1234,http://example.com,一般地區,25.05,121.52,300`;
+    '學校代碼,學校名稱,縣市名稱,鄉鎮市區,地址,電話,網址,地區屬性,緯度,經度,學生人數,推估114年人數';
+  const VALID_CSV = `${VALID_HEADER}\n013501,大同國小,臺北市,中山區,中山北路,02-1234,http://example.com,一般地區,25.05,121.52,300,280`;
 
   it('accepts a valid CSV with required headers and data rows', () => {
     expect(() => validateCsvContent(VALID_CSV)).not.toThrow();
