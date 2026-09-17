@@ -21,6 +21,9 @@ WGET_TIMEOUT="--connect-timeout=10 --read-timeout=30"
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
+# Accumulator for failed downloads
+FAILED_DOWNLOADS=()
+
 check_file() {
 	wget \
 		--spider \
@@ -44,15 +47,28 @@ main() {
 		echo "⚙️ Working on ${YEAR_CURRENT}"
 		for FILE_EXT in "${NAME_EXT[@]}"; do
 			URL_TARGET="https://stats.moe.gov.tw/files/detail/${YEAR_CURRENT}/${YEAR_CURRENT}${FILE_NAME}.${FILE_EXT}"
-			echo "⚙️ Checking URL: ${URL_TARGET}" \
-				&& check_file "${URL_TARGET}" \
-				&& download_file "${URL_TARGET}" \
-				&& echo "✅ File Downloaded: ${YEAR_CURRENT}${FILE_NAME}.${FILE_EXT}"
+			echo "⚙️ Checking URL: ${URL_TARGET}"
+			if check_file "${URL_TARGET}"; then
+				if download_file "${URL_TARGET}"; then
+					echo "✅ File Downloaded: ${YEAR_CURRENT}${FILE_NAME}.${FILE_EXT}"
+				else
+					echo "⚠️  download failed: ${URL_TARGET}" >&2
+					FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
+				fi
+			fi
 			sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
 		done
 
-		convert_to_csv_if_needed "${YEAR_CURRENT}${FILE_NAME}" || true
+		if ! convert_to_csv_if_needed "${YEAR_CURRENT}${FILE_NAME}"; then
+			echo "⚠️  no convertible file found for ${YEAR_CURRENT}${FILE_NAME}" >&2
+		fi
 	done
+
+	if [ ${#FAILED_DOWNLOADS[@]} -gt 0 ]; then
+		echo "⚠️  ${#FAILED_DOWNLOADS[@]} download(s) failed:" >&2
+		printf '  - %s\n' "${FAILED_DOWNLOADS[@]}" >&2
+		exit 1
+	fi
 }
 
 main
