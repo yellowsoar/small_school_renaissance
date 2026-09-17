@@ -20,6 +20,10 @@ describe('defaultFilters', () => {
     first.counties.add('南投縣');
     expect(defaultFilters().counties.size).toBe(0);
   });
+
+  it('defaults excludeClosed to true', () => {
+    expect(defaultFilters().excludeClosed).toBe(true);
+  });
 });
 
 describe('filtersFromSearch', () => {
@@ -60,6 +64,15 @@ describe('filtersFromSearch', () => {
   it('ignores empty segments and surrounding whitespace', () => {
     expect(filtersFromSearch('?county=,,南投縣,').counties).toEqual(new Set(['南投縣']));
     expect(filtersFromSearch('?q=%20%20插角%20%20').search).toBe('插角');
+  });
+
+  it('reads closed=1 as excludeClosed: false', () => {
+    expect(filtersFromSearch('?closed=1').excludeClosed).toBe(false);
+  });
+
+  it('defaults excludeClosed to true when closed param is absent', () => {
+    expect(filtersFromSearch('').excludeClosed).toBe(true);
+    expect(filtersFromSearch('?year=120').excludeClosed).toBe(true);
   });
 });
 
@@ -112,6 +125,16 @@ describe('searchFromFilters', () => {
     expect(searchFromFilters(filters({ search: '   ' }))).toBe('');
     expect(decodeURIComponent(searchFromFilters(filters({ search: ' 插角 ' })))).toBe('?q=插角');
   });
+
+  it('omits closed param when excludeClosed is true (default)', () => {
+    expect(searchFromFilters(filters())).toBe('');
+    expect(searchFromFilters(filters({ excludeClosed: true }))).toBe('');
+  });
+
+  it('adds closed=1 when excludeClosed is false', () => {
+    const query = searchFromFilters(filters({ excludeClosed: false }));
+    expect(query).toContain('closed=1');
+  });
 });
 
 describe('round trip', () => {
@@ -136,5 +159,19 @@ describe('round trip', () => {
   it('survives a search term with a comma in it', () => {
     const original = filters({ search: '插角, 分校' });
     expect(filtersFromSearch(searchFromFilters(original))).toEqual(original);
+  });
+
+  it('survives excludeClosed: false round trip', () => {
+    const original = filters({ excludeClosed: false });
+    const query = searchFromFilters(original);
+    expect(query).toContain('closed=1');
+    expect(filtersFromSearch(query)).toEqual(original);
+  });
+
+  it('survives excludeClosed: true round trip (default, no param)', () => {
+    const original = filters({ excludeClosed: true });
+    const query = searchFromFilters(original);
+    expect(query).not.toContain('closed');
+    expect(filtersFromSearch(query)).toEqual(original);
   });
 });

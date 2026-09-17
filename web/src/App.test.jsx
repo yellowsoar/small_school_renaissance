@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   useUrlFilters: vi.fn(),
   filterSchools: vi.fn(),
   summarize: vi.fn(),
+  tierFor: vi.fn(),
 }));
 
 vi.mock('./hooks/useSchoolData.js', () => ({
@@ -45,6 +46,7 @@ vi.mock('./hooks/useUrlFilters.js', () => ({
 vi.mock('./lib/schools.js', () => ({
   filterSchools: mocks.filterSchools,
   summarize: mocks.summarize,
+  tierFor: mocks.tierFor,
 }));
 
 /* ------------------------------------------------------------------ */
@@ -56,6 +58,7 @@ const defaultFilters = {
   counties: new Set(),
   tiers: new Set(),
   search: '',
+  excludeClosed: true,
 };
 
 const mockSetFilters = vi.fn();
@@ -73,6 +76,7 @@ const setupLoading = () => {
   mocks.useUrlFilters.mockReturnValue([defaultFilters, mockSetFilters, mockResetFilters]);
   mocks.filterSchools.mockReturnValue([]);
   mocks.summarize.mockReturnValue({});
+  mocks.tierFor.mockReturnValue(null);
 };
 
 const setupError = (message = '\u8cc7\u6599\u8f09\u5165\u5931\u6557') => {
@@ -86,6 +90,7 @@ const setupError = (message = '\u8cc7\u6599\u8f09\u5165\u5931\u6557') => {
   mocks.useUrlFilters.mockReturnValue([defaultFilters, mockSetFilters, mockResetFilters]);
   mocks.filterSchools.mockReturnValue([]);
   mocks.summarize.mockReturnValue({});
+  mocks.tierFor.mockReturnValue(null);
 };
 
 const setupReady = ({ visible = [{ id: '1' }] } = {}) => {
@@ -99,6 +104,7 @@ const setupReady = ({ visible = [{ id: '1' }] } = {}) => {
   mocks.useUrlFilters.mockReturnValue([defaultFilters, mockSetFilters, mockResetFilters]);
   mocks.filterSchools.mockReturnValue(visible);
   mocks.summarize.mockReturnValue({ total: 1 });
+  mocks.tierFor.mockReturnValue(null);
 };
 
 /* ------------------------------------------------------------------ */

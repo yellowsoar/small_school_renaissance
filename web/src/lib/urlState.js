@@ -19,6 +19,7 @@ export const defaultFilters = () => ({
   counties: new Set(),
   tiers: new Set(),
   search: '',
+  excludeClosed: true,
 });
 
 /** Multi-value params are comma separated; empty means "no filter". */
@@ -48,6 +49,7 @@ export const filtersFromSearch = (search) => {
     counties: new Set(counties),
     tiers: new Set(splitList(params.get('tier')).filter((tier) => VALID_TIERS.has(tier))),
     search: params.get('q')?.trim() ?? '',
+    excludeClosed: params.get('closed') !== '1',
   };
 };
 
@@ -83,6 +85,7 @@ export const searchFromFilters = (filters) => {
     );
   }
   if (filters.search.trim()) params.set('q', filters.search.trim());
+  if (!filters.excludeClosed) params.set('closed', '1');
 
   const query = params.toString();
   return query ? `?${query}` : '';
