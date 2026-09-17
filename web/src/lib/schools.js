@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
+import { PROJECTION_YEARS, RISK_TIERS, TW_BOUNDS } from '../config/index.js';
 import { REQUIRED_HEADERS } from './csv-schema.js';
 
 const num = (value) => {
@@ -28,6 +28,17 @@ const toSchool = (row) => {
   const lat = num(row['緯度']);
   const lng = num(row['經度']);
   if (lat == null || lng == null) return null;
+
+  // --- Bounding box validation (#89) ---------------------------------------
+  if (
+    lat < TW_BOUNDS.latMin || lat > TW_BOUNDS.latMax ||
+    lng < TW_BOUNDS.lngMin || lng > TW_BOUNDS.lngMax
+  ) {
+    console.warn(
+      `座標超出台灣範圍：${row['學校名稱'] ?? '未知'} (${lat}, ${lng})，已略過`,
+    );
+    return null;
+  }
 
   const projections = new Map(
     PROJECTION_YEARS.map((year) => [year, num(row[`推估${year}年人數`])]),
