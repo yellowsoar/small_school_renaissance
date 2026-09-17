@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import { PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
+import { REQUIRED_HEADERS } from './csv-schema.js';
 
 const num = (value) => {
   const parsed = Number.parseFloat(value);
@@ -52,13 +53,6 @@ const toSchool = (row) => {
     unprojected: [...projections.values()].every((value) => value == null),
   };
 };
-
-/**
- * Required CSV headers — if any of these are missing, the dataset is
- * structurally incompatible and we should fail loudly rather than
- * returning an empty school list that masquerades as "no matches".
- */
-const REQUIRED_HEADERS = ['緯度', '經度', '學校名稱'];
 
 /** Parses the CSV text into a normalized, map-ready dataset. */
 export const parseSchools = (csvText) => {

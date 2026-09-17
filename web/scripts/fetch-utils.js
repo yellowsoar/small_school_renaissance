@@ -4,15 +4,10 @@
  * Relies on AbortSignal.timeout() — requires Node.js >= 20.
  */
 
+import { REQUIRED_HEADERS } from '../src/lib/csv-schema.js';
+
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRIES = 2;
-
-/**
- * Required CSV headers that the downstream parseSchools() depends on.
- * If any are missing the dataset is structurally incompatible and should
- * be rejected at download time rather than producing a silent empty map.
- */
-const DEFAULT_REQUIRED_HEADERS = ['學校代碼', '學校名稱', '緯度', '經度'];
 
 /* ------------------------------------------------------------------ */
 /*  Backoff helpers                                                     */
@@ -99,7 +94,7 @@ export async function fetchWithRetry(
  */
 export function validateCsvContent(
   body,
-  requiredHeaders = DEFAULT_REQUIRED_HEADERS,
+  requiredHeaders = REQUIRED_HEADERS,
 ) {
   if (!body || body.trim().length === 0) {
     throw new Error('downloaded content is empty');

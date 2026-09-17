@@ -267,15 +267,16 @@ describe('parseSchools', () => {
     expect(schools[0].name).toBe('市立插角國小, 分校');
   });
 
-  // --- CSV schema validation (regression tests for #16) --------------------
+  // --- CSV schema validation (regression tests for #16, #62) ---------------
 
   it('throws when required headers are missing', () => {
     const wrongHeaders = 'id,name,lat,lng\n1,test,24.0,121.0';
 
     expect(() => parseSchools(wrongHeaders)).toThrow('CSV 欄位不符');
+    expect(() => parseSchools(wrongHeaders)).toThrow('學校代碼');
+    expect(() => parseSchools(wrongHeaders)).toThrow('學校名稱');
     expect(() => parseSchools(wrongHeaders)).toThrow('緯度');
     expect(() => parseSchools(wrongHeaders)).toThrow('經度');
-    expect(() => parseSchools(wrongHeaders)).toThrow('學校名稱');
   });
 
   it('includes actual headers in the error message for debugging', () => {
@@ -302,7 +303,7 @@ describe('parseSchools', () => {
   });
 
   it('only reports missing headers in the error, not present ones', () => {
-    // Has 緯度 and 經度 but missing 學校名稱
+    // Has 緯度 and 經度 but missing 學校代碼 and 學校名稱
     const partialHeaders = '緯度,經度,其他欄位\n24.0,121.0,test';
 
     try {
@@ -310,8 +311,9 @@ describe('parseSchools', () => {
       expect.fail('should have thrown');
     } catch (error) {
       expect(error.message).toContain('CSV 欄位不符');
-      // The "缺少" section should mention only the missing header
+      // The "缺少" section should mention only the missing headers
       const missingLine = error.message.split('\n')[0];
+      expect(missingLine).toContain('學校代碼');
       expect(missingLine).toContain('學校名稱');
       expect(missingLine).not.toContain('緯度');
       expect(missingLine).not.toContain('經度');
