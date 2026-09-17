@@ -23,6 +23,19 @@ export const MAP = {
 };
 
 /**
+ * Loose bounding box covering Taiwan proper and all outlying islands
+ * (Kinmen ≈ 118.3°E, Matsu ≈ 120.0°E, Orchid Island ≈ 121.6°E).
+ * Coordinates outside this box are treated as data errors and filtered
+ * out in toSchool().
+ */
+export const TW_BOUNDS = {
+  latMin: 21.5,
+  latMax: 26.5,
+  lngMin: 118.0,
+  lngMax: 122.5,
+};
+
+/**
  * Risk tiers, ordered from most to least severe. `max` is inclusive,
  * `Infinity` closes the final bucket.
  */

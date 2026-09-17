@@ -261,7 +261,7 @@ describe('parseSchools', () => {
 
   it('respects quoted fields containing commas', () => {
     const { schools } = parseSchools(
-      csv([row({ projected: 10, 學校名稱: '"市立插角國小, 分校"' })]),
+      csv([row({ projected: 10, 學校名稱: '"\u5e02\u7acb\u63d2\u89d2\u570b\u5c0f, \u5206\u6821"' })]),
     );
 
     expect(schools[0].name).toBe('市立插角國小, 分校');
@@ -366,6 +366,98 @@ describe('parseSchools', () => {
 
     expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('CSV 欄位不符');
     expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('縣市名稱');
+  });
+
+  // --- Bounding box validation (regression tests for #89) ------------------
+
+  it('filters out coordinates at Null Island (0, 0)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'keep', 緯度: '24.87', 經度: '121.41' }),
+        row({ projected: 10, 學校代碼: 'null-island', 緯度: '0', 經度: '0' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(1);
+    expect(schools[0].id).toBe('keep');
+    const boundsWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('座標超出台灣範圍'),
+    );
+    expect(boundsWarns).toHaveLength(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('filters out swapped lat/lng coordinates (lat=121, lng=24)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'keep', 緯度: '24.87', 經度: '121.41' }),
+        row({ projected: 10, 學校代碼: 'swapped', 緯度: '121.41', 經度: '24.87' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(1);
+    expect(schools[0].id).toBe('keep');
+
+    warnSpy.mockRestore();
+  });
+
+  it('filters out foreign coordinates outside Taiwan bounding box', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'keep', 緯度: '24.87', 經度: '121.41' }),
+        row({ projected: 10, 學校代碼: 'tokyo', 緯度: '35.68', 經度: '139.69' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(1);
+    expect(schools[0].id).toBe('keep');
+
+    warnSpy.mockRestore();
+  });
+
+  it('accepts coordinates at bounding box edges (Kinmen, southernmost island)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'kinmen', 學校名稱: '金門國小', 緯度: '24.45', 經度: '118.32' }),
+        row({ projected: 10, 學校代碼: 'south', 學校名稱: '南端國小', 緯度: '21.95', 經度: '120.75' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(2);
+    const boundsWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('座標超出台灣範圍'),
+    );
+    expect(boundsWarns).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  it('includes school name in the out-of-bounds warning message', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'valid', 緯度: '24.87', 經度: '121.41' }),
+        row({ projected: 10, 學校代碼: 'oob', 學校名稱: '測試國小', 緯度: '0', 經度: '0' }),
+      ]),
+    );
+
+    const boundsWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('座標超出台灣範圍'),
+    );
+    expect(boundsWarns).toHaveLength(1);
+    expect(boundsWarns[0][0]).toContain('測試國小');
+
+    warnSpy.mockRestore();
   });
 
   it('does not throw for valid headers even with some unparseable rows', () => {
