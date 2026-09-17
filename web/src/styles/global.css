@@ -1,4 +1,5 @@
-/* Fonts are linked from index.html so they do not sit behind a CSS import. */
+/* Fonts are preloaded in index.html and activated by main.jsx to avoid
+   render-blocking.  See #61. */
 
 :root {
   --ink: #16211f;
