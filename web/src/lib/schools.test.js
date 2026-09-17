@@ -549,7 +549,7 @@ describe('summarize', () => {
   });
 
   it('returns zeroes for an empty selection', () => {
-    expect(summarize([], 130)).toEqual({ schools: 0, students: 0, closing: 0, atRisk: 0 });
+    expect(summarize([], 130)).toEqual({ schools: 0, students: 0, closing: 0, atRisk: 0, unprojected: 0 });
   });
 
   it('reports zeroes for a year outside the projection range', () => {
@@ -582,5 +582,24 @@ describe('summarize', () => {
     expect(result.students).toBe(0);
     expect(result.closing).toBe(2);
     expect(result.atRisk).toBe(2);
+  });
+
+  // --- Unprojected count (regression tests for #59) ------------------------
+
+  it('counts schools with no projection as unprojected', () => {
+    expect(summarize(dataset, 130).unprojected).toBe(1);
+  });
+
+  it('reports zero unprojected when all schools have projections', () => {
+    const allProjected = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'x' }),
+        row({ projected: 20, 學校代碼: 'y' }),
+      ]),
+    ).schools;
+
+    const result = summarize(allProjected, 130);
+    expect(result.unprojected).toBe(0);
+    expect(result.students).toBe(30);
   });
 });
