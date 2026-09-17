@@ -21,9 +21,9 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: web/.nvmrc
           # v5 auto-caches when package.json declares a packageManager field.
@@ -60,10 +60,10 @@ jobs:
           DATA_SOURCE_URL: ${{ vars.DATA_SOURCE_URL || '' }}
           BASE_PATH: ${{ vars.BASE_PATH || '/small_school_renaissance/' }}
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
         if: ${{ inputs.with-pages-upload }}
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         if: ${{ inputs.with-pages-upload }}
         with:
           path: web/dist
