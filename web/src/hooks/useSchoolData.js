@@ -24,25 +24,35 @@ export function useSchoolData(url = DATA_URL) {
     const controller = new AbortController();
 
     (async () => {
+      let downloadComplete = false;
       try {
         const response = await fetchWithTimeout(url, {
           signal: controller.signal,
         });
 
-        const { schools, counties } = parseSchools(await response.text());
+        const text = await response.text();
+        downloadComplete = true;
+
+        const { schools, counties } = parseSchools(text);
         if (controller.signal.aborted) return;
 
         setState({ status: 'ready', schools, counties, error: null });
       } catch (error) {
         if (error.name === 'AbortError') return;
-        const message =
-          error.name === 'TimeoutError'
-            ? '資料載入逾時，請檢查網路連線後重新載入'
-            : `資料載入失敗 (${error.message})`;
+
+        let message;
+        if (error.name === 'TimeoutError') {
+          message = '資料載入逾時，請檢查網路連線後重新載入';
+        } else if (downloadComplete) {
+          message = `資料解析失敗 (${error.message})`;
+        } else {
+          message = `資料下載失敗 (${error.message})`;
+        }
+
         setState({
           ...initialState,
           status: 'error',
-          error: new Error(message),
+          error: new Error(message, { cause: error }),
         });
       }
     })();

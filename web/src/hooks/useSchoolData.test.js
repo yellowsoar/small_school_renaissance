@@ -45,13 +45,25 @@ describe('useSchoolData', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('transitions to error on fetch failure', async () => {
+  it('shows download failure message on fetch error', async () => {
     fetchWithTimeout.mockRejectedValue(new TypeError('Failed to fetch'));
 
     const { result } = renderHook(() => useSchoolData('/fake.csv'));
 
     await waitFor(() => expect(result.current.status).toBe('error'));
-    expect(result.current.error.message).toContain('資料載入失敗');
+    expect(result.current.error.message).toContain('資料下載失敗');
+  });
+
+  it('shows download failure message on HTTP error', async () => {
+    fetchWithTimeout.mockRejectedValue(
+      new Error('HTTP 500 Internal Server Error'),
+    );
+
+    const { result } = renderHook(() => useSchoolData('/fake.csv'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error.message).toContain('資料下載失敗');
+    expect(result.current.error.message).toContain('HTTP 500');
   });
 
   it('shows timeout message on TimeoutError', async () => {
@@ -66,7 +78,7 @@ describe('useSchoolData', () => {
     );
   });
 
-  it('transitions to error when parseSchools throws', async () => {
+  it('shows parse failure message when parseSchools throws', async () => {
     fetchWithTimeout.mockResolvedValue({
       text: () => Promise.resolve('bad-csv'),
     });
@@ -77,8 +89,18 @@ describe('useSchoolData', () => {
     const { result } = renderHook(() => useSchoolData('/fake.csv'));
 
     await waitFor(() => expect(result.current.status).toBe('error'));
-    expect(result.current.error.message).toContain('資料載入失敗');
+    expect(result.current.error.message).toContain('資料解析失敗');
     expect(result.current.error.message).toContain('Unexpected column header');
+  });
+
+  it('preserves original error as cause', async () => {
+    const original = new TypeError('Failed to fetch');
+    fetchWithTimeout.mockRejectedValue(original);
+
+    const { result } = renderHook(() => useSchoolData('/fake.csv'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error.cause).toBe(original);
   });
 
   it('re-fetches when the URL changes', async () => {
