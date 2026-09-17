@@ -20,13 +20,24 @@ export default function SchoolMarkers({ schools, year, visible }) {
     const tier = tierFor(school.projections.get(year));
     if (!tier) return null;
 
+    const ariaLabel = `${school.name}\uff08${tier.label}\uff09`;
+
     return (
       <Marker
         key={school.id}
         position={school.position}
         icon={iconFor(tier)}
         title={school.name}
-        alt={`${school.name}（${tier.label}）`}
+        alt={ariaLabel}
+        eventHandlers={{
+          add: (e) => {
+            const el = e.target.getElement();
+            if (el) {
+              el.setAttribute('role', 'img');
+              el.setAttribute('aria-label', ariaLabel);
+            }
+          },
+        }}
       >
         <Popup minWidth={260} maxWidth={320}>
           <SchoolPopup school={school} year={year} tier={tier} />
