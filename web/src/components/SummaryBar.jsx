@@ -10,16 +10,26 @@ export default function SummaryBar({ totals, year }) {
     ['推估學生總數', totals.students],
   ];
 
+  if (totals.unprojected > 0) {
+    stats.push(['其中無推估資料', totals.unprojected]);
+  }
+
   // Build a concise summary for the live region.  The visible <dl> updates
   // instantly for sighted users; the hidden live region only fires once the
   // slider has been idle for 400 ms, preventing screen-reader flood.
-  const summary = [
+  const summaryParts = [
     `${year} 學年`,
     `${integer.format(totals.schools)} 校`,
     `推估歸零 ${integer.format(totals.closing)} 校`,
     `50 人以下 ${integer.format(totals.atRisk)} 校`,
     `推估學生 ${integer.format(totals.students)} 人`,
-  ].join('、');
+  ];
+
+  if (totals.unprojected > 0) {
+    summaryParts.push(`無推估資料 ${integer.format(totals.unprojected)} 校`);
+  }
+
+  const summary = summaryParts.join('、');
 
   const announced = useDebouncedAnnounce(summary);
 
