@@ -184,3 +184,22 @@ download_file() {
 			"${url}"
 	fi
 }
+
+# Atomic download: download to temp file, validate not HTML, then rename.
+# Prevents partial/corrupt files from polluting the data pipeline (#195).
+# Usage: atomic_download <url> <final_path>
+atomic_download() {
+	local url="$1" final="$2"
+	local tmp
+	tmp=$(mktemp "${final}.XXXXXX")
+
+	if download_file "$url" "$tmp" \
+		&& validate_not_html "$tmp"; then
+		mv -f "$tmp" "$final"
+		return 0
+	else
+		local rc=$?
+		rm -f "$tmp"
+		return "$rc"
+	fi
+}

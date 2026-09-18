@@ -43,17 +43,12 @@ main() {
 			URL_TARGET="https://stats.moe.gov.tw/files/school/${YEAR_CURRENT}/${FILE_NAME}.${FILE_EXT}"
 			echo "⚙️ Checking URL: ${URL_TARGET}"
 			if check_file "${URL_TARGET}"; then
-				if download_file \
+				if atomic_download \
 					"${URL_TARGET}" \
 					"./${NAME_DIR}/${FULL_FILE_NAME}.${FILE_EXT}"; then
-					if validate_not_html "./${NAME_DIR}/${FULL_FILE_NAME}.${FILE_EXT}"; then
-						echo "✅ File Downloaded: ${FULL_FILE_NAME}.${FILE_EXT}"
-					else
-						echo "⚠️  downloaded file is HTML, not a spreadsheet: ${URL_TARGET}" >&2
-						FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
-					fi
+					echo "✅ File Downloaded: ${FULL_FILE_NAME}.${FILE_EXT}"
 				else
-					echo "⚠️  download failed: ${URL_TARGET}" >&2
+					echo "⚠️  download or validation failed: ${URL_TARGET}" >&2
 					FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
 				fi
 			fi
