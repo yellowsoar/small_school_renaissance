@@ -1,6 +1,8 @@
+import { RISK_TIERS } from '../config/index.js';
 import { useDebouncedAnnounce } from '../hooks/useDebouncedAnnounce.js';
 
 const integer = new Intl.NumberFormat('zh-Hant-TW');
+const AT_RISK_MAX = RISK_TIERS.find((t) => t.id === 'high').max;
 
 const handleToggleKeyDown = (callback) => (event) => {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -17,8 +19,8 @@ export default function SummaryBar({
   onToggleClosed,
 }) {
   const atRiskLabel = excludeClosed
-    ? '50 人以下（不含歸零）'
-    : '50 人以下（含歸零）';
+    ? `${AT_RISK_MAX} 人以下（不含歸零）`
+    : `${AT_RISK_MAX} 人以下（含歸零）`;
 
   const stats = [
     { label: '符合條件學校', value: totals.schools },
@@ -36,7 +38,7 @@ export default function SummaryBar({
     `${year} 學年`,
     `${integer.format(totals.schools)} 校`,
     `推估歸零 ${integer.format(closingCount)} 校${closedNote}`,
-    `50 人以下 ${integer.format(totals.atRisk)} 校`,
+    `${AT_RISK_MAX} 人以下 ${integer.format(totals.atRisk)} 校`,
     `推估學生 ${integer.format(totals.students)} 人`,
   ];
 
