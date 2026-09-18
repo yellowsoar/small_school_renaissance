@@ -24,14 +24,16 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - name: Install Bats
+      - name: Install ShellCheck and Bats
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq bats
-          echo "bats version: $(bats --version)"
+          sudo apt-get install -y -qq shellcheck bats
 
-      - name: Run Shell tests (TAP output)
-        run: bats --tap scripts/tests/
+      - name: ShellCheck
+        run: shellcheck --severity=error scripts/dump_schools_*.sh
+
+      - name: Run Shell tests
+        run: bats scripts/tests/
 
   coverage-badge:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
