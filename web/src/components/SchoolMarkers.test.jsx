@@ -14,21 +14,24 @@ const mocks = vi.hoisted(() => ({
   openPopup: vi.fn(),
 }));
 
-vi.mock('react-leaflet', () => ({
-  Marker: ({ children, title, alt, eventHandlers }) => {
-    const refCb = (node) => {
-      if (node && eventHandlers?.add) {
-        eventHandlers.add({ target: { getElement: () => node, openPopup: mocks.openPopup } });
-      }
-    };
-    return (
-      <div ref={refCb} data-testid="marker" data-title={title} data-alt={alt}>
-        {children}
-      </div>
-    );
-  },
-  Popup: ({ children }) => <div data-testid="popup">{children}</div>,
-}));
+vi.mock('react-leaflet', async () => {
+  const React = await import('react');
+  return {
+    Marker: React.forwardRef(function MockMarker({ children, title, alt }, ref) {
+      const nodeRef = React.useRef(null);
+      React.useImperativeHandle(ref, () => ({
+        getElement: () => nodeRef.current,
+        openPopup: mocks.openPopup,
+      }));
+      return (
+        <div ref={nodeRef} data-testid="marker" data-title={title} data-alt={alt}>
+          {children}
+        </div>
+      );
+    }),
+    Popup: ({ children }) => <div data-testid="popup">{children}</div>,
+  };
+});
 
 vi.mock('../hooks/useVisibleSchools.js', () => ({
   useVisibleSchools: mocks.useVisibleSchools,
@@ -132,7 +135,7 @@ describe('SchoolMarkers', () => {
     expect(mocks.iconFor).toHaveBeenCalledWith(tier);
   });
 
-  it('sets role="button" on the marker element via eventHandlers.add', () => {
+  it('sets role="button" on the marker element', () => {
     const school = makeSchool();
     mocks.useVisibleSchools.mockReturnValue([school]);
     mocks.tierFor.mockReturnValue(tier);
@@ -143,7 +146,7 @@ describe('SchoolMarkers', () => {
     expect(marker.getAttribute('role')).toBe('button');
   });
 
-  it('sets aria-label with school name and tier label via eventHandlers.add', () => {
+  it('sets aria-label with school name and tier label', () => {
     const school = makeSchool();
     mocks.useVisibleSchools.mockReturnValue([school]);
     mocks.tierFor.mockReturnValue(tier);
@@ -204,5 +207,26 @@ describe('SchoolMarkers', () => {
     fireEvent.keyDown(marker, { key: ' ' });
 
     expect(mocks.openPopup).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates aria-label after tier change on re-render', () => {
+    const school = makeSchool();
+    mocks.useVisibleSchools.mockReturnValue([school]);
+
+    const tierA = { id: 'critical', label: '\u6975\u9ad8\u98a8\u96aa', color: '#d7263d', max: 30 };
+    const tierB = { id: 'high', label: '\u9ad8\u98a8\u96aa', color: '#f46036', max: 50 };
+
+    mocks.tierFor.mockReturnValue(tierA);
+    const { rerender } = render(
+      <SchoolMarkers schools={[school]} year={130} visible={true} />,
+    );
+
+    const marker = screen.getByTestId('marker');
+    expect(marker.getAttribute('aria-label')).toBe('\u6e2c\u8a66\u570b\u5c0f\uff08\u6975\u9ad8\u98a8\u96aa\uff09');
+
+    mocks.tierFor.mockReturnValue(tierB);
+    rerender(<SchoolMarkers schools={[school]} year={125} visible={true} />);
+
+    expect(marker.getAttribute('aria-label')).toBe('\u6e2c\u8a66\u570b\u5c0f\uff08\u9ad8\u98a8\u96aa\uff09');
   });
 });
