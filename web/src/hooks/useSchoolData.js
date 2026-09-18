@@ -26,11 +26,11 @@ export function useSchoolData(url = DATA_URL) {
     (async () => {
       let downloadComplete = false;
       try {
-        const response = await fetchWithTimeout(url, {
+        // fetchWithTimeout now returns the response body as text, with
+        // both header and body transfer covered by the same timeout (#173).
+        const text = await fetchWithTimeout(url, {
           signal: controller.signal,
         });
-
-        const text = await response.text();
         downloadComplete = true;
 
         const { schools, counties } = parseSchools(text);
@@ -42,7 +42,7 @@ export function useSchoolData(url = DATA_URL) {
 
         let message;
         if (error.name === 'TimeoutError') {
-          message = '資料載入逾時，請檢查網路連線後重新載入';
+          message = '資料載入逎時，請檢查網路連線後重新載入';
         } else if (downloadComplete) {
           message = `資料解析失敗 (${error.message})`;
         } else {
