@@ -228,3 +228,34 @@ MOCK
   [ "$status" -eq 0 ]
   [ -f "$NAME_DIR/valid.csv" ]
 }
+
+# ── validate_not_html (#163) ─────────────────────────────────
+
+@test "validate_not_html: detects HTML file and deletes it (#163)" {
+  echo '<!DOCTYPE html><html><head><title>Maintenance</title></head><body>Under maintenance</body></html>' > "$TEST_TMPDIR/test.ods"
+  run validate_not_html "$TEST_TMPDIR/test.ods"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"is HTML, not a spreadsheet"* ]]
+  # HTML file should be deleted
+  [ ! -f "$TEST_TMPDIR/test.ods" ]
+}
+
+@test "validate_not_html: passes CSV text file (#163)" {
+  printf 'name,age,city\nAlice,30,Taipei\n' > "$TEST_TMPDIR/test.csv"
+  run validate_not_html "$TEST_TMPDIR/test.csv"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_TMPDIR/test.csv" ]
+}
+
+@test "validate_not_html: passes binary file (#163)" {
+  # PK zip magic bytes (used by xlsx/ods)
+  printf '\x50\x4b\x03\x04dummy_content' > "$TEST_TMPDIR/test.xlsx"
+  run validate_not_html "$TEST_TMPDIR/test.xlsx"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_TMPDIR/test.xlsx" ]
+}
+
+@test "validate_not_html: returns 0 for nonexistent file (#163)" {
+  run validate_not_html "$TEST_TMPDIR/nonexistent.ods"
+  [ "$status" -eq 0 ]
+}
