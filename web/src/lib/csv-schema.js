@@ -14,8 +14,12 @@
  *
  * Defined here instead of importing from config/index.js because that module
  * uses import.meta.env (Vite-only), which Node build scripts cannot resolve.
+ * config/index.js imports these constants to compute PROJECTION_YEARS.
  */
 export const FIRST_PROJECTION_YEAR = 114;
+
+/** The last projection year in the upstream CSV dataset (民國 year). */
+export const LAST_PROJECTION_YEAR = 130;
 
 export const REQUIRED_HEADERS = [
   '學校代碼',
