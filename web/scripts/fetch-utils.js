@@ -5,13 +5,9 @@
  */
 
 import { REQUIRED_HEADERS } from '../src/lib/csv-schema.js';
-import { fullJitter, parseRetryAfter } from '../src/lib/backoff.js';
+import { classifyResponse, withRetry, DEFAULT_RETRIES } from '../src/lib/retry-core.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_RETRIES = 2;
-
-/** Simple sleep for Node.js (no AbortSignal needed). */
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /* ------------------------------------------------------------------ */
 /*  Fetch with retry                                                    */
@@ -29,42 +25,21 @@ export async function fetchWithRetry(
   url,
   { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS } = {},
 ) {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
+  return withRetry(
+    async () => {
       const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
-      if (res.ok) return res;
-
-      // 429 Too Many Requests is a transient rate-limit — retriable
-      // with optional Retry-After delay.
-      if (res.status === 429) {
-        throw Object.assign(
-          new Error(`HTTP ${res.status} ${res.statusText}`),
-          { retryAfterMs: parseRetryAfter(res.headers.get('Retry-After')) },
+      return classifyResponse(res);
+    },
+    {
+      retries,
+      onRetry: (attempt, err, delay) => {
+        const label = err.name === 'TimeoutError' ? 'timeout' : err.message;
+        console.warn(
+          `\u26a0\ufe0f  attempt ${attempt + 1}/${retries + 1} failed (${label}), retrying in ${Math.round(delay)}ms\u2026`,
         );
-      }
-
-      // Other 4xx client errors are not retriable — fail immediately.
-      if (res.status >= 400 && res.status < 500) {
-        throw Object.assign(
-          new Error(`HTTP ${res.status} ${res.statusText}`),
-          { retriable: false },
-        );
-      }
-
-      throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    } catch (err) {
-      // Non-retriable errors (e.g. 4xx client errors) skip retry.
-      if (err.retriable === false) throw err;
-
-      if (attempt === retries) throw err;
-      const label = err.name === 'TimeoutError' ? 'timeout' : err.message;
-      const delay = Math.max(fullJitter(attempt), err.retryAfterMs ?? 0);
-      console.warn(
-        `\u26a0\ufe0f  attempt ${attempt + 1}/${retries + 1} failed (${label}), retrying in ${Math.round(delay)}ms\u2026`,
-      );
-      await sleep(delay);
-    }
-  }
+      },
+    },
+  );
 }
 
 /**
