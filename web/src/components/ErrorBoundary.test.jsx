@@ -127,4 +127,34 @@ describe('ErrorBoundary', () => {
       screen.getByText('已重試 3 次仍無法恢復，請重新整頁載入。'),
     ).toBeTruthy();
   });
+
+  it('resets retry counter after successful recovery', () => {
+    hush();
+    shouldThrow = true;
+
+    const { rerender } = render(
+      <ErrorBoundary>
+        <Thrower />
+      </ErrorBoundary>,
+    );
+
+    // First error cycle: use one retry to recover
+    expect(screen.getByText('重新嘗試（1/3）')).toBeTruthy();
+    shouldThrow = false;
+    fireEvent.click(screen.getByText('重新嘗試（1/3）'));
+
+    // Recovered — children are back
+    expect(screen.getByText('all good')).toBeTruthy();
+
+    // Second error cycle: trigger a new error via rerender
+    shouldThrow = true;
+    rerender(
+      <ErrorBoundary>
+        <Thrower />
+      </ErrorBoundary>,
+    );
+
+    // Counter should be fresh 1/3, not carried-over 2/3
+    expect(screen.getByText('重新嘗試（1/3）')).toBeTruthy();
+  });
 });

@@ -21,6 +21,13 @@ export default class ErrorBoundary extends Component {
     console.error('Unhandled render error', error, info);
   }
 
+  componentDidUpdate(_, prevState) {
+    // Recovery succeeded — reset the circuit breaker for the next error cycle.
+    if (prevState.error && !this.state.error) {
+      this.setState({ retries: 0 });
+    }
+  }
+
   handleRetry = () => {
     this.setState((prev) => ({ error: null, retries: prev.retries + 1 }));
   };
