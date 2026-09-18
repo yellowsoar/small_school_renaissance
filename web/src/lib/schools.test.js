@@ -568,29 +568,89 @@ describe('parseSchools', () => {
     expect(schools[0].deltaRatio).toBeCloseTo(-0.0643, 4);
   });
 
-  // --- Drop-ratio warning (regression tests for #102) ----------------------
+  // --- Drop-ratio guard + warning (regression tests for #102, #172) --------
 
-  it('warns when more than 20% of rows are dropped due to missing coordinates (#102)', () => {
+  it('throws when drop ratio exceeds 30% (#172)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    // 1 valid + 4 invalid = 80% drop rate → should warn
-    parseSchools(
+    // 1 valid + 4 invalid = 80% drop rate → above MAX_DROP_RATIO (30%)
+    expect(() =>
+      parseSchools(
+        csv([
+          row({ projected: 10, 學校代碼: 'valid' }),
+          row({ projected: 10, 學校代碼: 'bad1', 緯度: '', 經度: '' }),
+          row({ projected: 10, 學校代碼: 'bad2', 緯度: '', 經度: '' }),
+          row({ projected: 10, 學校代碼: 'bad3', 緯度: 'N/A', 經度: 'N/A' }),
+          row({ projected: 10, 學校代碼: 'bad4', 緯度: '', 經度: '' }),
+        ]),
+      ),
+    ).toThrow('資料品質異常');
+
+    warnSpy.mockRestore();
+  });
+
+  it('includes drop count, percentage and threshold in the throw message (#172)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 2 valid + 8 invalid = 80% drop rate
+    const rows = [
+      row({ projected: 10, 學校代碼: 'ok1' }),
+      row({ projected: 10, 學校代碼: 'ok2', 緯度: '24.9', 經度: '121.5' }),
+    ];
+    for (let i = 0; i < 8; i++) {
+      rows.push(row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }));
+    }
+
+    expect(() => parseSchools(csv(rows))).toThrow('10 筆資料');
+    expect(() => parseSchools(csv(rows))).toThrow('8 筆');
+    expect(() => parseSchools(csv(rows))).toThrow('80.0%');
+    expect(() => parseSchools(csv(rows))).toThrow('30%');
+
+    warnSpy.mockRestore();
+  });
+
+  it('warns but does not throw when drop ratio is between 20% and 30% (#172)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 3 valid + 1 invalid = 25% drop rate → above 20% warn, below 30% throw
+    const { schools } = parseSchools(
       csv([
-        row({ projected: 10, 學校代碼: 'valid' }),
-        row({ projected: 10, 學校代碼: 'bad1', 緯度: '', 經度: '' }),
-        row({ projected: 10, 學校代碼: 'bad2', 緯度: '', 經度: '' }),
-        row({ projected: 10, 學校代碼: 'bad3', 緯度: 'N/A', 經度: 'N/A' }),
-        row({ projected: 10, 學校代碼: 'bad4', 緯度: '', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'a' }),
+        row({ projected: 10, 學校代碼: 'b', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 10, 學校代碼: 'c', 緯度: '24.8', 經度: '121.4' }),
+        row({ projected: 10, 學校代碼: 'bad', 緯度: '', 經度: '' }),
       ]),
     );
 
+    expect(schools).toHaveLength(3);
     const dropWarns = warnSpy.mock.calls.filter(
       (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
     );
     expect(dropWarns).toHaveLength(1);
-    expect(dropWarns[0][0]).toContain('5 筆資料');
-    expect(dropWarns[0][0]).toContain('4 筆');
-    expect(dropWarns[0][0]).toContain('80.0%');
+    expect(dropWarns[0][0]).toContain('25.0%');
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not throw at exactly 30% drop ratio (boundary, #172)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 7 valid + 3 invalid = 30% drop rate → at boundary (> 0.3 triggers throw)
+    const rows = [];
+    for (let i = 0; i < 7; i++) {
+      rows.push(row({ projected: 10, 學校代碼: `ok${i}`, 緯度: `${24.5 + i * 0.1}`, 經度: `${121.0 + i * 0.1}` }));
+    }
+    for (let i = 0; i < 3; i++) {
+      rows.push(row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }));
+    }
+
+    const { schools } = parseSchools(csv(rows));
+    expect(schools).toHaveLength(7);
+    const dropWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
+    );
+    expect(dropWarns).toHaveLength(1);
+    expect(dropWarns[0][0]).toContain('30.0%');
 
     warnSpy.mockRestore();
   });
@@ -613,32 +673,6 @@ describe('parseSchools', () => {
       (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
     );
     expect(dropWarns).toHaveLength(0);
-
-    warnSpy.mockRestore();
-  });
-
-  it('includes drop count and percentage in the warning message (#102)', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    // 2 valid + 8 invalid = 80% drop rate
-    const rows = [
-      row({ projected: 10, 學校代碼: 'ok1' }),
-      row({ projected: 10, 學校代碼: 'ok2', 緯度: '24.9', 經度: '121.5' }),
-    ];
-    for (let i = 0; i < 8; i++) {
-      rows.push(row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }));
-    }
-
-    parseSchools(csv(rows));
-
-    const dropWarns = warnSpy.mock.calls.filter(
-      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
-    );
-    expect(dropWarns).toHaveLength(1);
-    expect(dropWarns[0][0]).toMatch(/10 筆資料/);
-    expect(dropWarns[0][0]).toMatch(/8 筆/);
-    expect(dropWarns[0][0]).toMatch(/80\.0%/);
-    expect(dropWarns[0][0]).toContain('座標缺失或超出範圍');
 
     warnSpy.mockRestore();
   });
