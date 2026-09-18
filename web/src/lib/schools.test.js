@@ -831,7 +831,11 @@ describe('parseSchools', () => {
       'only,two,fields',
     ];
 
-    try { parseSchools(csvLines.join('\n')); } catch { /* expected */ }
+    try {
+      parseSchools(csvLines.join('\n'));
+    } catch {
+      /* expected */
+    }
 
     // The existing console.warn for recoverable issues should still fire
     const recoverableWarns = warnSpy.mock.calls.filter(
