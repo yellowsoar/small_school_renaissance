@@ -4,7 +4,10 @@
 
 setup() {
   TEST_TMPDIR="$(mktemp -d)"
-  export NAME_DIR="$TEST_TMPDIR/data"
+  cd "$TEST_TMPDIR" || return 1
+  # NAME_DIR must be relative — convert_to_csv_if_needed() builds
+  # paths with "./${NAME_DIR}/..." matching production behavior.
+  export NAME_DIR="data"
   mkdir -p "$NAME_DIR"
   # WGET_TIMEOUT is required by check_file/download_file but not tested here
   export WGET_TIMEOUT="--connect-timeout=5 --read-timeout=10"
