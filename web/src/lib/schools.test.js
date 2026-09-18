@@ -66,6 +66,12 @@ const query = (overrides = {}) => ({
   ...overrides,
 });
 
+// Workaround: the GitHub Content API double-escapes CJK characters
+// adjacent to escaped double-quotes in JSON strings. Separating them
+// with concatenation prevents the issue.
+// prettier-ignore
+const QUOTED_BRANCH_NAME = '"' + '市立插角國小, 分校' + '"';
+
 // ---------------------------------------------------------------------------
 // tierFor
 // ---------------------------------------------------------------------------
@@ -267,9 +273,8 @@ describe('parseSchools', () => {
   });
 
   it('respects quoted fields containing commas', () => {
-    const quotedName = '"' + '市立插角國小, 分校' + '"';
     const { schools } = parseSchools(
-      csv([row({ projected: 10, 學校名稱: quotedName })]),
+      csv([row({ projected: 10, 學校名稱: QUOTED_BRANCH_NAME })]),
     );
 
     expect(schools[0].name).toBe('市立插角國小, 分校');
