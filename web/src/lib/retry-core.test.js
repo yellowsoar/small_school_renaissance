@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { classifyResponse, withRetry, DEFAULT_RETRIES } from './retry-core.js';
+import {
+  classifyResponse,
+  withRetry,
+  DEFAULT_RETRIES,
+  MAX_RETRY_AFTER_MS,
+} from './retry-core.js';
 
 /* ------------------------------------------------------------------ */
 /*  classifyResponse                                                    */
@@ -135,7 +140,7 @@ describe('withRetry', () => {
 
   it('incorporates retryAfterMs into backoff delay', async () => {
     const sleepFn = vi.fn().mockResolvedValue(undefined);
-    // Math.random = 0 → fullJitter(0) = 0; Math.max(0, 5000) = 5000
+    // Math.random = 0 -> fullJitter(0) = 0; Math.max(0, 5000) = 5000
     const err = Object.assign(new Error('rate limited'), {
       retryAfterMs: 5000,
     });
@@ -148,6 +153,36 @@ describe('withRetry', () => {
     expect(sleepFn).toHaveBeenCalledWith(5000);
   });
 
+  it('rejects immediately when retryAfterMs exceeds cap (#174)', async () => {
+    const err = Object.assign(new Error('rate limited'), {
+      retryAfterMs: MAX_RETRY_AFTER_MS + 1000,
+    });
+    const fn = vi.fn().mockRejectedValue(err);
+
+    await expect(
+      withRetry(fn, { retries: 2, sleepFn: instantSleep }),
+    ).rejects.toMatchObject({
+      message: 'rate limited',
+      retriable: false,
+    });
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries normally when retryAfterMs equals cap (#174)', async () => {
+    const sleepFn = vi.fn().mockResolvedValue(undefined);
+    const err = Object.assign(new Error('rate limited'), {
+      retryAfterMs: MAX_RETRY_AFTER_MS,
+    });
+    const fn = vi
+      .fn()
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce('ok');
+
+    const result = await withRetry(fn, { retries: 2, sleepFn });
+    expect(result).toBe('ok');
+    expect(sleepFn).toHaveBeenCalledWith(MAX_RETRY_AFTER_MS);
+  });
+
   it('passes zero-based attempt index to fn', async () => {
     const fn = vi.fn().mockResolvedValue('ok');
     await withRetry(fn, { retries: 0, sleepFn: instantSleep });
@@ -156,5 +191,9 @@ describe('withRetry', () => {
 
   it('exports DEFAULT_RETRIES as 2', () => {
     expect(DEFAULT_RETRIES).toBe(2);
+  });
+
+  it('exports MAX_RETRY_AFTER_MS as 30000', () => {
+    expect(MAX_RETRY_AFTER_MS).toBe(30000);
   });
 });

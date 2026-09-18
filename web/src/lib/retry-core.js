@@ -11,6 +11,9 @@ import { fullJitter, parseRetryAfter } from './backoff.js';
 
 export const DEFAULT_RETRIES = 2;
 
+/** Maximum Retry-After delay (ms) that withRetry will honour (#174). */
+export const MAX_RETRY_AFTER_MS = 30_000;
+
 /* ------------------------------------------------------------------ */
 /*  HTTP response classification                                        */
 /* ------------------------------------------------------------------ */
@@ -83,6 +86,11 @@ export async function withRetry(
     } catch (err) {
       // Non-retriable errors (e.g. 4xx client errors) skip retry.
       if (err.retriable === false) throw err;
+
+      // Retry-After exceeding the cap is treated as non-retriable.
+      if (err.retryAfterMs > MAX_RETRY_AFTER_MS) {
+        throw Object.assign(err, { retriable: false });
+      }
 
       // Last attempt — propagate the error.
       if (attempt === retries) throw err;

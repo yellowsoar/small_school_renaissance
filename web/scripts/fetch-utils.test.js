@@ -113,7 +113,7 @@ describe('fetchWithRetry', () => {
     await expect(fetchWithRetry(url, { retries: 2, timeout: 1000 })).rejects.toThrow(
       'HTTP 404 Not Found',
     );
-    // No retries — only the initial attempt.
+    // No retries -- only the initial attempt.
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(console.warn).not.toHaveBeenCalled();
   });
@@ -150,7 +150,7 @@ describe('fetchWithRetry', () => {
     const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
 
     expect(res.ok).toBe(true);
-    // 429 is retriable — two calls (initial + retry).
+    // 429 is retriable -- two calls (initial + retry).
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     expect(console.warn).toHaveBeenCalledTimes(1);
   });
@@ -185,10 +185,12 @@ describe('fetchWithRetry', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
 
+    // Use 5 s (under the 30 s MAX_RETRY_AFTER_MS cap) so the retry
+    // path fires and console.warn is called.
     const rateLimited = new Response('', {
       status: 429,
       statusText: 'Too Many Requests',
-      headers: { 'Retry-After': '60' },
+      headers: { 'Retry-After': '5' },
     });
     globalThis.fetch = vi
       .fn()
@@ -201,9 +203,9 @@ describe('fetchWithRetry', () => {
     await vi.runAllTimersAsync();
     await promise;
 
-    // Retry-After: 60 = 60 000 ms; Math.max(0, 60000) = 60000.
+    // Retry-After: 5 = 5 000 ms; Math.max(0, 5000) = 5000.
     expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining('60000'),
+      expect.stringContaining('5000'),
     );
 
     vi.useRealTimers();
@@ -277,7 +279,7 @@ describe('validateCsvContent', () => {
     try {
       validateCsvContent(csv);
     } catch (err) {
-      // The truncated portion should end with … and not contain the full 200-char string
+      // The truncated portion should end with ... and not contain the full 200-char string
       expect(err.message.length).toBeLessThan(400);
     }
   });
