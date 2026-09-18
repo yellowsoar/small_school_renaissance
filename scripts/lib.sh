@@ -30,7 +30,7 @@ remove_rows_mismatch_header() {
 	before_count=$(wc -l < "${file}")
 
 	echo "⚙️ Removing rows that its column mismatches the header..."
-	sed -n "/\(.*,\)\{${expected_commas},\}/p" "${file}" > "$tmpfile" \
+	sed -n "/^\([^,]*,\)\{${expected_commas}\}[^,]*$/p" "${file}" > "$tmpfile" \
 		&& mv -f "$tmpfile" "${file}"
 	local rc=$?
 	if [ "$rc" -ne 0 ]; then
