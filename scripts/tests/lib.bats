@@ -21,7 +21,7 @@ teardown() {
   rm -rf "$TEST_TMPDIR"
 }
 
-# ── sed_inplace ──────────────────────────────────────────────────────────────────
+# ── sed_inplace ──────────────────────────────────────────────────────────────────────────────
 
 @test "sed_inplace: successful substitution" {
   echo "hello world" > "$TEST_TMPDIR/f.txt"
@@ -305,4 +305,56 @@ MOCK
 @test "validate_not_html: returns 0 for nonexistent file (#163)" {
   run validate_not_html "$TEST_TMPDIR/nonexistent.ods"
   [ "$status" -eq 0 ]
+}
+
+# ── atomic_download (#195) ───────────────────────────────────────
+
+@test "atomic_download: successful download atomically renames to final path (#195)" {
+  # Mock download_file to write valid CSV content to the temp path
+  download_file() { printf 'name,age\nAlice,30\n' > "$2"; }
+  export -f download_file
+
+  local final_path="$TEST_TMPDIR/$NAME_DIR/test_file.ods"
+  run atomic_download "http://example.com/test.ods" "$final_path"
+  [ "$status" -eq 0 ]
+  [ -f "$final_path" ]
+  grep -q "Alice" "$final_path"
+  # No leftover temp files
+  local leftover
+  leftover=$(find "$TEST_TMPDIR/$NAME_DIR" -name 'test_file.ods.*' | wc -l)
+  [ "$leftover" -eq 0 ]
+}
+
+@test "atomic_download: cleans up temp file on download failure (#195)" {
+  # Mock download_file to fail
+  download_file() { return 1; }
+  export -f download_file
+
+  local final_path="$TEST_TMPDIR/$NAME_DIR/test_file.ods"
+  run atomic_download "http://example.com/test.ods" "$final_path"
+  [ "$status" -ne 0 ]
+  # No file at final path
+  [ ! -f "$final_path" ]
+  # No leftover temp files
+  local leftover
+  leftover=$(find "$TEST_TMPDIR/$NAME_DIR" -name 'test_file.ods.*' | wc -l)
+  [ "$leftover" -eq 0 ]
+}
+
+@test "atomic_download: cleans up temp file when HTML detected (#195)" {
+  # Mock download_file to write HTML content (validate_not_html will detect and delete)
+  download_file() {
+    echo '<!DOCTYPE html><html><body>Maintenance</body></html>' > "$2"
+  }
+  export -f download_file
+
+  local final_path="$TEST_TMPDIR/$NAME_DIR/test_file.ods"
+  run atomic_download "http://example.com/test.ods" "$final_path"
+  [ "$status" -ne 0 ]
+  # No file at final path
+  [ ! -f "$final_path" ]
+  # No leftover temp files (validate_not_html deletes the HTML, rm -f in else is a no-op)
+  local leftover
+  leftover=$(find "$TEST_TMPDIR/$NAME_DIR" -name 'test_file.ods.*' | wc -l)
+  [ "$leftover" -eq 0 ]
 }
