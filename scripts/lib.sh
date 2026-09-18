@@ -108,12 +108,31 @@ convert_to_csv_if_needed() {
 	return 1
 }
 
+# Validate that a downloaded file is not HTML (e.g. a redirected
+# login/maintenance/WAF page).  Uses `file --mime-type` for content
+# sniffing.  Deletes the file and returns non-zero if HTML is detected.
+# Returns 0 if the file does not exist (nothing to validate).
+# Usage: validate_not_html <file>
+validate_not_html() {
+	local file="$1"
+	[ -f "$file" ] || return 0
+	local mime
+	mime=$(file --mime-type -b "$file")
+	if [ "$mime" = "text/html" ]; then
+		echo "❌ ${file} is HTML, not a spreadsheet (${mime}) — possible redirect to login/maintenance page" >&2
+		rm -f "$file"
+		return 1
+	fi
+}
+
 # Check if a remote URL exists (HTTP HEAD request).
+# Limits redirects to 3 hops to avoid following login/WAF redirects (#163).
 # Requires WGET_TIMEOUT to be set by the caller.
 # Usage: check_file <url>
 check_file() {
 	wget \
 		--spider \
+		--max-redirect=3 \
 		${WGET_TIMEOUT} \
 		"${1}" \
 		>/dev/null \
@@ -121,6 +140,7 @@ check_file() {
 }
 
 # Download a file from a remote URL.
+# Limits redirects to 3 hops to avoid following login/WAF redirects (#163).
 # Requires WGET_TIMEOUT to be set by the caller.
 # Usage: download_file <url> [output_path]
 #   With 1 arg:  wget -N -P "./${NAME_DIR}" (timestamp-checked, directory mode)
@@ -131,6 +151,7 @@ download_file() {
 		wget \
 			-O "${2}" \
 			--quiet \
+			--max-redirect=3 \
 			${WGET_TIMEOUT} \
 			"${url}"
 	else
@@ -138,6 +159,7 @@ download_file() {
 			-N \
 			-P "./${NAME_DIR}" \
 			--quiet \
+			--max-redirect=3 \
 			${WGET_TIMEOUT} \
 			"${url}"
 	fi
