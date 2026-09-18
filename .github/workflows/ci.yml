@@ -24,16 +24,31 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
+      - name: Debug info
+        run: |
+          echo "=== ShellCheck version ==="
+          shellcheck --version || echo "shellcheck not found"
+          echo "=== Shell scripts ==="
+          ls -la scripts/*.sh
+          echo "=== Bats available? ==="
+          which bats || echo "bats not pre-installed"
+
       - name: ShellCheck
-        run: shellcheck --severity=warning scripts/dump_schools_*.sh
+        run: |
+          echo "Running: shellcheck --severity=warning scripts/dump_schools_*.sh"
+          shellcheck --severity=warning scripts/dump_schools_*.sh
+          echo "ShellCheck passed"
 
       - name: Install Bats
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq bats
+          bats --version
 
       - name: Run Shell tests
-        run: bats scripts/tests/
+        run: |
+          echo "Running bats..."
+          bats --verbose-run scripts/tests/
 
   coverage-badge:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
