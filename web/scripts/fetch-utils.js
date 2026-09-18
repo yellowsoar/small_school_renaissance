@@ -9,6 +9,14 @@ import { classifyResponse, withRetry, DEFAULT_RETRIES } from '../src/lib/retry-c
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/**
+ * Minimum number of data rows (excluding header) required for the CSV to
+ * pass build-time validation.  The full dataset contains ~2,600 schools;
+ * 100 is a conservative floor (~4%) that catches truncated downloads
+ * without false-positiving on legitimate future dataset shrinkage.
+ */
+const MIN_DATA_ROWS = 100;
+
 /* ------------------------------------------------------------------ */
 /*  Fetch with retry                                                    */
 /* ------------------------------------------------------------------ */
@@ -50,6 +58,7 @@ export async function fetchWithRetry(
  * 2. Content does not look like HTML (error pages, login pages).
  * 3. The header line contains all `requiredHeaders` (column-level match).
  * 4. At least one data row exists beyond the header.
+ * 5. Data row count meets the minimum threshold (truncation guard).
  *
  * @param {string} body - The raw response body text
  * @param {string[]} requiredHeaders - Column names that must appear in the
@@ -90,5 +99,13 @@ export function validateCsvContent(
   const lines = body.trim().split('\n');
   if (lines.length < 2) {
     throw new Error('CSV contains a header but no data rows');
+  }
+
+  // Guard against truncated downloads: the full dataset has ~2,600 rows.
+  if (lines.length < MIN_DATA_ROWS + 1) {
+    throw new Error(
+      `CSV has only ${lines.length - 1} data row(s), expected at least ${MIN_DATA_ROWS}` +
+        ` \u2014 the download may be truncated`,
+    );
   }
 }
