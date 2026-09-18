@@ -260,8 +260,6 @@ describe('parseSchools', () => {
   });
 
   it('throws on whitespace-only CSV text (#171)', () => {
-    // PapaParse with header:true treats whitespace-with-newlines as having
-    // a data row with space-only headers, so header validation catches it.
     expect(() => parseSchools('   \n  \n  ')).toThrow('CSV 欄位不符');
   });
 
@@ -312,7 +310,6 @@ describe('parseSchools', () => {
   });
 
   it('throws when CSV has data rows but all schools are unparseable', () => {
-    // Has required headers but every row has invalid lat/lng
     const badData = csv([
       row({ projected: 10, 學校代碼: 'a', 緯度: '', 經度: '' }),
       row({ projected: 10, 學校代碼: 'b', 緯度: 'N/A', 經度: 'N/A' }),
@@ -323,7 +320,6 @@ describe('parseSchools', () => {
   });
 
   it('only reports missing headers in the error, not present ones', () => {
-    // Has 緯度 and 經度 but missing 學校代碼 and 學校名稱
     const partialHeaders = '緯度,經度,其他欄位\n24.0,121.0,test';
 
     try {
@@ -331,7 +327,6 @@ describe('parseSchools', () => {
       expect.fail('should have thrown');
     } catch (error) {
       expect(error.message).toContain('CSV 欄位不符');
-      // The "缺少" section should mention only the missing headers
       const missingLine = error.message.split('\n')[0];
       expect(missingLine).toContain('學校代碼');
       expect(missingLine).toContain('學校名稱');
@@ -349,7 +344,6 @@ describe('parseSchools', () => {
       parseSchools(manyHeaders);
       expect.fail('should have thrown');
     } catch (error) {
-      // Only first 5 headers shown, followed by ellipsis
       expect(error.message).toContain('…');
       expect(error.message).not.toContain('f');
     }
@@ -358,9 +352,6 @@ describe('parseSchools', () => {
   // --- Projection sentinel regression test (#65) ---------------------------
 
   it('throws when projection columns are renamed but base headers are present (#65)', () => {
-    // All base headers present, but projection columns use a different naming
-    // pattern (e.g. "114年推估人數" instead of "推估114年人數"). Without the
-    // sentinel, parseSchools would silently produce a blank map.
     const renamedHeaders = [
       ...COLUMNS.filter((col) => !col.startsWith('推估')),
       ...PROJECTION_YEARS.map((year) => `${year}年推估人數`),
@@ -375,9 +366,6 @@ describe('parseSchools', () => {
   // --- County header regression test (#88) ---------------------------------
 
   it('throws when 縣市名稱 header is missing, preventing silent county fallback (#88)', () => {
-    // All other required headers present, but 縣市名稱 is renamed.
-    // Without the fix, parseSchools would silently fall back to '未知縣市'
-    // for every school, breaking the county filter.
     const headersWithoutCounty = COLUMNS.filter((col) => col !== '縣市名稱');
     const headerLine = headersWithoutCounty.join(',');
     const dataLine = headersWithoutCounty.map(() => 'x').join(',');
@@ -479,7 +467,6 @@ describe('parseSchools', () => {
   });
 
   it('does not throw for valid headers even with some unparseable rows', () => {
-    // Mix of valid and invalid rows — at least one parses, so no throw
     const mixed = csv([
       row({ projected: 10, 學校代碼: 'good' }),
       row({ projected: 10, 學校代碼: 'bad', 緯度: '', 經度: '' }),
@@ -516,7 +503,6 @@ describe('parseSchools', () => {
 
     const { schools } = parseSchools(fewOutliers);
     expect(schools).toHaveLength(4);
-    // Filter for deltaRatio-specific warnings (CSV parse warnings may also fire)
     const deltaWarns = warnSpy.mock.calls.filter(
       (args) => typeof args[0] === 'string' && args[0].includes('deltaRatio'),
     );
@@ -568,29 +554,147 @@ describe('parseSchools', () => {
     expect(schools[0].deltaRatio).toBeCloseTo(-0.0643, 4);
   });
 
-  // --- Drop-ratio warning (regression tests for #102) ----------------------
+  // --- Drop-ratio guard + warning (regression tests for #102, #172) --------
 
-  it('warns when more than 20% of rows are dropped due to missing coordinates (#102)', () => {
+  it('throws when drop ratio exceeds 30% with >= 10 rows (#172)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    // 1 valid + 4 invalid = 80% drop rate → should warn
-    parseSchools(
+    // 2 valid + 10 invalid = 12 rows, 83% drop rate
+    const rows = [
+      row({ projected: 10, 學校代碼: 'ok1' }),
+      row({
+        projected: 10,
+        學校代碼: 'ok2',
+        緯度: '24.9',
+        經度: '121.5',
+      }),
+    ];
+    for (let i = 0; i < 10; i++) {
+      rows.push(
+        row({
+          projected: 10,
+          學校代碼: `bad${i}`,
+          緯度: '',
+          經度: '',
+        }),
+      );
+    }
+
+    expect(() => parseSchools(csv(rows))).toThrow('資料品質異常');
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not throw for small datasets even with high drop ratio (#172)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 1 valid + 4 invalid = 5 rows, 80% drop but < 10 rows
+    const { schools } = parseSchools(
       csv([
         row({ projected: 10, 學校代碼: 'valid' }),
-        row({ projected: 10, 學校代碼: 'bad1', 緯度: '', 經度: '' }),
-        row({ projected: 10, 學校代碼: 'bad2', 緯度: '', 經度: '' }),
-        row({ projected: 10, 學校代碼: 'bad3', 緯度: 'N/A', 經度: 'N/A' }),
-        row({ projected: 10, 學校代碼: 'bad4', 緯度: '', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'b1', 緯度: '', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'b2', 緯度: '', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'b3', 緯度: '', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'b4', 緯度: '', 經度: '' }),
       ]),
     );
 
+    expect(schools).toHaveLength(1);
+    expect(schools[0].id).toBe('valid');
+
+    warnSpy.mockRestore();
+  });
+
+  it('includes drop count, percentage and threshold in the throw message (#172)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 2 valid + 8 invalid = 10 rows, 80% drop rate
+    const rows = [
+      row({ projected: 10, 學校代碼: 'ok1' }),
+      row({
+        projected: 10,
+        學校代碼: 'ok2',
+        緯度: '24.9',
+        經度: '121.5',
+      }),
+    ];
+    for (let i = 0; i < 8; i++) {
+      rows.push(
+        row({
+          projected: 10,
+          學校代碼: `bad${i}`,
+          緯度: '',
+          經度: '',
+        }),
+      );
+    }
+
+    expect(() => parseSchools(csv(rows))).toThrow('10 筆資料');
+    expect(() => parseSchools(csv(rows))).toThrow('8 筆');
+    expect(() => parseSchools(csv(rows))).toThrow('80.0%');
+    expect(() => parseSchools(csv(rows))).toThrow('30%');
+
+    warnSpy.mockRestore();
+  });
+
+  it('warns but does not throw when drop ratio is between 20% and 30% (#172)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 3 valid + 1 invalid = 25% drop rate
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'a' }),
+        row({ projected: 10, 學校代碼: 'b', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 10, 學校代碼: 'c', 緯度: '24.8', 經度: '121.4' }),
+        row({ projected: 10, 學校代碼: 'bad', 緯度: '', 經度: '' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(3);
     const dropWarns = warnSpy.mock.calls.filter(
       (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
     );
     expect(dropWarns).toHaveLength(1);
-    expect(dropWarns[0][0]).toContain('5 筆資料');
-    expect(dropWarns[0][0]).toContain('4 筆');
-    expect(dropWarns[0][0]).toContain('80.0%');
+    expect(dropWarns[0][0]).toContain('25.0%');
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not throw at exactly 30% drop ratio (boundary, #172)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 7 valid + 3 invalid = 30% drop rate, >= 10 rows
+    const rows = [];
+    for (let i = 0; i < 7; i++) {
+      const lat = `${24.5 + i * 0.1}`;
+      const lng = `${121.0 + i * 0.1}`;
+      rows.push(
+        row({
+          projected: 10,
+          學校代碼: `ok${i}`,
+          緯度: lat,
+          經度: lng,
+        }),
+      );
+    }
+    for (let i = 0; i < 3; i++) {
+      rows.push(
+        row({
+          projected: 10,
+          學校代碼: `bad${i}`,
+          緯度: '',
+          經度: '',
+        }),
+      );
+    }
+
+    const { schools } = parseSchools(csv(rows));
+    expect(schools).toHaveLength(7);
+    const dropWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
+    );
+    expect(dropWarns).toHaveLength(1);
+    expect(dropWarns[0][0]).toContain('30.0%');
 
     warnSpy.mockRestore();
   });
@@ -598,7 +702,7 @@ describe('parseSchools', () => {
   it('does not warn when drop ratio is at or below 20% (#102)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    // 4 valid + 1 invalid = 20% drop rate → should NOT warn
+    // 4 valid + 1 invalid = 20% drop rate
     parseSchools(
       csv([
         row({ projected: 10, 學校代碼: 'a' }),
@@ -613,32 +717,6 @@ describe('parseSchools', () => {
       (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
     );
     expect(dropWarns).toHaveLength(0);
-
-    warnSpy.mockRestore();
-  });
-
-  it('includes drop count and percentage in the warning message (#102)', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    // 2 valid + 8 invalid = 80% drop rate
-    const rows = [
-      row({ projected: 10, 學校代碼: 'ok1' }),
-      row({ projected: 10, 學校代碼: 'ok2', 緯度: '24.9', 經度: '121.5' }),
-    ];
-    for (let i = 0; i < 8; i++) {
-      rows.push(row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }));
-    }
-
-    parseSchools(csv(rows));
-
-    const dropWarns = warnSpy.mock.calls.filter(
-      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
-    );
-    expect(dropWarns).toHaveLength(1);
-    expect(dropWarns[0][0]).toMatch(/10 筆資料/);
-    expect(dropWarns[0][0]).toMatch(/8 筆/);
-    expect(dropWarns[0][0]).toMatch(/80\.0%/);
-    expect(dropWarns[0][0]).toContain('座標缺失或超出範圍');
 
     warnSpy.mockRestore();
   });
@@ -755,12 +833,10 @@ describe('filterSchools', () => {
   // --- Multi-token AND search (regression tests for #90) -------------------
 
   it('matches when space-separated tokens hit different fields (#90)', () => {
-    // '南投' matches county, '國小' matches name → school 'c'
     expect(ids({ search: '南投 國小' })).toEqual(['c']);
   });
 
   it('matches when space-separated tokens hit the same field', () => {
-    // '三峻' matches town, '建安' matches name → school 'b'
     expect(ids({ search: '三峻 建安' })).toEqual(['b']);
   });
 
@@ -900,25 +976,21 @@ describe('summarize', () => {
     const closedMax = RISK_TIERS.find((t) => t.id === 'closed').max;
     const highMax = RISK_TIERS.find((t) => t.id === 'high').max;
 
-    // A school at exactly the closed boundary counts as closing
     const atClosedBoundary = parseSchools(
       csv([row({ projected: closedMax, 學校代碼: 'at-closed' })]),
     ).schools;
     expect(summarize(atClosedBoundary, 130).closing).toBe(1);
 
-    // A school just above the closed boundary does NOT count as closing
     const aboveClosed = parseSchools(
       csv([row({ projected: closedMax + 1, 學校代碼: 'above-closed' })]),
     ).schools;
     expect(summarize(aboveClosed, 130).closing).toBe(0);
 
-    // A school at exactly the high boundary counts as atRisk
     const atHighBoundary = parseSchools(
       csv([row({ projected: highMax, 學校代碼: 'at-high' })]),
     ).schools;
     expect(summarize(atHighBoundary, 130).atRisk).toBe(1);
 
-    // A school just above the high boundary does NOT count as atRisk
     const aboveHigh = parseSchools(
       csv([row({ projected: highMax + 1, 學校代碼: 'above-high' })]),
     ).schools;

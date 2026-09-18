@@ -9,6 +9,21 @@ import { REQUIRED_HEADERS } from './csv-schema.js';
 const CLOSED_MAX = RISK_TIERS.find((t) => t.id === 'closed').max;
 const AT_RISK_MAX = RISK_TIERS.find((t) => t.id === 'high').max;
 
+/**
+ * Maximum tolerable ratio of dropped rows (invalid coordinates) before
+ * parseSchools treats the dataset as corrupted and throws (#172).
+ * Below this threshold (but above 20%) a console.warn is emitted.
+ */
+const MAX_DROP_RATIO = 0.3;
+
+/**
+ * Minimum number of CSV rows required before the drop-ratio throw
+ * activates (#172). Below this count the ratio is too noisy to be
+ * meaningful (e.g. 1 of 2 rows dropped = 50% but is not a data
+ * quality crisis).
+ */
+const MIN_DROP_SAMPLE = 10;
+
 const num = (value) => {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
   const trimmed = typeof value === 'string' ? value.trim() : value;
@@ -104,14 +119,22 @@ export const parseSchools = (csvText) => {
 
   const schools = data.map(toSchool).filter(Boolean);
 
-  // --- Drop-ratio warning (#102) -------------------------------------------
+  // --- Drop-ratio guard (#172) + warning (#102) ----------------------------
   // When a significant portion of CSV rows are silently dropped (null
-  // coordinates, out-of-bounds, etc.), warn so data maintainers notice
-  // upstream quality issues before they affect policy decisions.
+  // coordinates, out-of-bounds, etc.), either throw (above MAX_DROP_RATIO
+  // with enough rows for the ratio to be statistically meaningful) or warn
+  // (above 20%) so data maintainers notice upstream quality issues before
+  // they affect policy decisions.
   if (data.length > 0) {
     const dropCount = data.length - schools.length;
     if (dropCount > 0) {
       const dropRatio = dropCount / data.length;
+      if (dropRatio > MAX_DROP_RATIO && data.length >= MIN_DROP_SAMPLE) {
+        throw new Error(
+          `資料品質異常：${data.length} 筆資料中有 ${dropCount} 筆` +
+            `（${(dropRatio * 100).toFixed(1)}%）被丟棄，超過容許上限 ${MAX_DROP_RATIO * 100}%`,
+        );
+      }
       if (dropRatio > 0.2) {
         console.warn(
           `parseSchools：${data.length} 筆資料中有 ${dropCount} 筆` +
@@ -123,10 +146,6 @@ export const parseSchools = (csvText) => {
   }
 
   // --- Duplicate ID disambiguation (#45) -----------------------------------
-  // When multiple schools share the same fallback ID (e.g. same coordinates
-  // with no school code), append #2, #3, … to subsequent duplicates so every
-  // React key stays unique. The first occurrence keeps its original ID for
-  // backward compatibility.
   const idCounts = new Map();
   for (const school of schools) {
     const count = (idCounts.get(school.id) ?? 0) + 1;
@@ -144,10 +163,6 @@ export const parseSchools = (csvText) => {
   }
 
   // --- deltaRatio format detection (#32) -----------------------------------
-  // The upstream CSV column「學生人數變化百分比」stores values as ratios
-  // (e.g. -0.0643 = -6.43%). If upstream ever switches to percentage numbers
-  // (e.g. -5.2 = -5.2%), Intl.NumberFormat({ style: 'percent' }) would
-  // display -520% instead of -5.2%. Detect this at the batch level.
   const ratios = schools.map((s) => s.deltaRatio).filter((v) => v != null);
   if (ratios.length > 0) {
     const outliers = ratios.filter((v) => Math.abs(v) > 1);
@@ -195,9 +210,6 @@ export const filterSchools = (schools, { year, counties, tiers, search }) => {
 
     if (needle) {
       // Split on whitespace for multi-token AND search (#90).
-      // Each token must appear in at least one field (OR across fields).
-      // Each field is tested on its own — concatenating them would let a
-      // term straddle two fields ("插角國小南投縣" should not match).
       const tokens = needle.split(/\s+/).filter(Boolean);
       const fields = [school.name, school.county, school.town].map((f) =>
         f.toLowerCase(),
