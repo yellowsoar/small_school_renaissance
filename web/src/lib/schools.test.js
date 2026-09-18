@@ -598,7 +598,9 @@ describe('parseSchools', () => {
       row({ projected: 10, 學校代碼: 'ok2', 緯度: '24.9', 經度: '121.5' }),
     ];
     for (let i = 0; i < 8; i++) {
-      rows.push(row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }));
+      rows.push(
+        row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }),
+      );
     }
 
     expect(() => parseSchools(csv(rows))).toThrow('10 筆資料');
@@ -638,10 +640,16 @@ describe('parseSchools', () => {
     // 7 valid + 3 invalid = 30% drop rate → at boundary (> 0.3 triggers throw)
     const rows = [];
     for (let i = 0; i < 7; i++) {
-      rows.push(row({ projected: 10, 學校代碼: `ok${i}`, 緯度: `${24.5 + i * 0.1}`, 經度: `${121.0 + i * 0.1}` }));
+      const lat = `${24.5 + i * 0.1}`;
+      const lng = `${121.0 + i * 0.1}`;
+      rows.push(
+        row({ projected: 10, 學校代碼: `ok${i}`, 緯度: lat, 經度: lng }),
+      );
     }
     for (let i = 0; i < 3; i++) {
-      rows.push(row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }));
+      rows.push(
+        row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }),
+      );
     }
 
     const { schools } = parseSchools(csv(rows));
