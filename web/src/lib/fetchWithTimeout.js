@@ -124,6 +124,13 @@ export async function fetchWithTimeout(
     {
       retries,
       sleepFn: (ms) => abortableSleep(ms, signal),
+      onRetry: (attempt, err, delay) => {
+        const label = err.name === 'TimeoutError' ? 'timeout' : err.message;
+        console.warn(
+          `[fetchWithTimeout] attempt ${attempt + 1}/${retries + 1} failed (${label}), ` +
+            `retrying in ${Math.round(delay)}ms\u2026`,
+        );
+      },
     },
   );
 }
