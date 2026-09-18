@@ -334,6 +334,112 @@ describe('fetchWithTimeout', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  maxBytes size limit (#207)                                          */
+/* ------------------------------------------------------------------ */
+
+describe('maxBytes size limit (#207)', () => {
+  beforeEach(() => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+  });
+
+  it('rejects early when Content-Length header exceeds maxBytes', async () => {
+    const mockRes = {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers({ 'Content-Length': '20000000' }),
+      body: null,
+      text: vi.fn(),
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
+
+    await expect(
+      fetchWithTimeout('https://example.com/data.csv', {
+        retries: 0,
+        maxBytes: 1000,
+      }),
+    ).rejects.toMatchObject({ name: 'SizeLimitError' });
+
+    // Body should never be read when Content-Length triggers early rejection.
+    expect(mockRes.text).not.toHaveBeenCalled();
+  });
+
+  it('rejects mid-stream when body exceeds maxBytes without Content-Length', async () => {
+    // Build a ReadableStream response without Content-Length header so
+    // the streaming reader (not the header check) enforces the limit.
+    const encoder = new TextEncoder();
+    const chunks = [
+      encoder.encode('x'.repeat(60)),
+      encoder.encode('x'.repeat(60)),
+    ];
+    let i = 0;
+    const stream = new ReadableStream({
+      pull(controller) {
+        if (i < chunks.length) {
+          controller.enqueue(chunks[i++]);
+        } else {
+          controller.close();
+        }
+      },
+    });
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(stream, { status: 200, statusText: 'OK' }),
+    );
+
+    await expect(
+      fetchWithTimeout('https://example.com/data.csv', {
+        retries: 0,
+        maxBytes: 100,
+      }),
+    ).rejects.toMatchObject({ name: 'SizeLimitError' });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns body text when size is within maxBytes', async () => {
+    const body = 'small CSV content';
+    globalThis.fetch = vi.fn().mockResolvedValue(okResponse(body));
+
+    const text = await fetchWithTimeout('https://example.com/data.csv', {
+      maxBytes: 10_000,
+    });
+
+    expect(text).toBe(body);
+  });
+
+  it('does not enforce size limit when maxBytes is omitted', async () => {
+    const body = 'x'.repeat(5000);
+    globalThis.fetch = vi.fn().mockResolvedValue(okResponse(body));
+
+    const text = await fetchWithTimeout('https://example.com/data.csv');
+
+    expect(text).toBe(body);
+    expect(text).toHaveLength(5000);
+  });
+
+  it('does not retry on SizeLimitError (non-retriable)', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers({ 'Content-Length': '20000000' }),
+      body: null,
+      text: () => Promise.resolve(''),
+    });
+
+    await expect(
+      fetchWithTimeout('https://example.com/data.csv', {
+        retries: 2,
+        maxBytes: 1000,
+      }),
+    ).rejects.toMatchObject({ name: 'SizeLimitError' });
+
+    // Non-retriable — only the initial attempt.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  Backoff behavior (fake timers for precise control)                   */
 /* ------------------------------------------------------------------ */
 

@@ -3,6 +3,12 @@ import { FIRST_PROJECTION_YEAR, LAST_PROJECTION_YEAR } from '../lib/csv-schema.j
 /** Dataset lives in public/data/, so it is resolved against the Vite base path. */
 export const DATA_URL = `${import.meta.env.BASE_URL}data/113-107.csv`;
 
+/** Maximum allowed CSV response size in bytes (10 MB).
+ *  The full dataset is ~2.5 MB; 10 MB provides a 4x safety margin
+ *  while preventing memory exhaustion from corrupted or hijacked
+ *  data sources (#207). */
+export const MAX_CSV_BYTES = 10 * 1024 * 1024;
+
 /** Base (observed) school year in the dataset, in 民國 years. */
 export const BASE_YEAR = 113;
 

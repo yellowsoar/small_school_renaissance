@@ -91,6 +91,20 @@ describe('useSchoolData', () => {
     expect(result.current.error.message).toContain('Unexpected column header');
   });
 
+  it('shows size limit message on SizeLimitError (#207)', async () => {
+    const err = Object.assign(
+      new Error('Response size 20000000 bytes exceeds limit of 10485760 bytes'),
+      { name: 'SizeLimitError', retriable: false },
+    );
+    fetchWithTimeout.mockRejectedValue(err);
+
+    const { result } = renderHook(() => useSchoolData('/fake.csv'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error.message).toContain('資料大小超過上限');
+    expect(result.current.error.message).toContain('exceeds limit');
+  });
+
   it('preserves original error as cause', async () => {
     const original = new TypeError('Failed to fetch');
     fetchWithTimeout.mockRejectedValue(original);
@@ -134,13 +148,14 @@ describe('useSchoolData', () => {
     expect(fetchWithTimeout).toHaveBeenCalledTimes(2);
   });
 
-  it('passes AbortSignal for cleanup on unmount', () => {
+  it('passes AbortSignal and maxBytes for cleanup on unmount (#207)', () => {
     fetchWithTimeout.mockReturnValue(new Promise(() => {}));
     const { unmount } = renderHook(() => useSchoolData('/fake.csv'));
 
     const [, opts] = fetchWithTimeout.mock.calls[0];
     expect(opts.signal).toBeInstanceOf(AbortSignal);
     expect(opts.signal.aborted).toBe(false);
+    expect(opts.maxBytes).toBe(10 * 1024 * 1024);
 
     unmount();
     expect(opts.signal.aborted).toBe(true);

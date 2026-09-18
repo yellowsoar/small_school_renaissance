@@ -49,6 +49,95 @@ function abortableSleep(ms, signal) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Size-limited body reader                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Read the full response body as text, enforcing a byte-size ceiling.
+ *
+ * When `maxBytes` is provided:
+ * 1. Reject early if the Content-Length header exceeds the limit.
+ * 2. Stream the body via `response.body.getReader()`, accumulating
+ *    chunks and aborting when the cumulative size exceeds `maxBytes`.
+ * 3. Fall back to `response.text()` + post-check when ReadableStream
+ *    body is unavailable (e.g. mocked responses in tests).
+ *
+ * When `maxBytes` is omitted or undefined, delegates to `response.text()`
+ * with zero overhead (existing behavior).
+ *
+ * @param {Response} response  Fetch API Response (after classifyResponse)
+ * @param {number} [maxBytes]  Optional byte-size ceiling
+ * @returns {Promise<string>}  The response body as text
+ * @throws {Error}             With `name: 'SizeLimitError'` and
+ *                             `retriable: false` when the limit is exceeded
+ */
+async function readBodyWithLimit(response, maxBytes) {
+  // No limit requested — fast path, zero overhead.
+  if (maxBytes == null) {
+    return response.text();
+  }
+
+  // Early rejection via Content-Length header when available.
+  const contentLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw Object.assign(
+      new Error(
+        `Response size ${contentLength} bytes exceeds limit of ${maxBytes} bytes`,
+      ),
+      { name: 'SizeLimitError', retriable: false },
+    );
+  }
+
+  // Streaming read with cumulative size check.
+  if (response.body) {
+    const reader = response.body.getReader();
+    const chunks = [];
+    let received = 0;
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        received += value.byteLength;
+        if (received > maxBytes) {
+          reader.cancel();
+          throw Object.assign(
+            new Error(
+              `Response size exceeds limit of ${maxBytes} bytes (received ${received}+ bytes)`,
+            ),
+            { name: 'SizeLimitError', retriable: false },
+          );
+        }
+        chunks.push(value);
+      }
+    } catch (err) {
+      if (err.name === 'SizeLimitError' || err.name === 'AbortError') throw err;
+      throw err;
+    }
+
+    const decoder = new TextDecoder();
+    return (
+      chunks.map((c) => decoder.decode(c, { stream: true })).join('') +
+      decoder.decode()
+    );
+  }
+
+  // Fallback: response.body is null (e.g. mocked Response in tests).
+  const text = await response.text();
+  const byteLength = new TextEncoder().encode(text).byteLength;
+  if (byteLength > maxBytes) {
+    throw Object.assign(
+      new Error(
+        `Response size ${byteLength} bytes exceeds limit of ${maxBytes} bytes`,
+      ),
+      { name: 'SizeLimitError', retriable: false },
+    );
+  }
+  return text;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main fetch wrapper                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -60,13 +149,13 @@ function abortableSleep(ms, signal) {
  * stalled body transfer triggers the timeout or external abort (#173).
  *
  * @param {string} url
- * @param {{ retries?: number, timeout?: number, signal?: AbortSignal }} [options]
+ * @param {{ retries?: number, timeout?: number, signal?: AbortSignal, maxBytes?: number }} [options]
  * @returns {Promise<string>} The response body as text
- * @throws On exhausted retries, timeout, or external abort
+ * @throws On exhausted retries, timeout, external abort, or size limit exceeded
  */
 export async function fetchWithTimeout(
   url,
-  { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS, signal } = {},
+  { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS, signal, maxBytes } = {},
 ) {
   return withRetry(
     async () => {
@@ -95,7 +184,8 @@ export async function fetchWithTimeout(
         const checkedRes = classifyResponse(res);
         // Consume body inside the same timeout/signal scope so stalled
         // body transfers trigger the timeout or external abort (#173).
-        const text = await checkedRes.text();
+        // When maxBytes is provided, enforce streaming size limit (#207).
+        const text = await readBodyWithLimit(checkedRes, maxBytes);
         return text;
       } catch (err) {
         // External abort (React unmount) takes priority — propagate immediately.
