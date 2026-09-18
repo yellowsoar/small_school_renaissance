@@ -22,9 +22,6 @@ export const MAP = {
   maxZoom: 18,
   /** Below this zoom the individual school markers are hidden for legibility. */
   markerZoom: 11,
-  tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  tileAttribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 };
 
 /**
