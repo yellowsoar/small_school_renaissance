@@ -5,6 +5,7 @@ import {
   REFERENCE_YEAR,
   PROJECTION_YEARS,
   MAP,
+  TILE_LAYERS,
   RISK_TIERS,
   HEATMAP_THRESHOLD,
   HEATMAP_OPTIONS,
@@ -60,9 +61,18 @@ describe('config', () => {
     expect(MAP.markerZoom).toBeLessThanOrEqual(MAP.maxZoom);
   });
 
-  it('MAP has a tile URL and attribution', () => {
-    expect(MAP.tileUrl).toMatch(/^https?:\/\//);
-    expect(MAP.tileAttribution).toBeTruthy();
+  // ---------------------------------------------------------------------------
+  // TILE_LAYERS
+  // ---------------------------------------------------------------------------
+
+  it('every TILE_LAYERS entry has a valid url and attribution', () => {
+    expect(TILE_LAYERS.length).toBeGreaterThan(0);
+    for (const layer of TILE_LAYERS) {
+      expect(layer.id).toBeTruthy();
+      expect(layer.label).toBeTruthy();
+      expect(layer.url).toMatch(/^https?:\/\//);
+      expect(layer.attribution).toBeTruthy();
+    }
   });
 
   // ---------------------------------------------------------------------------
