@@ -42,7 +42,7 @@ export function useSchoolData(url = DATA_URL) {
 
         let message;
         if (error.name === 'TimeoutError') {
-          message = '資料載入逎時，請檢查網路連線後重新載入';
+          message = '資料載入逾時，請檢查網路連線後重新載入';
         } else if (downloadComplete) {
           message = `資料解析失敗 (${error.message})`;
         } else {
