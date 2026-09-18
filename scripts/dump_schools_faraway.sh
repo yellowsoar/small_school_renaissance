@@ -46,7 +46,12 @@ main() {
 				if download_file \
 					"${URL_TARGET}" \
 					"./${NAME_DIR}/${FULL_FILE_NAME}.${FILE_EXT}"; then
-					echo "✅ File Downloaded: ${FULL_FILE_NAME}.${FILE_EXT}"
+					if validate_not_html "./${NAME_DIR}/${FULL_FILE_NAME}.${FILE_EXT}"; then
+						echo "✅ File Downloaded: ${FULL_FILE_NAME}.${FILE_EXT}"
+					else
+						echo "⚠️  downloaded file is HTML, not a spreadsheet: ${URL_TARGET}" >&2
+						FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
+					fi
 				else
 					echo "⚠️  download failed: ${URL_TARGET}" >&2
 					FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
