@@ -21,11 +21,17 @@ export const FIRST_PROJECTION_YEAR = 114;
 /** The last projection year in the upstream CSV dataset (民國 year). */
 export const LAST_PROJECTION_YEAR = 130;
 
-export const REQUIRED_HEADERS = [
+const BASE_HEADERS = [
   '學校代碼',
   '學校名稱',
   '縣市名稱',
   '緯度',
   '經度',
-  `推估${FIRST_PROJECTION_YEAR}年人數`,
 ];
+
+const PROJECTION_HEADERS = Array.from(
+  { length: LAST_PROJECTION_YEAR - FIRST_PROJECTION_YEAR + 1 },
+  (_, i) => `推估${FIRST_PROJECTION_YEAR + i}年人數`,
+);
+
+export const REQUIRED_HEADERS = [...BASE_HEADERS, ...PROJECTION_HEADERS];
