@@ -33,8 +33,15 @@ export default function SchoolMarkers({ schools, year, visible }) {
           add: (e) => {
             const el = e.target.getElement();
             if (el) {
-              el.setAttribute('role', 'img');
+              el.setAttribute('tabindex', '0');
+              el.setAttribute('role', 'button');
               el.setAttribute('aria-label', ariaLabel);
+              el.addEventListener('keydown', (evt) => {
+                if (evt.key === 'Enter' || evt.key === ' ') {
+                  evt.preventDefault();
+                  e.target.openPopup();
+                }
+              });
             }
           },
         }}
