@@ -229,7 +229,10 @@ describe('validateCsvContent', () => {
     ...Array(LAST_PROJECTION_YEAR - FIRST_PROJECTION_YEAR + 1).fill('280'), // 推估 columns
     '中山區', '中山北路', '02-1234', 'http://example.com', '一般地區', '300', // extras
   ];
-  const VALID_CSV = `${VALID_HEADER}\n${VALID_DATA_VALUES.join(',')}`;
+  const VALID_DATA_ROW = VALID_DATA_VALUES.join(',');
+  // Use 100 data rows so the fixture also satisfies the MIN_DATA_ROWS
+  // truncation guard introduced in #203.
+  const VALID_CSV = [VALID_HEADER, ...Array(100).fill(VALID_DATA_ROW)].join('\n');
 
   it('accepts a valid CSV with required headers and data rows', () => {
     expect(() => validateCsvContent(VALID_CSV)).not.toThrow();
@@ -274,7 +277,8 @@ describe('validateCsvContent', () => {
   });
 
   it('accepts custom required headers', () => {
-    const csv = 'alpha,beta\n1,2';
+    const rows = Array(100).fill('1,2');
+    const csv = ['alpha,beta', ...rows].join('\n');
     expect(() => validateCsvContent(csv, ['alpha', 'beta'])).not.toThrow();
   });
 
@@ -309,7 +313,8 @@ describe('validateCsvContent', () => {
 
   it('accepts quoted CSV headers after unquoting', () => {
     const quotedHeader = ALL_COLUMNS.map((col) => `"${col}"`).join(',');
-    const csv = `${quotedHeader}\n${VALID_DATA_VALUES.join(',')}`;
+    const rows = Array(100).fill(VALID_DATA_ROW);
+    const csv = [quotedHeader, ...rows].join('\n');
     expect(() => validateCsvContent(csv)).not.toThrow();
   });
 
@@ -325,5 +330,22 @@ describe('validateCsvContent', () => {
     const csv = `${incompleteHeader}\n013501,大同國小,臺北市,25.05,121.52,280`;
     expect(() => validateCsvContent(csv)).toThrow('CSV header missing required columns');
     expect(() => validateCsvContent(csv)).toThrow('推估115年人數');
+  });
+
+  /* -------------------------------------------------------------- */
+  /*  Minimum row threshold regression tests (#203)                    */
+  /* -------------------------------------------------------------- */
+
+  it('throws when CSV has fewer than 100 data rows (truncated download)', () => {
+    const rows = Array(99).fill(VALID_DATA_ROW);
+    const csv = [VALID_HEADER, ...rows].join('\n');
+    expect(() => validateCsvContent(csv)).toThrow('truncated');
+    expect(() => validateCsvContent(csv)).toThrow('99 data row(s)');
+  });
+
+  it('accepts CSV with exactly 100 data rows (at the threshold)', () => {
+    const rows = Array(100).fill(VALID_DATA_ROW);
+    const csv = [VALID_HEADER, ...rows].join('\n');
+    expect(() => validateCsvContent(csv)).not.toThrow();
   });
 });
