@@ -73,7 +73,7 @@ describe('useSchoolData', () => {
 
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current.error.message).toBe(
-      '資料載入逎時，請檢查網路連線後重新載入',
+      '資料載入逾時，請檢查網路連線後重新載入',
     );
   });
 
