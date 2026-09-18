@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import SummaryBar from './SummaryBar.jsx';
+import { RISK_TIERS } from '../config/index.js';
+
+const AT_RISK_MAX = RISK_TIERS.find((t) => t.id === 'high').max;
 
 const baseTotals = { schools: 2634, closing: 42, atRisk: 187, students: 98765, unprojected: 0 };
 
@@ -35,7 +38,7 @@ describe('SummaryBar', () => {
 
     expect(screen.getByText('符合條件學校')).toBeTruthy();
     expect(screen.getByText('125 學年推估歸零')).toBeTruthy();
-    expect(screen.getByText('50 人以下（含歸零）')).toBeTruthy();
+    expect(screen.getByText(`${AT_RISK_MAX} 人以下（含歸零）`)).toBeTruthy();
     expect(screen.getByText('推估學生總數')).toBeTruthy();
   });
 
@@ -196,15 +199,15 @@ describe('SummaryBar', () => {
   it('shows "不含歸零" label when excludeClosed is true', () => {
     renderBar({ excludeClosed: true });
 
-    expect(screen.getByText('50 人以下（不含歸零）')).toBeTruthy();
-    expect(screen.queryByText('50 人以下（含歸零）')).toBeNull();
+    expect(screen.getByText(`${AT_RISK_MAX} 人以下（不含歸零）`)).toBeTruthy();
+    expect(screen.queryByText(`${AT_RISK_MAX} 人以下（含歸零）`)).toBeNull();
   });
 
   it('shows "含歸零" label when excludeClosed is false', () => {
     renderBar({ excludeClosed: false });
 
-    expect(screen.getByText('50 人以下（含歸零）')).toBeTruthy();
-    expect(screen.queryByText('50 人以下（不含歸零）')).toBeNull();
+    expect(screen.getByText(`${AT_RISK_MAX} 人以下（含歸零）`)).toBeTruthy();
+    expect(screen.queryByText(`${AT_RISK_MAX} 人以下（不含歸零）`)).toBeNull();
   });
 
   it('applies excluded styling class when excludeClosed is true', () => {

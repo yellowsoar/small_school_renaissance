@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import Legend from './Legend.jsx';
-import { METHODOLOGY, RISK_TIERS } from '../config/index.js';
+import { HEATMAP_THRESHOLD, METHODOLOGY, RISK_TIERS } from '../config/index.js';
 
 vi.mock('./TierGlyph.jsx', () => ({
   default: ({ shape, color }) => (
@@ -35,11 +35,13 @@ describe('Legend', () => {
     }
   });
 
-  it('shows the heatmap explanation note', () => {
+  it('shows the heatmap explanation note with dynamic threshold', () => {
     render(<Legend year={114} />);
 
     expect(
-      screen.getByText(/熱區顏色代表 100 人以下學校的密集程度/),
+      screen.getByText(
+        new RegExp(`熱區顏色代表 ${HEATMAP_THRESHOLD} 人以下學校的密集程度`),
+      ),
     ).toBeTruthy();
   });
 
