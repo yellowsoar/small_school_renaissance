@@ -93,3 +93,38 @@ convert_to_csv_if_needed() {
 	done
 	return 1
 }
+
+# Check if a remote URL exists (HTTP HEAD request).
+# Requires WGET_TIMEOUT to be set by the caller.
+# Usage: check_file <url>
+check_file() {
+	wget \
+		--spider \
+		${WGET_TIMEOUT} \
+		"${1}" \
+		>/dev/null \
+		2>&1
+}
+
+# Download a file from a remote URL.
+# Requires WGET_TIMEOUT to be set by the caller.
+# Usage: download_file <url> [output_path]
+#   With 1 arg:  wget -N -P "./${NAME_DIR}" (timestamp-checked, directory mode)
+#   With 2 args: wget -O "$2" (explicit output path mode)
+download_file() {
+	local url="$1"
+	if [ -n "${2:-}" ]; then
+		wget \
+			-O "${2}" \
+			--quiet \
+			${WGET_TIMEOUT} \
+			"${url}"
+	else
+		wget \
+			-N \
+			-P "./${NAME_DIR}" \
+			--quiet \
+			${WGET_TIMEOUT} \
+			"${url}"
+	fi
+}

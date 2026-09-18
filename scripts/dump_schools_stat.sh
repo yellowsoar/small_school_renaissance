@@ -24,24 +24,6 @@ source "$(dirname "$0")/lib.sh"
 # Accumulator for failed downloads
 FAILED_DOWNLOADS=()
 
-check_file() {
-	wget \
-		--spider \
-		${WGET_TIMEOUT} \
-		"${1}" \
-		>/dev/null \
-		2>&1
-}
-
-download_file() {
-	wget \
-		-N \
-		-P "./${NAME_DIR}" \
-		--quiet \
-		${WGET_TIMEOUT} \
-		"${1}"
-}
-
 main() {
 	for YEAR_CURRENT in $(seq ${YEAR_START} ${YEAR_END}); do
 		echo "⚙️ Working on ${YEAR_CURRENT}"
