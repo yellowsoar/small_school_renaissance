@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import SchoolMarkers from './SchoolMarkers.jsx';
 import { MAP } from '../config/index.js';
 
@@ -11,13 +11,14 @@ const mocks = vi.hoisted(() => ({
   useVisibleSchools: vi.fn(),
   tierFor: vi.fn(),
   iconFor: vi.fn(() => ({})),
+  openPopup: vi.fn(),
 }));
 
 vi.mock('react-leaflet', () => ({
   Marker: ({ children, title, alt, eventHandlers }) => {
     const refCb = (node) => {
       if (node && eventHandlers?.add) {
-        eventHandlers.add({ target: { getElement: () => node } });
+        eventHandlers.add({ target: { getElement: () => node, openPopup: mocks.openPopup } });
       }
     };
     return (
@@ -131,7 +132,7 @@ describe('SchoolMarkers', () => {
     expect(mocks.iconFor).toHaveBeenCalledWith(tier);
   });
 
-  it('sets role="img" on the marker element via eventHandlers.add', () => {
+  it('sets role="button" on the marker element via eventHandlers.add', () => {
     const school = makeSchool();
     mocks.useVisibleSchools.mockReturnValue([school]);
     mocks.tierFor.mockReturnValue(tier);
@@ -139,7 +140,7 @@ describe('SchoolMarkers', () => {
     render(<SchoolMarkers schools={[school]} year={130} visible={true} />);
 
     const marker = screen.getByTestId('marker');
-    expect(marker.getAttribute('role')).toBe('img');
+    expect(marker.getAttribute('role')).toBe('button');
   });
 
   it('sets aria-label with school name and tier label via eventHandlers.add', () => {
@@ -166,5 +167,42 @@ describe('SchoolMarkers', () => {
     const markers = screen.getAllByTestId('marker');
     expect(markers[0].getAttribute('aria-label')).toBe('\u6e2c\u8a66\u570b\u5c0f\uff08\u6975\u9ad8\u98a8\u96aa\uff09');
     expect(markers[1].getAttribute('aria-label')).toBe('\u53e6\u4e00\u570b\u5c0f\uff08\u6975\u9ad8\u98a8\u96aa\uff09');
+  });
+
+  it('sets tabindex="0" on the marker element for keyboard focusability', () => {
+    const school = makeSchool();
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(tier);
+
+    render(<SchoolMarkers schools={[school]} year={130} visible={true} />);
+
+    const marker = screen.getByTestId('marker');
+    expect(marker.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('opens popup when Enter key is pressed on a focused marker', () => {
+    const school = makeSchool();
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(tier);
+
+    render(<SchoolMarkers schools={[school]} year={130} visible={true} />);
+
+    const marker = screen.getByTestId('marker');
+    fireEvent.keyDown(marker, { key: 'Enter' });
+
+    expect(mocks.openPopup).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens popup when Space key is pressed on a focused marker', () => {
+    const school = makeSchool();
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(tier);
+
+    render(<SchoolMarkers schools={[school]} year={130} visible={true} />);
+
+    const marker = screen.getByTestId('marker');
+    fireEvent.keyDown(marker, { key: ' ' });
+
+    expect(mocks.openPopup).toHaveBeenCalledTimes(1);
   });
 });
