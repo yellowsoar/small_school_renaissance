@@ -11,11 +11,7 @@ import { fullJitter, parseRetryAfter } from './backoff.js';
 
 export const DEFAULT_RETRIES = 2;
 
-/**
- * Maximum Retry-After delay (in ms) that withRetry will honour.
- * Anything above this is treated as non-retriable: the server is
- * asking for a wait longer than any reasonable UX allows (#174).
- */
+/** Maximum Retry-After delay (ms) that withRetry will honour (#174). */
 export const MAX_RETRY_AFTER_MS = 30_000;
 
 /* ------------------------------------------------------------------ */
@@ -36,7 +32,7 @@ export const MAX_RETRY_AFTER_MS = 30_000;
 export function classifyResponse(res) {
   if (res.ok) return res;
 
-  // 429 Too Many Requests: retriable with optional Retry-After delay.
+  // 429 Too Many Requests — retriable with optional Retry-After delay.
   if (res.status === 429) {
     throw Object.assign(
       new Error(`HTTP ${res.status} ${res.statusText}`),
@@ -44,7 +40,7 @@ export function classifyResponse(res) {
     );
   }
 
-  // Other 4xx client errors are not retriable: fail immediately.
+  // Other 4xx client errors are not retriable — fail immediately.
   if (res.status >= 400 && res.status < 500) {
     throw Object.assign(
       new Error(`HTTP ${res.status} ${res.statusText}`),
@@ -52,7 +48,7 @@ export function classifyResponse(res) {
     );
   }
 
-  // 5xx and anything else: retriable by default.
+  // 5xx and anything else — retriable by default.
   throw new Error(`HTTP ${res.status} ${res.statusText}`);
 }
 
@@ -91,14 +87,12 @@ export async function withRetry(
       // Non-retriable errors (e.g. 4xx client errors) skip retry.
       if (err.retriable === false) throw err;
 
-      // Retry-After exceeding the cap is treated as non-retriable:
-      // the server is asking for a wait longer than any reasonable
-      // UX allows.
+      // Retry-After exceeding the cap is treated as non-retriable.
       if (err.retryAfterMs > MAX_RETRY_AFTER_MS) {
         throw Object.assign(err, { retriable: false });
       }
 
-      // Last attempt: propagate the error.
+      // Last attempt — propagate the error.
       if (attempt === retries) throw err;
 
       // Back off before the next attempt (full-jitter exponential backoff).
