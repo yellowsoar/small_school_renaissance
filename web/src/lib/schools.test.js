@@ -243,8 +243,15 @@ describe('parseSchools', () => {
     expect(counties).toEqual([...counties].sort((a, b) => a.localeCompare(b, 'zh-Hant')));
   });
 
-  it('handles an empty dataset without throwing', () => {
-    expect(parseSchools(csv([]))).toEqual({ schools: [], counties: [] });
+  // --- Empty data guard (regression tests for #171) -------------------------
+
+  it('throws when CSV contains only a header row and no data (#171)', () => {
+    expect(() => parseSchools(csv([]))).toThrow('CSV 資料為空');
+  });
+
+  it('throws when CSV text is completely blank (#171)', () => {
+    expect(() => parseSchools('')).toThrow('CSV 資料為空');
+    expect(() => parseSchools('   \n  \n  ')).toThrow('CSV 資料為空');
   });
 
   it('skips blank lines and trims padded headers', () => {
@@ -261,7 +268,7 @@ describe('parseSchools', () => {
 
   it('respects quoted fields containing commas', () => {
     const { schools } = parseSchools(
-      csv([row({ projected: 10, 學校名稱: '"市立插角國小, 分校"' })]),
+      csv([row({ projected: 10, 學校名稱: '"\u5e02\u7acb\u63d2\u89d2\u570b\u5c0f, \u5206\u6821"' })]),
     );
 
     expect(schools[0].name).toBe('市立插角國小, 分校');
