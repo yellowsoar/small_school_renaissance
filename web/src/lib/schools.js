@@ -9,6 +9,13 @@ import { REQUIRED_HEADERS } from './csv-schema.js';
 const CLOSED_MAX = RISK_TIERS.find((t) => t.id === 'closed').max;
 const AT_RISK_MAX = RISK_TIERS.find((t) => t.id === 'high').max;
 
+/**
+ * Maximum tolerable ratio of dropped rows (invalid coordinates) before
+ * parseSchools treats the dataset as corrupted and throws (#172).
+ * Below this threshold (but above 20%) a console.warn is emitted.
+ */
+const MAX_DROP_RATIO = 0.3;
+
 const num = (value) => {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
   const trimmed = typeof value === 'string' ? value.trim() : value;
@@ -104,14 +111,21 @@ export const parseSchools = (csvText) => {
 
   const schools = data.map(toSchool).filter(Boolean);
 
-  // --- Drop-ratio warning (#102) -------------------------------------------
+  // --- Drop-ratio guard (#172) + warning (#102) ----------------------------
   // When a significant portion of CSV rows are silently dropped (null
-  // coordinates, out-of-bounds, etc.), warn so data maintainers notice
-  // upstream quality issues before they affect policy decisions.
+  // coordinates, out-of-bounds, etc.), either throw (above MAX_DROP_RATIO)
+  // or warn (above 20%) so data maintainers notice upstream quality issues
+  // before they affect policy decisions.
   if (data.length > 0) {
     const dropCount = data.length - schools.length;
     if (dropCount > 0) {
       const dropRatio = dropCount / data.length;
+      if (dropRatio > MAX_DROP_RATIO) {
+        throw new Error(
+          `資料品質異常：${data.length} 筆資料中有 ${dropCount} 筆` +
+            `（${(dropRatio * 100).toFixed(1)}%）被丟棄，超過容許上限 ${MAX_DROP_RATIO * 100}%`,
+        );
+      }
       if (dropRatio > 0.2) {
         console.warn(
           `parseSchools：${data.length} 筆資料中有 ${dropCount} 筆` +
