@@ -30,23 +30,6 @@ check_directory() {
 	fi
 }
 
-check_file() {
-	wget \
-		--spider \
-		${WGET_TIMEOUT} \
-		"${1}" \
-		>/dev/null \
-		2>&1
-}
-
-download_file() {
-	wget \
-		-O "${2}" \
-		--quiet \
-		${WGET_TIMEOUT} \
-		"${1}"
-}
-
 wait_a_second() {
 	sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
 }
