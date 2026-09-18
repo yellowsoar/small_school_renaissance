@@ -66,6 +66,12 @@ const query = (overrides = {}) => ({
   ...overrides,
 });
 
+// Workaround: the GitHub Content API double-escapes CJK characters
+// adjacent to escaped double-quotes in JSON strings. Separating them
+// with concatenation prevents the issue.
+// prettier-ignore
+const QUOTED_BRANCH_NAME = '"' + '市立插角國小, 分校' + '"';
+
 // ---------------------------------------------------------------------------
 // tierFor
 // ---------------------------------------------------------------------------
@@ -243,8 +249,20 @@ describe('parseSchools', () => {
     expect(counties).toEqual([...counties].sort((a, b) => a.localeCompare(b, 'zh-Hant')));
   });
 
-  it('handles an empty dataset without throwing', () => {
-    expect(parseSchools(csv([]))).toEqual({ schools: [], counties: [] });
+  // --- Empty data guard (regression tests for #171) -------------------------
+
+  it('throws when CSV contains only a header row and no data (#171)', () => {
+    expect(() => parseSchools(csv([]))).toThrow('CSV 資料為空');
+  });
+
+  it('throws when CSV text is completely blank (#171)', () => {
+    expect(() => parseSchools('')).toThrow('CSV 資料為空');
+  });
+
+  it('throws on whitespace-only CSV text (#171)', () => {
+    // PapaParse with header:true treats whitespace-with-newlines as having
+    // a data row with space-only headers, so header validation catches it.
+    expect(() => parseSchools('   \n  \n  ')).toThrow('CSV 欄位不符');
   });
 
   it('skips blank lines and trims padded headers', () => {
@@ -261,7 +279,7 @@ describe('parseSchools', () => {
 
   it('respects quoted fields containing commas', () => {
     const { schools } = parseSchools(
-      csv([row({ projected: 10, 學校名稱: '"市立插角國小, 分校"' })]),
+      csv([row({ projected: 10, 學校名稱: QUOTED_BRANCH_NAME })]),
     );
 
     expect(schools[0].name).toBe('市立插角國小, 分校');
