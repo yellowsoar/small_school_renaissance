@@ -25,6 +25,7 @@ source "$(dirname "$0")/lib.sh"
 FAILED_DOWNLOADS=()
 
 main() {
+	mkdir -p "./${NAME_DIR}"
 	for YEAR_CURRENT in $(seq ${YEAR_START} ${YEAR_END}); do
 		echo "⚙️ Working on ${YEAR_CURRENT}"
 		for FILE_EXT in "${NAME_EXT[@]}"; do
