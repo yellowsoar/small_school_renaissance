@@ -24,18 +24,12 @@ source "$(dirname "$0")/lib.sh"
 # Accumulator for failed downloads
 FAILED_DOWNLOADS=()
 
-check_directory() {
-	if [ ! -d ${NAME_DIR} ]; then
-		mkdir ${NAME_DIR}
-	fi
-}
-
 wait_a_second() {
 	sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
 }
 
 main() {
-	check_directory
+	mkdir -p "./${NAME_DIR}"
 	for YEAR_CURRENT in $(seq ${YEAR_START} ${YEAR_END}); do
 		echo "⚙️ Working on ${YEAR_CURRENT}"
 		FULL_FILE_NAME="${YEAR_CURRENT}_${FILE_NAME}"
