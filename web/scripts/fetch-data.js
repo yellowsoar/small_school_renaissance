@@ -47,6 +47,23 @@ const SOURCE_URL =
 const target = resolve(root, 'public/data/113-107.csv');
 const force = process.argv.includes('--force');
 
+/**
+ * Return a redacted URL safe for build logs: origin + pathname only.
+ * Strips query strings, fragments, and userinfo that may contain tokens
+ * or signed-URL credentials.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+const redactUrl = (url) => {
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return '(invalid URL)';
+  }
+};
+
 const exists = async (path) => {
   try {
     return (await stat(path)).size > 0;
@@ -60,7 +77,7 @@ if (!force && (await exists(target))) {
   process.exit(0);
 }
 
-console.log(`\u2699\ufe0f  downloading ${SOURCE_URL}`);
+console.log(`\u2699\ufe0f  downloading ${redactUrl(SOURCE_URL)}`);
 
 let body;
 try {
