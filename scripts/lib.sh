@@ -56,9 +56,9 @@ remove_rows_mismatch_header() {
 # Requires NAME_DIR to be set by the caller.
 #
 # Return codes (#85):
-#   0 = success (CSV already exists or conversion completed)
+#   0 = success (CSV already exists or conversion completed with data)
 #   1 = no convertible spreadsheet source found (expected, not an error)
-#   2 = soffice conversion or row-cleanup failed (abnormal)
+#   2 = soffice conversion, row-cleanup, or empty-result failed (abnormal)
 #
 # Security: soffice runs with --headless, --norestore and an isolated
 # UserInstallation directory so that no embedded macros can execute and
@@ -89,6 +89,14 @@ convert_to_csv_if_needed() {
 				&& remove_rows_mismatch_header "$csv_path"; then
 				echo "✅ File converted to ${csv_path}"
 				rm -rf "$soffice_sandbox"
+				# Verify converted CSV has data rows (not just header) (#141)
+				local line_count
+				line_count=$(wc -l < "$csv_path")
+				if [ "$line_count" -lt 2 ]; then
+					echo "❌ Converted CSV is empty or has no data rows: ${csv_path} (${line_count} lines)" >&2
+					rm -f "$csv_path"
+					return 2
+				fi
 				return 0
 			else
 				echo "❌ Conversion failed for ${src} (exit code: $?)" >&2
