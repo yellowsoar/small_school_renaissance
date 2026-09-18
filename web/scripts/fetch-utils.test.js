@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fetchWithRetry, validateCsvContent } from './fetch-utils.js';
+import {
+  REQUIRED_HEADERS,
+  FIRST_PROJECTION_YEAR,
+  LAST_PROJECTION_YEAR,
+} from '../src/lib/csv-schema.js';
 
 describe('fetchWithRetry', () => {
   const url = 'https://example.com/data.csv';
@@ -213,9 +218,18 @@ describe('fetchWithRetry', () => {
 });
 
 describe('validateCsvContent', () => {
-  const VALID_HEADER =
-    '學校代碼,學校名稱,縣市名稱,鄉鎮市區,地址,電話,網址,地區屬性,緯度,經度,學生人數,推估114年人數';
-  const VALID_CSV = `${VALID_HEADER}\n013501,大同國小,臺北市,中山區,中山北路,02-1234,http://example.com,一般地區,25.05,121.52,300,280`;
+  // Programmatically generate valid header and CSV from REQUIRED_HEADERS
+  // so the fixture stays in sync with the expanded projection columns (#194).
+  const EXTRA_COLUMNS = ['鄉鎮市區', '地址', '電話', '網址', '地區屬性', '學生人數'];
+  const ALL_COLUMNS = [...REQUIRED_HEADERS, ...EXTRA_COLUMNS];
+  const VALID_HEADER = ALL_COLUMNS.join(',');
+  const VALID_DATA_VALUES = [
+    '013501', '大同國小', '臺北市',  // 學校代碼, 學校名稱, 縣市名稱
+    '25.05', '121.52',               // 緯度, 經度
+    ...Array(LAST_PROJECTION_YEAR - FIRST_PROJECTION_YEAR + 1).fill('280'), // 推估 columns
+    '中山區', '中山北路', '02-1234', 'http://example.com', '一般地區', '300', // extras
+  ];
+  const VALID_CSV = `${VALID_HEADER}\n${VALID_DATA_VALUES.join(',')}`;
 
   it('accepts a valid CSV with required headers and data rows', () => {
     expect(() => validateCsvContent(VALID_CSV)).not.toThrow();
@@ -294,7 +308,22 @@ describe('validateCsvContent', () => {
   });
 
   it('accepts quoted CSV headers after unquoting', () => {
-    const csv = '"學校代碼","學校名稱","縣市名稱","緯度","經度","推估114年人數"\n1,test,city,25,121,100';
+    const quotedHeader = ALL_COLUMNS.map((col) => `"${col}"`).join(',');
+    const csv = `${quotedHeader}\n${VALID_DATA_VALUES.join(',')}`;
     expect(() => validateCsvContent(csv)).not.toThrow();
+  });
+
+  /* -------------------------------------------------------------- */
+  /*  Incomplete projection columns regression test (#194)             */
+  /* -------------------------------------------------------------- */
+
+  it('throws when only 推估114年人數 is present but 推估115年人數 is missing (#194)', () => {
+    // Build a header with base columns + only the first projection column
+    const incompleteHeader = [
+      '學校代碼', '學校名稱', '縣市名稱', '緯度', '經度', '推估114年人數',
+    ].join(',');
+    const csv = `${incompleteHeader}\n013501,大同國小,臺北市,25.05,121.52,280`;
+    expect(() => validateCsvContent(csv)).toThrow('CSV header missing required columns');
+    expect(() => validateCsvContent(csv)).toThrow('推估115年人數');
   });
 });
