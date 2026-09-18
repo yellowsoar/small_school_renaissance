@@ -21,7 +21,7 @@ teardown() {
   rm -rf "$TEST_TMPDIR"
 }
 
-# ── sed_inplace ──────────────────────────────────────────────────────────
+# ── sed_inplace ──────────────────────────────────────────────────────────────────
 
 @test "sed_inplace: successful substitution" {
   echo "hello world" > "$TEST_TMPDIR/f.txt"
@@ -146,7 +146,26 @@ CSV
   [[ "$output" == *"All rows match header"* ]]
 }
 
-# ── convert_to_csv_if_needed ─────────────────────────────────────────
+@test "remove_rows_mismatch_header: preserves multi-line quoted fields (#185)" {
+  # RFC 4180 §2 rule 6: fields may contain line breaks if enclosed in quotes
+  printf 'name,age,address\nAlice,30,"123 Main St\nFloor 2"\nBob,25,Kaohsiung\n' > "$TEST_TMPDIR/multiline.csv"
+  run remove_rows_mismatch_header "$TEST_TMPDIR/multiline.csv"
+  [ "$status" -eq 0 ]
+  grep -q "Alice" "$TEST_TMPDIR/multiline.csv"
+  grep -q "Bob" "$TEST_TMPDIR/multiline.csv"
+  [[ "$output" == *"All rows match header"* ]]
+}
+
+@test "remove_rows_mismatch_header: preserves multi-line quoted fields with commas (#185)" {
+  printf 'name,age,address\nAlice,30,"Taipei, Taiwan\nFloor 2, Room 3"\nBob,25,Kaohsiung\n' > "$TEST_TMPDIR/multiline_comma.csv"
+  run remove_rows_mismatch_header "$TEST_TMPDIR/multiline_comma.csv"
+  [ "$status" -eq 0 ]
+  grep -q "Alice" "$TEST_TMPDIR/multiline_comma.csv"
+  grep -q "Bob" "$TEST_TMPDIR/multiline_comma.csv"
+  [[ "$output" == *"All rows match header"* ]]
+}
+
+# ── convert_to_csv_if_needed ─────────────────────────────────────────────
 
 @test "convert_to_csv_if_needed: returns 0 when CSV already exists" {
   echo "name,age" > "$NAME_DIR/existing.csv"
