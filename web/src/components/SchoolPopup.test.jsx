@@ -146,13 +146,26 @@ describe('SchoolPopup', () => {
     expect(phoneLink.getAttribute('href')).toBe('tel:0223456789');
   });
 
-  it('hides phone link when phone yields no dialable digits', () => {
+  it('shows non-dialable phone as plain text without tel: link', () => {
     const school = makeSchool({ phone: '無電話' });
     const { container } = render(
       <SchoolPopup school={school} year={130} tier={tier} />,
     );
 
     expect(container.querySelector('a[href^="tel:"]')).toBeNull();
+    expect(screen.getByText('無電話')).toBeTruthy();
+    expect(screen.getByText('無電話').tagName).toBe('SPAN');
+  });
+
+  it('shows descriptive phone text as plain text', () => {
+    const school = makeSchool({ phone: '請洽教育局' });
+    const { container } = render(
+      <SchoolPopup school={school} year={130} tier={tier} />,
+    );
+
+    expect(container.querySelector('a[href^="tel:"]')).toBeNull();
+    expect(screen.getByText('請洽教育局')).toBeTruthy();
+    expect(screen.getByText('請洽教育局').tagName).toBe('SPAN');
   });
 
   it('displays the address', () => {
