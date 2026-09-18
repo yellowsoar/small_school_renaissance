@@ -19,10 +19,10 @@ sed_inplace() {
 }
 
 # Remove rows whose column count does not match the header row.
-# Uses Python csv.reader for RFC 4180 compliant quote-aware field
-# counting, so quoted commas (e.g. "Taipei, Taiwan") are not
-# miscounted (#170).  Replaces the previous sed/tr heuristic that
-# could false-positive on quoted fields (#83, #170).
+# Uses Python csv.reader/csv.writer for RFC 4180 compliant handling,
+# including quoted commas (#170) and multi-line quoted fields (#185).
+# Replaces the previous sed/tr heuristic that could false-positive on
+# quoted fields (#83, #170).
 # Logs the number of removed rows so operators can detect upstream
 # format changes or download corruption (#108).
 # Usage: remove_rows_mismatch_header <csv-file>
@@ -34,22 +34,24 @@ remove_rows_mismatch_header() {
 	echo "⚙️ Removing rows that its column mismatches the header..."
 	local removed
 	removed=$(python3 -c '
-import csv, io, sys
+import csv, sys
 
 infile, outfile = sys.argv[1], sys.argv[2]
 removed = 0
 
 with open(infile, newline="") as f_in, open(outfile, "w", newline="") as f_out:
-    lines = f_in.readlines()
-    if not lines:
+    reader = csv.reader(f_in)
+    writer = csv.writer(f_out, lineterminator="\n")
+    try:
+        header = next(reader)
+    except StopIteration:
         print(0)
         sys.exit(0)
-    header_fields = len(next(csv.reader(io.StringIO(lines[0]))))
-    f_out.write(lines[0])
-    for line in lines[1:]:
-        row = list(csv.reader(io.StringIO(line)))
-        if row and len(row[0]) == header_fields:
-            f_out.write(line)
+    header_fields = len(header)
+    writer.writerow(header)
+    for row in reader:
+        if len(row) == header_fields:
+            writer.writerow(row)
         else:
             removed += 1
 
