@@ -271,6 +271,66 @@ describe('fetchWithTimeout', () => {
     ).rejects.toThrow('HTTP 400 Bad Request');
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
+
+  /* -------------------------------------------------------------- */
+  /*  onRetry diagnostic logging (#186)                                */
+  /* -------------------------------------------------------------- */
+
+  it('logs a console.warn on each retry attempt (#186)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(errorResponse(502))
+      .mockResolvedValueOnce(errorResponse(503))
+      .mockResolvedValueOnce(okResponse('ok'));
+
+    const text = await fetchWithTimeout('https://example.com/data.csv', {
+      retries: 2,
+    });
+    expect(text).toBe('ok');
+
+    // Two retries -> two console.warn calls.
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+
+    // First retry: attempt 1/3 failed (HTTP 502 ...).
+    expect(warnSpy.mock.calls[0][0]).toMatch(
+      /\[fetchWithTimeout\] attempt 1\/3 failed \(HTTP 502/,
+    );
+    expect(warnSpy.mock.calls[0][0]).toMatch(/retrying in \d+ms/);
+
+    // Second retry: attempt 2/3 failed (HTTP 503 ...).
+    expect(warnSpy.mock.calls[1][0]).toMatch(
+      /\[fetchWithTimeout\] attempt 2\/3 failed \(HTTP 503/,
+    );
+  });
+
+  it('logs "timeout" label when retry is caused by a timeout (#186)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    globalThis.fetch = vi
+      .fn()
+      .mockImplementationOnce(hangingFetch)
+      .mockResolvedValueOnce(okResponse('ok'));
+
+    const text = await fetchWithTimeout('https://example.com/data.csv', {
+      timeout: 10,
+      retries: 1,
+    });
+    expect(text).toBe('ok');
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toMatch(
+      /\[fetchWithTimeout\] attempt 1\/2 failed \(timeout\)/,
+    );
+  });
+
+  it('does not log console.warn when first attempt succeeds (#186)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    globalThis.fetch = vi.fn().mockResolvedValue(okResponse('ok'));
+
+    await fetchWithTimeout('https://example.com/data.csv');
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -304,7 +364,7 @@ describe('backoff behavior', () => {
   });
 
   it('sleeps between retries with full-jitter delay', async () => {
-    // Math.random() = 0.5  →  delay = 0.5 * min(10000, 1000 * 2^0) = 500ms
+    // Math.random() = 0.5  ->  delay = 0.5 * min(10000, 1000 * 2^0) = 500ms
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     globalThis.fetch = vi
       .fn()
@@ -357,7 +417,7 @@ describe('backoff behavior', () => {
       .map(([, ms]) => ms)
       .filter((ms) => ms !== 15_000);
 
-    // Two retries → two backoff sleeps.
+    // Two retries -> two backoff sleeps.
     expect(backoffDelays).toHaveLength(2);
     expect(backoffDelays[0]).toBe(1000); // min(10000, 1000 * 2^0) * 1.0
     expect(backoffDelays[1]).toBe(2000); // min(10000, 1000 * 2^1) * 1.0
@@ -385,7 +445,7 @@ describe('backoff behavior', () => {
 
     // Last delays should be capped at 10 000.
     expect(backoffDelays[3]).toBe(8000); // 1000 * 2^3 = 8000 (under cap)
-    expect(backoffDelays[4]).toBe(10000); // 1000 * 2^4 = 16000 → capped 10000
+    expect(backoffDelays[4]).toBe(10000); // 1000 * 2^4 = 16000 -> capped 10000
   });
 
   it('does not sleep after the last failed attempt', async () => {
@@ -497,7 +557,7 @@ describe('backoff behavior', () => {
   });
 
   it('falls back to jitter delay on 429 without Retry-After header', async () => {
-    // fullJitter(0) = 0.5 * 1000 = 500ms, no Retry-After → 0
+    // fullJitter(0) = 0.5 * 1000 = 500ms, no Retry-After -> 0
     // Math.max(500, 0) = 500ms effective delay
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
 
