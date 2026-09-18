@@ -1,3 +1,5 @@
+import { FIRST_PROJECTION_YEAR, LAST_PROJECTION_YEAR } from '../lib/csv-schema.js';
+
 /** Dataset lives in public/data/, so it is resolved against the Vite base path. */
 export const DATA_URL = `${import.meta.env.BASE_URL}data/113-107.csv`;
 
@@ -8,7 +10,10 @@ export const BASE_YEAR = 113;
 export const REFERENCE_YEAR = 107;
 
 /** Projection columns run 推估114年人數 … 推估130年人數. */
-export const PROJECTION_YEARS = Array.from({ length: 17 }, (_, i) => 114 + i);
+export const PROJECTION_YEARS = Array.from(
+  { length: LAST_PROJECTION_YEAR - FIRST_PROJECTION_YEAR + 1 },
+  (_, i) => FIRST_PROJECTION_YEAR + i,
+);
 
 export const MAP = {
   center: [23.75, 121],
