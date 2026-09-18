@@ -32,9 +32,8 @@ describe('useSchoolData', () => {
   });
 
   it('transitions to ready on successful fetch', async () => {
-    fetchWithTimeout.mockResolvedValue({
-      text: () => Promise.resolve('csv-content'),
-    });
+    // fetchWithTimeout now returns text directly (#173).
+    fetchWithTimeout.mockResolvedValue('csv-content');
     parseSchools.mockReturnValue({ schools: mockSchools, counties: mockCounties });
 
     const { result } = renderHook(() => useSchoolData('/fake.csv'));
@@ -79,9 +78,8 @@ describe('useSchoolData', () => {
   });
 
   it('shows parse failure message when parseSchools throws', async () => {
-    fetchWithTimeout.mockResolvedValue({
-      text: () => Promise.resolve('bad-csv'),
-    });
+    // fetchWithTimeout resolves with text → downloadComplete = true.
+    fetchWithTimeout.mockResolvedValue('bad-csv');
     parseSchools.mockImplementation(() => {
       throw new TypeError('Unexpected column header');
     });
@@ -104,9 +102,7 @@ describe('useSchoolData', () => {
   });
 
   it('re-fetches when the URL changes', async () => {
-    fetchWithTimeout.mockResolvedValue({
-      text: () => Promise.resolve('csv'),
-    });
+    fetchWithTimeout.mockResolvedValue('csv');
     parseSchools.mockReturnValue({ schools: mockSchools, counties: mockCounties });
 
     const { result, rerender } = renderHook(
@@ -126,7 +122,7 @@ describe('useSchoolData', () => {
   it('reload triggers a new fetch attempt', async () => {
     fetchWithTimeout
       .mockRejectedValueOnce(new TypeError('fail'))
-      .mockResolvedValueOnce({ text: () => Promise.resolve('csv') });
+      .mockResolvedValueOnce('csv');
     parseSchools.mockReturnValue({ schools: mockSchools, counties: mockCounties });
 
     const { result } = renderHook(() => useSchoolData('/fake.csv'));

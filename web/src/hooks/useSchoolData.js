@@ -26,11 +26,11 @@ export function useSchoolData(url = DATA_URL) {
     (async () => {
       let downloadComplete = false;
       try {
-        const response = await fetchWithTimeout(url, {
+        // fetchWithTimeout now returns the response body as text, with
+        // both header and body transfer covered by the same timeout (#173).
+        const text = await fetchWithTimeout(url, {
           signal: controller.signal,
         });
-
-        const text = await response.text();
         downloadComplete = true;
 
         const { schools, counties } = parseSchools(text);

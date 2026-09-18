@@ -56,9 +56,12 @@ function abortableSleep(ms, signal) {
  * Fetch a URL with timeout and automatic retry, optionally linked to an
  * external AbortSignal (e.g. from a React useEffect cleanup).
  *
+ * The response body is consumed inside the same timeout scope so that a
+ * stalled body transfer triggers the timeout or external abort (#173).
+ *
  * @param {string} url
  * @param {{ retries?: number, timeout?: number, signal?: AbortSignal }} [options]
- * @returns {Promise<Response>} A successful (ok) response
+ * @returns {Promise<string>} The response body as text
  * @throws On exhausted retries, timeout, or external abort
  */
 export async function fetchWithTimeout(
@@ -89,7 +92,11 @@ export async function fetchWithTimeout(
 
       try {
         const res = await fetch(url, { signal: controller.signal });
-        return classifyResponse(res);
+        const checkedRes = classifyResponse(res);
+        // Consume body inside the same timeout/signal scope so stalled
+        // body transfers trigger the timeout or external abort (#173).
+        const text = await checkedRes.text();
+        return text;
       } catch (err) {
         // External abort (React unmount) takes priority — propagate immediately.
         if (signal?.aborted) {
