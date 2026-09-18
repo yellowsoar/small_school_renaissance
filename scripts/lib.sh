@@ -9,8 +9,13 @@ sed_inplace() {
 	shift
 	local tmpfile
 	tmpfile=$(mktemp "${file}.XXXXXX")
-	trap 'rm -f "$tmpfile"' RETURN
-	sed "$@" "$file" > "$tmpfile" && mv -f "$tmpfile" "$file"
+	if sed "$@" "$file" > "$tmpfile" && mv -f "$tmpfile" "$file"; then
+		return 0
+	else
+		local rc=$?
+		rm -f "$tmpfile"
+		return "$rc"
+	fi
 }
 
 # Remove rows whose column count does not match the header row.
@@ -23,7 +28,6 @@ remove_rows_mismatch_header() {
 	local file="$1"
 	local tmpfile
 	tmpfile=$(mktemp "${file}.XXXXXX")
-	trap 'rm -f "$tmpfile"' RETURN
 
 	local expected_commas before_count after_count removed
 	expected_commas=$(head -n 1 "${file}" | tr -dc ',' | wc -c)
@@ -34,6 +38,7 @@ remove_rows_mismatch_header() {
 		&& mv -f "$tmpfile" "${file}"
 	local rc=$?
 	if [ "$rc" -ne 0 ]; then
+		rm -f "$tmpfile"
 		return "$rc"
 	fi
 
@@ -72,7 +77,6 @@ convert_to_csv_if_needed() {
 			# trusted macro certificates and no user-level config.
 			local soffice_sandbox
 			soffice_sandbox=$(mktemp -d "${TMPDIR:-/tmp}/soffice-sandbox.XXXXXX")
-			trap 'rm -rf "$soffice_sandbox"' RETURN
 
 			echo "⚙️ Converting ${ext} to csv for ${src}"
 			if soffice \
@@ -84,9 +88,11 @@ convert_to_csv_if_needed() {
 				"$src" \
 				&& remove_rows_mismatch_header "$csv_path"; then
 				echo "✅ File converted to ${csv_path}"
+				rm -rf "$soffice_sandbox"
 				return 0
 			else
 				echo "❌ Conversion failed for ${src} (exit code: $?)" >&2
+				rm -rf "$soffice_sandbox"
 				return 2
 			fi
 		fi
