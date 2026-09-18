@@ -1,9 +1,12 @@
 import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
-import { MAP } from '../config/index.js';
+import { MAP, TILE_LAYERS } from '../config/index.js';
 import HeatmapLayer from './HeatmapLayer.jsx';
 import SchoolMarkers from './SchoolMarkers.jsx';
 
 export default function SchoolMap({ schools, year, layers }) {
+  const activeTile =
+    TILE_LAYERS.find((t) => t.id === layers.baseMap) || TILE_LAYERS[0];
+
   return (
     <MapContainer
       className="map"
@@ -17,8 +20,9 @@ export default function SchoolMap({ schools, year, layers }) {
       aria-label="全台國小廢校風險地圖，可用鍵盤方向鍵平移、加減鍵縮放"
     >
       <TileLayer
-        url={MAP.tileUrl}
-        attribution={MAP.tileAttribution}
+        key={activeTile.id}
+        url={activeTile.url}
+        attribution={activeTile.attribution}
         maxZoom={MAP.maxZoom}
       />
       <ScaleControl position="bottomleft" imperial={false} />

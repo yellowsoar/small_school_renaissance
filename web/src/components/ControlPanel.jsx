@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
+import { PROJECTION_YEARS, RISK_TIERS, TILE_LAYERS } from '../config/index.js';
 
 const toggle = (set, value) => {
   const next = new Set(set);
@@ -125,6 +125,23 @@ export default function ControlPanel({
             </label>
           ))}
         </div>
+        <fieldset className="panel__basemap">
+          <legend className="panel__sublabel">底圖</legend>
+          <div className="switches">
+            {TILE_LAYERS.map((tile) => (
+              <label key={tile.id} className="switch">
+                <input
+                  type="radio"
+                  name="baseMap"
+                  value={tile.id}
+                  checked={layers.baseMap === tile.id}
+                  onChange={() => onLayers({ baseMap: tile.id })}
+                />
+                <span>{tile.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
       </fieldset>
     </form>
   );

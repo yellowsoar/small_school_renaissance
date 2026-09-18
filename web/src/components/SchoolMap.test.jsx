@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import SchoolMap from './SchoolMap.jsx';
-import { MAP } from '../config/index.js';
+import { MAP, TILE_LAYERS } from '../config/index.js';
 
 /* ------------------------------------------------------------------ */
 /*  Mocks                                                              */
@@ -50,7 +50,7 @@ vi.mock('./SchoolMarkers.jsx', () => ({
 
 const schools = [{ id: '1' }];
 const year = 125;
-const layers = { heatmap: true, markers: true };
+const layers = { heatmap: true, markers: true, baseMap: 'osm' };
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -87,14 +87,49 @@ describe('SchoolMap', () => {
     );
   });
 
-  it('passes tile config to TileLayer', () => {
+  it('uses the default OSM tile layer', () => {
     render(<SchoolMap schools={schools} year={year} layers={layers} />);
+
+    const osm = TILE_LAYERS.find((t) => t.id === 'osm');
+    expect(mocks.tileLayerProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: osm.url,
+        attribution: osm.attribution,
+        maxZoom: MAP.maxZoom,
+      }),
+    );
+  });
+
+  it('switches to a different tile layer when baseMap changes', () => {
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={{ ...layers, baseMap: 'positron' }}
+      />,
+    );
+
+    const positron = TILE_LAYERS.find((t) => t.id === 'positron');
+    expect(mocks.tileLayerProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: positron.url,
+        attribution: positron.attribution,
+      }),
+    );
+  });
+
+  it('falls back to the first tile layer for an unknown baseMap id', () => {
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={{ ...layers, baseMap: 'nonexistent' }}
+      />,
+    );
 
     expect(mocks.tileLayerProps).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: MAP.tileUrl,
-        attribution: MAP.tileAttribution,
-        maxZoom: MAP.maxZoom,
+        url: TILE_LAYERS[0].url,
       }),
     );
   });
@@ -124,7 +159,11 @@ describe('SchoolMap', () => {
 
   it('forwards schools, year, and markers visibility to SchoolMarkers', () => {
     render(
-      <SchoolMap schools={schools} year={year} layers={{ heatmap: false, markers: false }} />,
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={{ heatmap: false, markers: false, baseMap: 'osm' }}
+      />,
     );
 
     expect(mocks.markersProps).toHaveBeenCalledWith(

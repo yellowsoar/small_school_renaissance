@@ -28,6 +28,34 @@ export const MAP = {
 };
 
 /**
+ * Available base map tile layers. The first entry is the default.
+ * Each entry provides a Leaflet-compatible URL template and attribution.
+ */
+export const TILE_LAYERS = [
+  {
+    id: 'osm',
+    label: 'OpenStreetMap',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  },
+  {
+    id: 'positron',
+    label: '淺色底圖',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  {
+    id: 'dark',
+    label: '深色底圖',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  },
+];
+
+/**
  * Loose bounding box covering Taiwan proper and all outlying islands
  * (Kinmen ≈ 118.3°E, Matsu ≈ 120.0°E, Orchid Island ≈ 121.6°E).
  * Coordinates outside this box are treated as data errors and filtered

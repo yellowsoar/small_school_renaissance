@@ -19,7 +19,7 @@ export default function App() {
   const countySet = useMemo(() => (counties.length ? new Set(counties) : null), [counties]);
 
   const [filters, setFilters, resetFilters] = useUrlFilters(countySet);
-  const [layers, setLayers] = useReducer(merge, { heatmap: true, markers: true });
+  const [layers, setLayers] = useReducer(merge, { heatmap: true, markers: true, baseMap: 'osm' });
   const [panelOpen, setPanelOpen] = useState(true);
 
   const filtered = useMemo(() => filterSchools(schools, filters), [schools, filters]);
