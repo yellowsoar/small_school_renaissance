@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { classifyResponse, withRetry, DEFAULT_RETRIES } from './retry-core.js';
+import { classifyResponse, withRetry, DEFAULT_RETRIES, MAX_RETRY_AFTER_MS } from './retry-core.js';
 
 /* ------------------------------------------------------------------ */
 /*  classifyResponse                                                    */
@@ -146,6 +146,34 @@ describe('withRetry', () => {
 
     await withRetry(fn, { retries: 2, sleepFn });
     expect(sleepFn).toHaveBeenCalledWith(5000);
+  });
+
+  it('throws non-retriable when retryAfterMs exceeds MAX_RETRY_AFTER_MS (#174)', async () => {
+    const err = Object.assign(new Error('rate limited'), {
+      retryAfterMs: MAX_RETRY_AFTER_MS + 1_000,
+    });
+    const fn = vi.fn().mockRejectedValue(err);
+
+    await expect(
+      withRetry(fn, { retries: 2, sleepFn: instantSleep }),
+    ).rejects.toMatchObject({ message: 'rate limited', retriable: false });
+    // Must not retry — first attempt triggers the cap.
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries normally when retryAfterMs equals MAX_RETRY_AFTER_MS (#174)', async () => {
+    const sleepFn = vi.fn().mockResolvedValue(undefined);
+    const err = Object.assign(new Error('rate limited'), {
+      retryAfterMs: MAX_RETRY_AFTER_MS,
+    });
+    const fn = vi
+      .fn()
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce('ok');
+
+    const result = await withRetry(fn, { retries: 2, sleepFn });
+    expect(result).toBe('ok');
+    expect(sleepFn).toHaveBeenCalledWith(MAX_RETRY_AFTER_MS);
   });
 
   it('passes zero-based attempt index to fn', async () => {
