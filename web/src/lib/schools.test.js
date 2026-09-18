@@ -1,1 +1,927 @@
-this-is-a-targeted-edit
+import { describe, expect, it, vi } from 'vitest';
+import { PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
+import { filterSchools, parseSchools, summarize, tierFor } from './schools.js';
+
+// ---------------------------------------------------------------------------
+// fixtures
+// ---------------------------------------------------------------------------
+
+const PROJECTION_COLUMNS = PROJECTION_YEARS.map((year) => `推估${year}年人數`);
+
+const COLUMNS = [
+  '學校代碼',
+  '學校名稱',
+  '縣市名稱',
+  '鄉鎮市區',
+  '地址',
+  '電話',
+  '網址',
+  '地區屬性',
+  '經度',
+  '緯度',
+  '學生人數',
+  '參考學生人數',
+  '學生人數差異',
+  '學生人數變化百分比',
+  ...PROJECTION_COLUMNS,
+];
+
+/**
+ * Builds one CSV row. `projected` fills every 推估 column with the same value,
+ * so tests only spell out the columns they actually care about.
+ */
+const row = ({ projected, ...overrides } = {}) => ({
+  學校代碼: '014630',
+  學校名稱: '市立插角國小',
+  縣市名稱: '新北市',
+  鄉鎮市區: '三峻區',
+  地址: '[237]新北市三峻區插角里插角路39號',
+  電話: '(02)26720230',
+  網址: 'https://www.cgps.ntpc.edu.tw',
+  地區屬性: '偏遠',
+  經度: '121.40522708',
+  緯度: '24.87235152',
+  學生人數: '160',
+  參考學生人數: '171',
+  學生人數差異: '-11',
+  學生人數變化百分比: '-0.06432748538011696',
+  ...Object.fromEntries(
+    PROJECTION_COLUMNS.map((column) => [column, projected == null ? '' : `${projected}`]),
+  ),
+  ...overrides,
+});
+
+const csv = (rows) =>
+  [
+    COLUMNS.join(','),
+    ...rows.map((entry) => COLUMNS.map((column) => entry[column] ?? '').join(',')),
+  ].join('\n');
+
+/** Shorthand for the object shape filterSchools expects. */
+const query = (overrides = {}) => ({
+  year: 130,
+  counties: new Set(),
+  tiers: new Set(),
+  search: '',
+  ...overrides,
+});
+
+// Workaround: the GitHub Content API double-escapes CJK characters
+// adjacent to escaped double-quotes in JSON strings. Separating them
+// with concatenation prevents the issue.
+// prettier-ignore
+const QUOTED_BRANCH_NAME = '"' + '市立插角國小, 分校' + '"';
+
+// ---------------------------------------------------------------------------
+// tierFor
+// ---------------------------------------------------------------------------
+
+describe('tierFor', () => {
+  it('returns null when there is no projection', () => {
+    expect(tierFor(null)).toBeNull();
+    expect(tierFor(undefined)).toBeNull();
+  });
+
+  it.each([
+    [0, 'closed'],
+    [1, 'critical'],
+    [30, 'critical'],
+    [31, 'high'],
+    [50, 'high'],
+    [51, 'watch'],
+    [100, 'watch'],
+    [101, 'stable'],
+    [5000, 'stable'],
+  ])('maps %i students to the %s tier', (headcount, id) => {
+    expect(tierFor(headcount).id).toBe(id);
+  });
+
+  it('treats tier ceilings as inclusive', () => {
+    expect(tierFor(30).id).not.toBe(tierFor(30.0001).id);
+  });
+
+  it('buckets a negative projection as closed rather than dropping it', () => {
+    expect(tierFor(-12).id).toBe('closed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseSchools
+// ---------------------------------------------------------------------------
+
+describe('parseSchools', () => {
+  it('normalizes a row into the shape the UI consumes', () => {
+    const { schools } = parseSchools(csv([row({ projected: 126 })]));
+
+    expect(schools).toHaveLength(1);
+    expect(schools[0]).toMatchObject({
+      id: '014630',
+      name: '市立插角國小',
+      county: '新北市',
+      town: '三峻區',
+      remoteness: '偏遠',
+      enrollment: 160,
+      reference: 171,
+      delta: -11,
+      unprojected: false,
+    });
+    expect(schools[0].position).toEqual([24.87235152, 121.40522708]);
+    expect(schools[0].deltaRatio).toBeCloseTo(-0.0643, 4);
+  });
+
+  it('exposes every projection year as a numeric map', () => {
+    const { schools } = parseSchools(csv([row({ projected: 42 })]));
+    const { projections } = schools[0];
+
+    expect([...projections.keys()]).toEqual(PROJECTION_YEARS);
+    expect(projections.get(114)).toBe(42);
+    expect(projections.get(130)).toBe(42);
+    expect(projections.get(999)).toBeUndefined();
+  });
+
+  it('drops rows that cannot be placed on the map', () => {
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'keep' }),
+        row({ projected: 10, 學校代碼: 'no-lat', 緯度: '' }),
+        row({ projected: 10, 學校代碼: 'no-lng', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'junk-coords', 緯度: 'N/A', 經度: 'N/A' }),
+      ]),
+    );
+
+    expect(schools.map((school) => school.id)).toEqual(['keep']);
+  });
+
+  it('flags rows with no projections at all', () => {
+    const { schools } = parseSchools(csv([row({ projected: null })]));
+
+    expect(schools[0].unprojected).toBe(true);
+    expect(schools[0].projections.get(130)).toBeNull();
+  });
+
+  it('turns blank optional fields into null instead of empty strings', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 地址: '', 網址: '', 電話: '   ' })]),
+    );
+
+    expect(schools[0].address).toBeNull();
+    expect(schools[0].website).toBeNull();
+    expect(schools[0].phone).toBeNull();
+  });
+
+  it('falls back to readable defaults for missing identity fields', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: '', 學校名稱: '', 縣市名稱: '', 地區屬性: '' })]),
+    );
+
+    expect(schools[0]).toMatchObject({
+      id: '24.87235152,121.40522708',
+      name: '未命名學校',
+      county: '未知縣市',
+      remoteness: '一般地區',
+    });
+  });
+
+  // --- Duplicate ID disambiguation (regression tests for #45) --------------
+
+  it('disambiguates duplicate fallback IDs when multiple schools share coordinates and lack a school code', () => {
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: '', 學校名稱: '甲校', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 20, 學校代碼: '', 學校名稱: '乙校', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 30, 學校代碼: '', 學校名稱: '丙校', 緯度: '24.9', 經度: '121.5' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(3);
+    expect(schools[0].id).toBe('24.9,121.5');
+    expect(schools[1].id).toBe('24.9,121.5#2');
+    expect(schools[2].id).toBe('24.9,121.5#3');
+  });
+
+  it('does not add a suffix when only one school uses a fallback ID', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: '', 學校名稱: '孤獨校' })]),
+    );
+
+    expect(schools[0].id).toBe('24.87235152,121.40522708');
+    expect(schools[0].id).not.toContain('#');
+  });
+
+  it('disambiguates explicit duplicate school codes the same way', () => {
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'DUP001', 學校名稱: '甲校' }),
+        row({ projected: 20, 學校代碼: 'DUP001', 學校名稱: '乙校' }),
+      ]),
+    );
+
+    expect(schools[0].id).toBe('DUP001');
+    expect(schools[1].id).toBe('DUP001#2');
+  });
+
+  it('does not affect summarize() totals after disambiguation', () => {
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: '', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 20, 學校代碼: '', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 30, 學校代碼: '', 緯度: '24.9', 經度: '121.5' }),
+      ]),
+    );
+
+    const totals = summarize(schools, 130);
+    expect(totals.schools).toBe(3);
+    expect(totals.students).toBe(60);
+  });
+
+  it('returns unique counties, sorted for zh-Hant', () => {
+    const { counties } = parseSchools(
+      csv([
+        row({ projected: 10, 縣市名稱: '臺東縣' }),
+        row({ projected: 10, 縣市名稱: '新北市' }),
+        row({ projected: 10, 縣市名稱: '臺東縣' }),
+        row({ projected: 10, 縣市名稱: '南投縣' }),
+      ]),
+    );
+
+    expect(counties).toHaveLength(3);
+    expect(new Set(counties)).toEqual(new Set(['臺東縣', '新北市', '南投縣']));
+    expect(counties).toEqual([...counties].sort((a, b) => a.localeCompare(b, 'zh-Hant')));
+  });
+
+  // --- Empty data guard (regression tests for #171) -------------------------
+
+  it('throws when CSV contains only a header row and no data (#171)', () => {
+    expect(() => parseSchools(csv([]))).toThrow('CSV 資料為空');
+  });
+
+  it('throws when CSV text is completely blank (#171)', () => {
+    expect(() => parseSchools('')).toThrow('CSV 資料為空');
+  });
+
+  it('throws on whitespace-only CSV text (#171)', () => {
+    // PapaParse with header:true treats whitespace-with-newlines as having
+    // a data row with space-only headers, so header validation catches it.
+    expect(() => parseSchools('   \n  \n  ')).toThrow('CSV 欄位不符');
+  });
+
+  it('skips blank lines and trims padded headers', () => {
+    const padded = csv([row({ projected: 10 })])
+      .split('\n')
+      .map((line, index) => (index === 0 ? line.replaceAll('經度', ' 經度 ') : line))
+      .join('\n');
+
+    const { schools } = parseSchools(`${padded}\n\n`);
+
+    expect(schools).toHaveLength(1);
+    expect(schools[0].position[1]).toBe(121.40522708);
+  });
+
+  it('respects quoted fields containing commas', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校名稱: QUOTED_BRANCH_NAME })]),
+    );
+
+    expect(schools[0].name).toBe('市立插角國小, 分校');
+  });
+
+  // --- CSV schema validation (regression tests for #16, #62) ---------------
+
+  it('throws when required headers are missing', () => {
+    const wrongHeaders = 'id,name,lat,lng\n1,test,24.0,121.0';
+
+    expect(() => parseSchools(wrongHeaders)).toThrow('CSV 欄位不符');
+    expect(() => parseSchools(wrongHeaders)).toThrow('學校代碼');
+    expect(() => parseSchools(wrongHeaders)).toThrow('學校名稱');
+    expect(() => parseSchools(wrongHeaders)).toThrow('縣市名稱');
+    expect(() => parseSchools(wrongHeaders)).toThrow('緯度');
+    expect(() => parseSchools(wrongHeaders)).toThrow('經度');
+    expect(() => parseSchools(wrongHeaders)).toThrow('推估114年人數');
+  });
+
+  it('includes actual headers in the error message for debugging', () => {
+    const wrongHeaders = 'id,name,lat,lng,extra\n1,test,24.0,121.0,x';
+
+    try {
+      parseSchools(wrongHeaders);
+      expect.fail('should have thrown');
+    } catch (error) {
+      expect(error.message).toContain('id');
+      expect(error.message).toContain('實際欄位');
+    }
+  });
+
+  it('throws when CSV has data rows but all schools are unparseable', () => {
+    // Has required headers but every row has invalid lat/lng
+    const badData = csv([
+      row({ projected: 10, 學校代碼: 'a', 緯度: '', 經度: '' }),
+      row({ projected: 10, 學校代碼: 'b', 緯度: 'N/A', 經度: 'N/A' }),
+    ]);
+
+    expect(() => parseSchools(badData)).toThrow('無法解析出任何學校');
+    expect(() => parseSchools(badData)).toThrow('2 筆資料');
+  });
+
+  it('only reports missing headers in the error, not present ones', () => {
+    // Has 緯度 and 經度 but missing 學校代碼 and 學校名稱
+    const partialHeaders = '緯度,經度,其他欄位\n24.0,121.0,test';
+
+    try {
+      parseSchools(partialHeaders);
+      expect.fail('should have thrown');
+    } catch (error) {
+      expect(error.message).toContain('CSV 欄位不符');
+      // The "缺少" section should mention only the missing headers
+      const missingLine = error.message.split('\n')[0];
+      expect(missingLine).toContain('學校代碼');
+      expect(missingLine).toContain('學校名稱');
+      expect(missingLine).toContain('縣市名稱');
+      expect(missingLine).toContain('推估114年人數');
+      expect(missingLine).not.toContain('緯度');
+      expect(missingLine).not.toContain('經度');
+    }
+  });
+
+  it('truncates long header lists in the error with an ellipsis', () => {
+    const manyHeaders = 'a,b,c,d,e,f,g\n1,2,3,4,5,6,7';
+
+    try {
+      parseSchools(manyHeaders);
+      expect.fail('should have thrown');
+    } catch (error) {
+      // Only first 5 headers shown, followed by ellipsis
+      expect(error.message).toContain('…');
+      expect(error.message).not.toContain('f');
+    }
+  });
+
+  // --- Projection sentinel regression test (#65) ---------------------------
+
+  it('throws when projection columns are renamed but base headers are present (#65)', () => {
+    // All base headers present, but projection columns use a different naming
+    // pattern (e.g. "114年推估人數" instead of "推估114年人數"). Without the
+    // sentinel, parseSchools would silently produce a blank map.
+    const renamedHeaders = [
+      ...COLUMNS.filter((col) => !col.startsWith('推估')),
+      ...PROJECTION_YEARS.map((year) => `${year}年推估人數`),
+    ];
+    const headerLine = renamedHeaders.join(',');
+    const dataLine = renamedHeaders.map(() => 'x').join(',');
+
+    expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('CSV 欄位不符');
+    expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('推估114年人數');
+  });
+
+  // --- County header regression test (#88) ---------------------------------
+
+  it('throws when 縣市名稱 header is missing, preventing silent county fallback (#88)', () => {
+    // All other required headers present, but 縣市名稱 is renamed.
+    // Without the fix, parseSchools would silently fall back to '未知縣市'
+    // for every school, breaking the county filter.
+    const headersWithoutCounty = COLUMNS.filter((col) => col !== '縣市名稱');
+    const headerLine = headersWithoutCounty.join(',');
+    const dataLine = headersWithoutCounty.map(() => 'x').join(',');
+
+    expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('CSV 欄位不符');
+    expect(() => parseSchools(`${headerLine}\n${dataLine}`)).toThrow('縣市名稱');
+  });
+
+  // --- Bounding box validation (regression tests for #89) ------------------
+
+  it('filters out coordinates at Null Island (0, 0)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'keep', 緯度: '24.87', 經度: '121.41' }),
+        row({ projected: 10, 學校代碼: 'null-island', 緯度: '0', 經度: '0' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(1);
+    expect(schools[0].id).toBe('keep');
+    const boundsWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('座標超出台灣範圍'),
+    );
+    expect(boundsWarns).toHaveLength(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('filters out swapped lat/lng coordinates (lat=121, lng=24)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'keep', 緯度: '24.87', 經度: '121.41' }),
+        row({ projected: 10, 學校代碼: 'swapped', 緯度: '121.41', 經度: '24.87' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(1);
+    expect(schools[0].id).toBe('keep');
+
+    warnSpy.mockRestore();
+  });
+
+  it('filters out foreign coordinates outside Taiwan bounding box', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'keep', 緯度: '24.87', 經度: '121.41' }),
+        row({ projected: 10, 學校代碼: 'tokyo', 緯度: '35.68', 經度: '139.69' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(1);
+    expect(schools[0].id).toBe('keep');
+
+    warnSpy.mockRestore();
+  });
+
+  it('accepts coordinates at bounding box edges (Kinmen, southernmost island)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'kinmen', 學校名稱: '金門國小', 緯度: '24.45', 經度: '118.32' }),
+        row({ projected: 10, 學校代碼: 'south', 學校名稱: '南端國小', 緯度: '21.95', 經度: '120.75' }),
+      ]),
+    );
+
+    expect(schools).toHaveLength(2);
+    const boundsWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('座標超出台灣範圍'),
+    );
+    expect(boundsWarns).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  it('includes school name in the out-of-bounds warning message', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'valid', 緯度: '24.87', 經度: '121.41' }),
+        row({ projected: 10, 學校代碼: 'oob', 學校名稱: '測試國小', 緯度: '0', 經度: '0' }),
+      ]),
+    );
+
+    const boundsWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('座標超出台灣範圍'),
+    );
+    expect(boundsWarns).toHaveLength(1);
+    expect(boundsWarns[0][0]).toContain('測試國小');
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not throw for valid headers even with some unparseable rows', () => {
+    // Mix of valid and invalid rows — at least one parses, so no throw
+    const mixed = csv([
+      row({ projected: 10, 學校代碼: 'good' }),
+      row({ projected: 10, 學校代碼: 'bad', 緯度: '', 經度: '' }),
+    ]);
+
+    const { schools } = parseSchools(mixed);
+    expect(schools).toHaveLength(1);
+    expect(schools[0].id).toBe('good');
+  });
+
+  // --- deltaRatio batch format detection (regression tests for #32) --------
+
+  it('throws when majority of deltaRatio values exceed |1| (percentage format)', () => {
+    const percentageFormat = csv([
+      row({ projected: 10, 學校代碼: 'a', 學生人數變化百分比: '-5.2' }),
+      row({ projected: 10, 學校代碼: 'b', 學生人數變化百分比: '-12.8' }),
+      row({ projected: 10, 學校代碼: 'c', 學生人數變化百分比: '3.1' }),
+      row({ projected: 10, 學校代碼: 'd', 學生人數變化百分比: '-0.5' }),
+    ]);
+
+    expect(() => parseSchools(percentageFormat)).toThrow('百分比數值');
+    expect(() => parseSchools(percentageFormat)).toThrow('3/4');
+  });
+
+  it('warns but does not throw for a few outlier deltaRatio values above |1|', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const fewOutliers = csv([
+      row({ projected: 10, 學校代碼: 'a', 學生人數變化百分比: '-0.064' }),
+      row({ projected: 10, 學校代碼: 'b', 學生人數變化百分比: '-0.15' }),
+      row({ projected: 10, 學校代碼: 'c', 學生人數變化百分比: '1.5' }),
+      row({ projected: 10, 學校代碼: 'd', 學生人數變化百分比: '-0.30' }),
+    ]);
+
+    const { schools } = parseSchools(fewOutliers);
+    expect(schools).toHaveLength(4);
+    // Filter for deltaRatio-specific warnings (CSV parse warnings may also fire)
+    const deltaWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('deltaRatio'),
+    );
+    expect(deltaWarns).toHaveLength(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('stays silent when all deltaRatio values are within |1|', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const normalFormat = csv([
+      row({ projected: 10, 學校代碼: 'a', 學生人數變化百分比: '-0.064' }),
+      row({ projected: 10, 學校代碼: 'b', 學生人數變化百分比: '-0.15' }),
+      row({ projected: 10, 學校代碼: 'c', 學生人數變化百分比: '0.02' }),
+    ]);
+
+    parseSchools(normalFormat);
+    const deltaWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('deltaRatio'),
+    );
+    expect(deltaWarns).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  it('excludes null deltaRatio values from the format check', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const withNulls = csv([
+      row({ projected: 10, 學校代碼: 'a', 學生人數變化百分比: '-0.064' }),
+      row({ projected: 10, 學校代碼: 'b', 學生人數變化百分比: '' }),
+      row({ projected: 10, 學校代碼: 'c', 學生人數變化百分比: '' }),
+      row({ projected: 10, 學校代碼: 'd', 學生人數變化百分比: '0.02' }),
+    ]);
+
+    const { schools } = parseSchools(withNulls);
+    expect(schools).toHaveLength(4);
+    const deltaWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('deltaRatio'),
+    );
+    expect(deltaWarns).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not alter existing deltaRatio assertions for current data format', () => {
+    const { schools } = parseSchools(csv([row({ projected: 126 })]));
+    expect(schools[0].deltaRatio).toBeCloseTo(-0.0643, 4);
+  });
+
+  // --- Drop-ratio warning (regression tests for #102) ----------------------
+
+  it('warns when more than 20% of rows are dropped due to missing coordinates (#102)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 1 valid + 4 invalid = 80% drop rate → should warn
+    parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'valid' }),
+        row({ projected: 10, 學校代碼: 'bad1', 緯度: '', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'bad2', 緯度: '', 經度: '' }),
+        row({ projected: 10, 學校代碼: 'bad3', 緯度: 'N/A', 經度: 'N/A' }),
+        row({ projected: 10, 學校代碼: 'bad4', 緯度: '', 經度: '' }),
+      ]),
+    );
+
+    const dropWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
+    );
+    expect(dropWarns).toHaveLength(1);
+    expect(dropWarns[0][0]).toContain('5 筆資料');
+    expect(dropWarns[0][0]).toContain('4 筆');
+    expect(dropWarns[0][0]).toContain('80.0%');
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn when drop ratio is at or below 20% (#102)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 4 valid + 1 invalid = 20% drop rate → should NOT warn
+    parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'a' }),
+        row({ projected: 10, 學校代碼: 'b', 緯度: '24.9', 經度: '121.5' }),
+        row({ projected: 10, 學校代碼: 'c', 緯度: '24.8', 經度: '121.4' }),
+        row({ projected: 10, 學校代碼: 'd', 緯度: '25.0', 經度: '121.3' }),
+        row({ projected: 10, 學校代碼: 'bad', 緯度: '', 經度: '' }),
+      ]),
+    );
+
+    const dropWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
+    );
+    expect(dropWarns).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  it('includes drop count and percentage in the warning message (#102)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 2 valid + 8 invalid = 80% drop rate
+    const rows = [
+      row({ projected: 10, 學校代碼: 'ok1' }),
+      row({ projected: 10, 學校代碼: 'ok2', 緯度: '24.9', 經度: '121.5' }),
+    ];
+    for (let i = 0; i < 8; i++) {
+      rows.push(row({ projected: 10, 學校代碼: `bad${i}`, 緯度: '', 經度: '' }));
+    }
+
+    parseSchools(csv(rows));
+
+    const dropWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('parseSchools'),
+    );
+    expect(dropWarns).toHaveLength(1);
+    expect(dropWarns[0][0]).toMatch(/10 筆資料/);
+    expect(dropWarns[0][0]).toMatch(/8 筆/);
+    expect(dropWarns[0][0]).toMatch(/80\.0%/);
+    expect(dropWarns[0][0]).toContain('座標缺失或超出範圍');
+
+    warnSpy.mockRestore();
+  });
+
+  // --- Strict numeric parsing (regression tests for #113) ------------------
+
+  it('rejects numeric fields with trailing non-numeric characters (#113)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: 'test', 學生人數: '123人' })]),
+    );
+
+    expect(schools[0].enrollment).toBeNull();
+  });
+
+  it('rejects percentage-suffixed values in numeric fields (#113)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: 'test', 學生人數變化百分比: '0.5%' })]),
+    );
+
+    expect(schools[0].deltaRatio).toBeNull();
+
+    warnSpy.mockRestore();
+  });
+
+  it('rejects annotation-suffixed numeric fields (#113)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: 'test', 學生人數: '50(含分校)' })]),
+    );
+
+    expect(schools[0].enrollment).toBeNull();
+  });
+
+  it('parses pure numeric strings correctly with strict coercion (#113)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 126, 學校代碼: 'test' })]),
+    );
+
+    expect(schools[0].enrollment).toBe(160);
+    expect(schools[0].reference).toBe(171);
+    expect(schools[0].delta).toBe(-11);
+    expect(schools[0].deltaRatio).toBeCloseTo(-0.0643, 4);
+  });
+
+  it('returns null for whitespace-only numeric fields (#113)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 10, 學校代碼: 'test', 學生人數: '   ' })]),
+    );
+
+    expect(schools[0].enrollment).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// filterSchools
+// ---------------------------------------------------------------------------
+
+describe('filterSchools', () => {
+  const dataset = parseSchools(
+    csv([
+      row({ projected: 0, 學校代碼: 'a', 學校名稱: '市立大成國小', 縣市名稱: '新北市', 鄉鎮市區: '三峻區' }),
+      row({ projected: 26, 學校代碼: 'b', 學校名稱: '市立建安國小', 縣市名稱: '新北市', 鄉鎮市區: '三峻區' }),
+      row({ projected: 126, 學校代碼: 'c', 學校名稱: '市立插角國小', 縣市名稱: '南投縣', 鄉鎮市區: '仁愛鄉' }),
+      row({ projected: null, 學校代碼: 'd', 學校名稱: '市立淡海國小', 縣市名稱: '臺東縣', 鄉鎮市區: '海端鄉' }),
+    ]),
+  ).schools;
+
+  const ids = (filters) =>
+    filterSchools(dataset, query(filters))
+      .map((school) => school.id)
+      .sort();
+
+  it('returns everything when no filter is active', () => {
+    expect(ids()).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('filters by county', () => {
+    expect(ids({ counties: new Set(['新北市']) })).toEqual(['a', 'b']);
+  });
+
+  it('treats multiple counties as OR', () => {
+    expect(ids({ counties: new Set(['南投縣', '臺東縣']) })).toEqual(['c', 'd']);
+  });
+
+  it('filters by risk tier for the selected year', () => {
+    expect(ids({ tiers: new Set(['closed']) })).toEqual(['a']);
+    expect(ids({ tiers: new Set(['closed', 'critical']) })).toEqual(['a', 'b']);
+  });
+
+  it('excludes schools with no projection once a tier filter is on', () => {
+    expect(ids()).toContain('d');
+    expect(ids({ tiers: new Set(['stable']) })).toEqual(['c']);
+  });
+
+  it('searches across name, county and town', () => {
+    expect(ids({ search: '插角' })).toEqual(['c']);
+    expect(ids({ search: '三峻區' })).toEqual(['a', 'b']);
+    expect(ids({ search: '臺東縣' })).toEqual(['d']);
+  });
+
+  it('ignores surrounding whitespace in the search term', () => {
+    expect(ids({ search: '   建安   ' })).toEqual(['b']);
+  });
+
+  it('returns nothing when the search matches nothing', () => {
+    expect(ids({ search: '不存在的學校' })).toEqual([]);
+  });
+
+  it('does not let a search term straddle two fields', () => {
+    expect(ids({ search: '插角國小南投縣' })).toEqual([]);
+  });
+
+  // --- Multi-token AND search (regression tests for #90) -------------------
+
+  it('matches when space-separated tokens hit different fields (#90)', () => {
+    // '南投' matches county, '國小' matches name → school 'c'
+    expect(ids({ search: '南投 國小' })).toEqual(['c']);
+  });
+
+  it('matches when space-separated tokens hit the same field', () => {
+    // '三峻' matches town, '建安' matches name → school 'b'
+    expect(ids({ search: '三峻 建安' })).toEqual(['b']);
+  });
+
+  it('handles multiple consecutive spaces between tokens', () => {
+    expect(ids({ search: '南投   國小' })).toEqual(['c']);
+  });
+
+  it('returns nothing when one token in a multi-token search has no match', () => {
+    expect(ids({ search: '南投 不存在' })).toEqual([]);
+  });
+
+  it('combines filters as AND', () => {
+    expect(ids({ counties: new Set(['新北市']), tiers: new Set(['closed']) })).toEqual(['a']);
+    expect(ids({ counties: new Set(['南投縣']), tiers: new Set(['closed']) })).toEqual([]);
+  });
+
+  it('re-tiers schools when the year changes', () => {
+    const shifting = parseSchools(
+      csv([
+        row({
+          學校代碼: 'shift',
+          ...Object.fromEntries(
+            PROJECTION_COLUMNS.map((column, index) => [column, `${200 - index * 15}`]),
+          ),
+        }),
+      ]),
+    ).schools;
+
+    expect(filterSchools(shifting, query({ year: 114, tiers: new Set(['stable']) }))).toHaveLength(1);
+    expect(filterSchools(shifting, query({ year: 130, tiers: new Set(['stable']) }))).toHaveLength(0);
+    expect(filterSchools(shifting, query({ year: 130, tiers: new Set(['closed']) }))).toHaveLength(1);
+  });
+
+  it('does not mutate the input array', () => {
+    const before = [...dataset];
+    filterSchools(dataset, query({ search: '插角' }));
+    expect(dataset).toEqual(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// summarize
+// ---------------------------------------------------------------------------
+
+describe('summarize', () => {
+  const dataset = parseSchools(
+    csv([
+      row({ projected: 0, 學校代碼: 'a' }),
+      row({ projected: 26, 學校代碼: 'b' }),
+      row({ projected: 126, 學校代碼: 'c' }),
+      row({ projected: null, 學校代碼: 'd' }),
+    ]),
+  ).schools;
+
+  it('counts every school passed in, projection or not', () => {
+    expect(summarize(dataset, 130).schools).toBe(4);
+  });
+
+  it('sums only the schools that have a projection', () => {
+    expect(summarize(dataset, 130).students).toBe(152);
+  });
+
+  it('counts schools projected to hit zero', () => {
+    expect(summarize(dataset, 130).closing).toBe(1);
+  });
+
+  it('counts at-risk as 50 or fewer, including the zeroed ones', () => {
+    expect(summarize(dataset, 130).atRisk).toBe(2);
+  });
+
+  it('rounds the student total, since projections can be fractional', () => {
+    const fractional = parseSchools(
+      csv([row({ projected: 10.4, 學校代碼: 'x' }), row({ projected: 10.4, 學校代碼: 'y' })]),
+    ).schools;
+
+    expect(summarize(fractional, 130).students).toBe(21);
+  });
+
+  it('returns zeroes for an empty selection', () => {
+    expect(summarize([], 130)).toEqual({ schools: 0, students: 0, closing: 0, atRisk: 0, unprojected: 0 });
+  });
+
+  it('reports zeroes for a year outside the projection range', () => {
+    expect(summarize(dataset, 999)).toMatchObject({ schools: 4, students: 0, closing: 0 });
+  });
+
+  it('clamps negative projections to zero in the student total', () => {
+    const withNegative = parseSchools(
+      csv([
+        row({ projected: -12, 學校代碼: 'neg' }),
+        row({ projected: 100, 學校代碼: 'pos' }),
+      ]),
+    ).schools;
+
+    const result = summarize(withNegative, 130);
+    expect(result.students).toBe(100);
+    expect(result.closing).toBe(1);
+    expect(result.atRisk).toBe(1);
+  });
+
+  it('returns zero students when all projections are negative', () => {
+    const allNegative = parseSchools(
+      csv([
+        row({ projected: -5, 學校代碼: 'x' }),
+        row({ projected: -20, 學校代碼: 'y' }),
+      ]),
+    ).schools;
+
+    const result = summarize(allNegative, 130);
+    expect(result.students).toBe(0);
+    expect(result.closing).toBe(2);
+    expect(result.atRisk).toBe(2);
+  });
+
+  // --- Unprojected count (regression tests for #59) ------------------------
+
+  it('counts schools with no projection as unprojected', () => {
+    expect(summarize(dataset, 130).unprojected).toBe(1);
+  });
+
+  it('reports zero unprojected when all schools have projections', () => {
+    const allProjected = parseSchools(
+      csv([
+        row({ projected: 10, 學校代碼: 'x' }),
+        row({ projected: 20, 學校代碼: 'y' }),
+      ]),
+    ).schools;
+
+    const result = summarize(allProjected, 130);
+    expect(result.unprojected).toBe(0);
+    expect(result.students).toBe(30);
+  });
+
+  // --- RISK_TIERS coupling (regression tests for #106) ----------------------
+
+  it('closing and atRisk thresholds correspond to RISK_TIERS boundaries (#106)', () => {
+    const closedMax = RISK_TIERS.find((t) => t.id === 'closed').max;
+    const highMax = RISK_TIERS.find((t) => t.id === 'high').max;
+
+    // A school at exactly the closed boundary counts as closing
+    const atClosedBoundary = parseSchools(
+      csv([row({ projected: closedMax, 學校代碼: 'at-closed' })]),
+    ).schools;
+    expect(summarize(atClosedBoundary, 130).closing).toBe(1);
+
+    // A school just above the closed boundary does NOT count as closing
+    const aboveClosed = parseSchools(
+      csv([row({ projected: closedMax + 1, 學校代碼: 'above-closed' })]),
+    ).schools;
+    expect(summarize(aboveClosed, 130).closing).toBe(0);
+
+    // A school at exactly the high boundary counts as atRisk
+    const atHighBoundary = parseSchools(
+      csv([row({ projected: highMax, 學校代碼: 'at-high' })]),
+    ).schools;
+    expect(summarize(atHighBoundary, 130).atRisk).toBe(1);
+
+    // A school just above the high boundary does NOT count as atRisk
+    const aboveHigh = parseSchools(
+      csv([row({ projected: highMax + 1, 學校代碼: 'above-high' })]),
+    ).schools;
+    expect(summarize(aboveHigh, 130).atRisk).toBe(0);
+  });
+});
