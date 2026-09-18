@@ -24,6 +24,20 @@ const MAX_DROP_RATIO = 0.3;
  */
 const MIN_DROP_SAMPLE = 10;
 
+/**
+ * PapaParse error codes that indicate field-alignment corruption (#208).
+ * These codes mean the row's column count or quoting is broken, so
+ * downstream field access (student counts, projections) is unreliable.
+ */
+const CRITICAL_PARSE_ERROR_CODES = ['TooFewFields', 'TooManyFields', 'InvalidQuotes'];
+
+/**
+ * Maximum tolerable ratio of critical parse errors before parseSchools
+ * rejects the dataset (#208). 1% is conservative: a handful of edge-case
+ * rows in ~2,600 won't trip this, but a structurally damaged CSV will.
+ */
+const MAX_CRITICAL_ERROR_RATIO = 0.01;
+
 const num = (value) => {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
   const trimmed = typeof value === 'string' ? value.trim() : value;
@@ -100,6 +114,25 @@ export const parseSchools = (csvText) => {
 
   if (errors.length > 0) {
     console.warn(`CSV parsed with ${errors.length} recoverable issue(s)`, errors[0]);
+  }
+
+  // --- Critical parse-error guard (#208) -----------------------------------
+  // PapaParse field-alignment errors (TooFewFields, TooManyFields,
+  // InvalidQuotes) mean column data is unreliable for the affected rows.
+  // When too many rows are affected, reject the entire dataset rather than
+  // silently displaying corrupted student counts and projections.
+  if (data.length > 0 && errors.length > 0) {
+    const critical = errors.filter((e) =>
+      CRITICAL_PARSE_ERROR_CODES.includes(e.code),
+    );
+    if (critical.length > data.length * MAX_CRITICAL_ERROR_RATIO) {
+      throw new Error(
+        `CSV 欄位對齊錯誤過多：${critical.length}/${data.length} 筆資料列` +
+          `（${((critical.length / data.length) * 100).toFixed(1)}%）發生欄位對齊錯誤` +
+          `（${[...new Set(critical.map((e) => e.code))].join('、')}），` +
+          `超過容許上限 ${MAX_CRITICAL_ERROR_RATIO * 100}%，請檢查上游 CSV 格式`,
+      );
+    }
   }
 
   // --- Empty data guard (#171) ---------------------------------------------

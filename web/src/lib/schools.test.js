@@ -769,6 +769,84 @@ describe('parseSchools', () => {
 
     expect(schools[0].enrollment).toBeNull();
   });
+
+  // --- Critical parse-error guard (regression tests for #208) ----------------
+
+  it('throws when critical parse errors exceed 1% of data rows (#208)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 3 valid rows + 1 row with too few fields = 4 data rows, 1 critical error
+    // 1/4 = 25% > 1% threshold → throws
+    const header = COLUMNS.join(',');
+    const validRows = [
+      row({ projected: 10, 學校代碼: 'a' }),
+      row({ projected: 10, 學校代碼: 'b', 緯度: '24.9', 經度: '121.5' }),
+      row({ projected: 10, 學校代碼: 'c', 緯度: '24.8', 經度: '121.4' }),
+    ];
+    const csvLines = [
+      header,
+      ...validRows.map((r) => COLUMNS.map((col) => r[col] ?? '').join(',')),
+      'only,two,fields',
+    ];
+
+    expect(() => parseSchools(csvLines.join('\n'))).toThrow('欄位對齊錯誤過多');
+    expect(() => parseSchools(csvLines.join('\n'))).toThrow('1/4');
+    expect(() => parseSchools(csvLines.join('\n'))).toThrow('TooFewFields');
+    expect(() => parseSchools(csvLines.join('\n'))).toThrow('1%');
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not throw when critical parse errors are at or below 1% (#208)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 100 valid rows + 1 broken row = 101 data rows, 1 critical error
+    // 1/101 ≈ 0.99% which is NOT > 1% → does not throw
+    // Broken row placed last so data[0] has all header keys for validation.
+    const header = COLUMNS.join(',');
+    const csvLines = [header];
+    for (let i = 0; i < 100; i++) {
+      const r = row({ projected: 10, 學校代碼: `s${i}` });
+      csvLines.push(COLUMNS.map((col) => r[col] ?? '').join(','));
+    }
+    csvLines.push('only,two,fields');
+
+    const { schools } = parseSchools(csvLines.join('\n'));
+    expect(schools).toHaveLength(100);
+
+    warnSpy.mockRestore();
+  });
+
+  it('still logs the existing console.warn for any PapaParse errors (#208)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // 3 valid + 1 broken = 4 rows, 25% critical → throws
+    const header = COLUMNS.join(',');
+    const validRows = [
+      row({ projected: 10, 學校代碼: 'a' }),
+      row({ projected: 10, 學校代碼: 'b', 緯度: '24.9', 經度: '121.5' }),
+      row({ projected: 10, 學校代碼: 'c', 緯度: '24.8', 經度: '121.4' }),
+    ];
+    const csvLines = [
+      header,
+      ...validRows.map((r) => COLUMNS.map((col) => r[col] ?? '').join(',')),
+      'only,two,fields',
+    ];
+
+    try {
+      parseSchools(csvLines.join('\n'));
+    } catch {
+      /* expected */
+    }
+
+    // The existing console.warn for recoverable issues should still fire
+    const recoverableWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('recoverable'),
+    );
+    expect(recoverableWarns).toHaveLength(1);
+
+    warnSpy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------
