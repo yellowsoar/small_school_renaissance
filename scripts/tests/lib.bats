@@ -136,3 +136,95 @@ CSV
   run convert_to_csv_if_needed "test"
   [ "$status" -ne 0 ]
 }
+
+# ── convert_to_csv_if_needed: empty CSV validation (#141) ────
+
+@test "convert_to_csv_if_needed: returns 2 when converted CSV has only header (#141)" {
+  # Create mock soffice that produces a header-only CSV
+  mkdir -p "$TEST_TMPDIR/bin"
+  cat > "$TEST_TMPDIR/bin/soffice" <<'MOCK'
+#!/usr/bin/env bash
+# Mock soffice: extract --outdir and source file, write header-only CSV
+prev=""
+outdir=""
+src=""
+for arg in "$@"; do
+  if [ "$prev" = "--outdir" ]; then
+    outdir="$arg"
+  fi
+  prev="$arg"
+  src="$arg"
+done
+base=$(basename "$src")
+base="${base%.*}.csv"
+echo "name,age,city" > "${outdir}/${base}"
+MOCK
+  chmod +x "$TEST_TMPDIR/bin/soffice"
+  export PATH="$TEST_TMPDIR/bin:$PATH"
+
+  # Create dummy ODS source file to trigger conversion path
+  echo "dummy" > "$NAME_DIR/headeronly.ods"
+
+  run convert_to_csv_if_needed "headeronly"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"empty or has no data rows"* ]]
+  # Empty CSV should be cleaned up
+  [ ! -f "$NAME_DIR/headeronly.csv" ]
+}
+
+@test "convert_to_csv_if_needed: returns 2 when converted CSV is completely empty (#141)" {
+  mkdir -p "$TEST_TMPDIR/bin"
+  cat > "$TEST_TMPDIR/bin/soffice" <<'MOCK'
+#!/usr/bin/env bash
+prev=""
+outdir=""
+src=""
+for arg in "$@"; do
+  if [ "$prev" = "--outdir" ]; then
+    outdir="$arg"
+  fi
+  prev="$arg"
+  src="$arg"
+done
+base=$(basename "$src")
+base="${base%.*}.csv"
+touch "${outdir}/${base}"
+MOCK
+  chmod +x "$TEST_TMPDIR/bin/soffice"
+  export PATH="$TEST_TMPDIR/bin:$PATH"
+
+  echo "dummy" > "$NAME_DIR/emptyfile.ods"
+
+  run convert_to_csv_if_needed "emptyfile"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"empty or has no data rows"* ]]
+  [ ! -f "$NAME_DIR/emptyfile.csv" ]
+}
+
+@test "convert_to_csv_if_needed: returns 0 when converted CSV has data rows (#141)" {
+  mkdir -p "$TEST_TMPDIR/bin"
+  cat > "$TEST_TMPDIR/bin/soffice" <<'MOCK'
+#!/usr/bin/env bash
+prev=""
+outdir=""
+src=""
+for arg in "$@"; do
+  if [ "$prev" = "--outdir" ]; then
+    outdir="$arg"
+  fi
+  prev="$arg"
+  src="$arg"
+done
+base=$(basename "$src")
+base="${base%.*}.csv"
+printf "name,age,city\nAlice,30,Taipei\n" > "${outdir}/${base}"
+MOCK
+  chmod +x "$TEST_TMPDIR/bin/soffice"
+  export PATH="$TEST_TMPDIR/bin:$PATH"
+
+  echo "dummy" > "$NAME_DIR/valid.ods"
+
+  run convert_to_csv_if_needed "valid"
+  [ "$status" -eq 0 ]
+  [ -f "$NAME_DIR/valid.csv" ]
+}
