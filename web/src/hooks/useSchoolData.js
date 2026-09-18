@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DATA_URL } from '../config/index.js';
+import { DATA_URL, MAX_CSV_BYTES } from '../config/index.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 import { parseSchools } from '../lib/schools.js';
 
@@ -28,8 +28,10 @@ export function useSchoolData(url = DATA_URL) {
       try {
         // fetchWithTimeout now returns the response body as text, with
         // both header and body transfer covered by the same timeout (#173).
+        // maxBytes enforces a size ceiling to prevent memory exhaustion (#207).
         const text = await fetchWithTimeout(url, {
           signal: controller.signal,
+          maxBytes: MAX_CSV_BYTES,
         });
         downloadComplete = true;
 
@@ -43,6 +45,8 @@ export function useSchoolData(url = DATA_URL) {
         let message;
         if (error.name === 'TimeoutError') {
           message = '資料載入逾時，請檢查網路連線後重新載入';
+        } else if (error.name === 'SizeLimitError') {
+          message = `資料大小超過上限 (${error.message})`;
         } else if (downloadComplete) {
           message = `資料解析失敗 (${error.message})`;
         } else {
