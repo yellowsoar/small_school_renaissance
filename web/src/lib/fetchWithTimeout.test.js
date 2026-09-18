@@ -23,6 +23,33 @@ const hangingFetch = (_url, opts) =>
     opts?.signal?.addEventListener('abort', onAbort);
   });
 
+/**
+ * A fetch mock whose headers arrive immediately but whose body never
+ * completes.  The body .text() rejects with AbortError when the fetch
+ * signal fires, mirroring real browser behavior where the body stream
+ * is wired to the fetch AbortController.
+ */
+const stalledBodyFetch = (_url, opts) => {
+  const signal = opts?.signal;
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: new Headers(),
+    text: () =>
+      new Promise((_resolve, reject) => {
+        const onAbort = () =>
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        if (signal?.aborted) {
+          onAbort();
+          return;
+        }
+        signal?.addEventListener('abort', onAbort, { once: true });
+        // Never resolves — simulates stalled body transfer.
+      }),
+  });
+};
+
 /* ------------------------------------------------------------------ */
 /*  Setup / teardown                                                    */
 /* ------------------------------------------------------------------ */
@@ -44,11 +71,12 @@ describe('fetchWithTimeout', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
   });
 
-  it('returns a successful response on the first attempt', async () => {
+  it('returns response body as text (#173)', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(okResponse('hello'));
 
-    const res = await fetchWithTimeout('https://example.com/data.csv');
-    expect(res.ok).toBe(true);
+    const text = await fetchWithTimeout('https://example.com/data.csv');
+    expect(typeof text).toBe('string');
+    expect(text).toBe('hello');
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -58,8 +86,8 @@ describe('fetchWithTimeout', () => {
       .mockResolvedValueOnce(errorResponse(502))
       .mockResolvedValueOnce(okResponse('ok'));
 
-    const res = await fetchWithTimeout('https://example.com/data.csv');
-    expect(res.ok).toBe(true);
+    const text = await fetchWithTimeout('https://example.com/data.csv');
+    expect(text).toBe('ok');
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -79,8 +107,8 @@ describe('fetchWithTimeout', () => {
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce(okResponse('recovered'));
 
-    const res = await fetchWithTimeout('https://example.com/data.csv');
-    expect(res.ok).toBe(true);
+    const text = await fetchWithTimeout('https://example.com/data.csv');
+    expect(text).toBe('recovered');
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -95,16 +123,28 @@ describe('fetchWithTimeout', () => {
     ).rejects.toMatchObject({ name: 'TimeoutError' });
   });
 
+  it('times out when response body transfer stalls (#173)', async () => {
+    globalThis.fetch = vi.fn().mockImplementation(stalledBodyFetch);
+
+    await expect(
+      fetchWithTimeout('https://example.com/data.csv', {
+        timeout: 50,
+        retries: 0,
+      }),
+    ).rejects.toMatchObject({ name: 'TimeoutError' });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('retries on timeout then succeeds', async () => {
     globalThis.fetch = vi
       .fn()
       .mockImplementationOnce(hangingFetch)
       .mockResolvedValueOnce(okResponse('ok'));
 
-    const res = await fetchWithTimeout('https://example.com/data.csv', {
+    const text = await fetchWithTimeout('https://example.com/data.csv', {
       timeout: 10,
     });
-    expect(res.ok).toBe(true);
+    expect(text).toBe('ok');
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -182,8 +222,8 @@ describe('fetchWithTimeout', () => {
       .mockResolvedValueOnce(errorResponse(502))
       .mockResolvedValueOnce(okResponse('recovered'));
 
-    const res = await fetchWithTimeout('https://example.com/data.csv');
-    expect(res.ok).toBe(true);
+    const text = await fetchWithTimeout('https://example.com/data.csv');
+    expect(text).toBe('recovered');
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -201,8 +241,8 @@ describe('fetchWithTimeout', () => {
       .mockResolvedValueOnce(rateLimited)
       .mockResolvedValueOnce(okResponse('ok'));
 
-    const res = await fetchWithTimeout('https://example.com/data.csv');
-    expect(res.ok).toBe(true);
+    const text = await fetchWithTimeout('https://example.com/data.csv');
+    expect(text).toBe('ok');
     // 429 is retriable — two calls (initial + retry).
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
@@ -253,8 +293,8 @@ describe('backoff behavior', () => {
     globalThis.fetch = vi.fn().mockResolvedValue(okResponse('ok'));
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
 
-    const res = await fetchWithTimeout('https://example.com/data.csv');
-    expect(res.ok).toBe(true);
+    const text = await fetchWithTimeout('https://example.com/data.csv');
+    expect(text).toBe('ok');
 
     // Only the per-request timeout timer should be scheduled, not a backoff sleep.
     const backoffCalls = setTimeoutSpy.mock.calls.filter(
@@ -289,8 +329,8 @@ describe('backoff behavior', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
 
-    const res = await promise;
-    expect(res.ok).toBe(true);
+    const text = await promise;
+    expect(text).toBe('ok');
   });
 
   it('increases backoff ceiling on successive retries', async () => {
@@ -452,8 +492,8 @@ describe('backoff behavior', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
 
-    const res = await promise;
-    expect(res.ok).toBe(true);
+    const text = await promise;
+    expect(text).toBe('ok');
   });
 
   it('falls back to jitter delay on 429 without Retry-After header', async () => {
@@ -488,7 +528,7 @@ describe('backoff behavior', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
 
-    const res = await promise;
-    expect(res.ok).toBe(true);
+    const text = await promise;
+    expect(text).toBe('ok');
   });
 });
