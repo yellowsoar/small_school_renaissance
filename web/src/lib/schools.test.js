@@ -267,9 +267,9 @@ describe('parseSchools', () => {
   });
 
   it('respects quoted fields containing commas', () => {
-    // prettier-ignore
+    const quotedName = '"' + '市立插角國小, 分校' + '"';
     const { schools } = parseSchools(
-      csv([row({ projected: 10, 學校名稱: '"\u5e02\u7acb\u63d2\u89d2\u570b\u5c0f, \u5206\u6821"' })]),
+      csv([row({ projected: 10, 學校名稱: quotedName })]),
     );
 
     expect(schools[0].name).toBe('市立插角國小, 分校');
