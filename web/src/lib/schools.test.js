@@ -800,14 +800,16 @@ describe('parseSchools', () => {
   it('does not throw when critical parse errors are at or below 1% (#208)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    // 1 broken row + 100 valid rows = 101 data rows, 1 critical error
+    // 100 valid rows + 1 broken row = 101 data rows, 1 critical error
     // 1/101 ≈ 0.99% which is NOT > 1% → does not throw
+    // Broken row placed last so data[0] has all header keys for validation.
     const header = COLUMNS.join(',');
-    const csvLines = [header, 'only,two,fields'];
+    const csvLines = [header];
     for (let i = 0; i < 100; i++) {
       const r = row({ projected: 10, 學校代碼: `s${i}` });
       csvLines.push(COLUMNS.map((col) => r[col] ?? '').join(','));
     }
+    csvLines.push('only,two,fields');
 
     const { schools } = parseSchools(csvLines.join('\n'));
     expect(schools).toHaveLength(100);
