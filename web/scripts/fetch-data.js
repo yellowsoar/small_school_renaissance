@@ -13,7 +13,7 @@
  *
  * Usage: node scripts/fetch-data.js [--force]
  */
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -94,6 +94,22 @@ try {
   process.exit(1);
 }
 
+// Write to a temporary file first, then atomically rename to the target.
+// rename() on the same filesystem is a POSIX atomic operation, so the target
+// is always either the complete old file or the complete new file — never a
+// partial write that would fool the exists() check on the next run.
+const tmpTarget = `${target}.tmp`;
 await mkdir(dirname(target), { recursive: true });
-await writeFile(target, body, 'utf-8');
+try {
+  await writeFile(tmpTarget, body, 'utf-8');
+  await rename(tmpTarget, target);
+} catch (err) {
+  // Clean up partial temp file so it does not confuse the next run.
+  try {
+    await unlink(tmpTarget);
+  } catch {
+    /* ENOENT is expected if writeFile() itself failed */
+  }
+  throw err;
+}
 console.log(`\u2705 saved to ${target}`);
