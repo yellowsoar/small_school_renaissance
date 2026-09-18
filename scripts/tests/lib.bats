@@ -21,7 +21,7 @@ teardown() {
   rm -rf "$TEST_TMPDIR"
 }
 
-# ── sed_inplace ──────────────────────────────────────────────
+# ── sed_inplace ──────────────────────────────────────────────────────────
 
 @test "sed_inplace: successful substitution" {
   echo "hello world" > "$TEST_TMPDIR/f.txt"
@@ -49,7 +49,7 @@ teardown() {
   [ "$(wc -l < "$TEST_TMPDIR/f.txt" | tr -d ' ')" = "3" ]
 }
 
-# ── remove_rows_mismatch_header ──────────────────────────────
+# ── remove_rows_mismatch_header ────────────────────────────────────────
 
 @test "remove_rows_mismatch_header: keeps all rows when columns match" {
   cat > "$TEST_TMPDIR/good.csv" <<'CSV'
@@ -118,7 +118,35 @@ CSV
   [ "$(wc -l < "$TEST_TMPDIR/empty.csv" | tr -d ' ')" = "4" ]
 }
 
-# ── convert_to_csv_if_needed ─────────────────────────────────
+@test "remove_rows_mismatch_header: preserves rows with quoted commas (#170)" {
+  cat > "$TEST_TMPDIR/quoted.csv" <<'CSV'
+name,age,address
+Alice,30,"Taipei, Taiwan"
+Bob,25,Kaohsiung
+CSV
+  run remove_rows_mismatch_header "$TEST_TMPDIR/quoted.csv"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$TEST_TMPDIR/quoted.csv" | tr -d ' ')" = "3" ]
+  grep -q "Alice" "$TEST_TMPDIR/quoted.csv"
+  grep -q "Taipei, Taiwan" "$TEST_TMPDIR/quoted.csv"
+  [[ "$output" == *"All rows match header"* ]]
+}
+
+@test "remove_rows_mismatch_header: preserves rows with escaped quotes (#170)" {
+  cat > "$TEST_TMPDIR/escaped.csv" <<'CSV'
+name,age,note
+Alice,30,"She said ""hello"""
+Bob,25,normal
+CSV
+  run remove_rows_mismatch_header "$TEST_TMPDIR/escaped.csv"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$TEST_TMPDIR/escaped.csv" | tr -d ' ')" = "3" ]
+  grep -q "Alice" "$TEST_TMPDIR/escaped.csv"
+  grep -q "Bob" "$TEST_TMPDIR/escaped.csv"
+  [[ "$output" == *"All rows match header"* ]]
+}
+
+# ── convert_to_csv_if_needed ─────────────────────────────────────────
 
 @test "convert_to_csv_if_needed: returns 0 when CSV already exists" {
   echo "name,age" > "$NAME_DIR/existing.csv"
@@ -229,7 +257,7 @@ MOCK
   [ -f "$NAME_DIR/valid.csv" ]
 }
 
-# ── validate_not_html (#163) ─────────────────────────────────
+# ── validate_not_html (#163) ─────────────────────────────────────
 
 @test "validate_not_html: detects HTML file and deletes it (#163)" {
   echo '<!DOCTYPE html><html><head><title>Maintenance</title></head><body>Under maintenance</body></html>' > "$TEST_TMPDIR/test.ods"
