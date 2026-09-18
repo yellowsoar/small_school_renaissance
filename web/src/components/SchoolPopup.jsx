@@ -81,7 +81,9 @@ export default function SchoolPopup({ school, year, tier }) {
           const number = dialable(school.phone);
           return number ? (
             <a href={`tel:${number}`}>{school.phone}</a>
-          ) : null;
+          ) : (
+            <span>{school.phone}</span>
+          );
         })()}
       </p>
     </div>
