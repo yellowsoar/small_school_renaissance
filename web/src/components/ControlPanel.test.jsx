@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ControlPanel from './ControlPanel.jsx';
-import { RISK_TIERS, PROJECTION_YEARS } from '../config/index.js';
+import { RISK_TIERS, PROJECTION_YEARS, TILE_LAYERS } from '../config/index.js';
 
 /* ------------------------------------------------------------------ */
 /*  Fixtures                                                           */
@@ -15,7 +15,7 @@ const defaultFilters = {
 };
 
 const counties = ['臺北市', '新北市', '桃園市'];
-const layers = { heatmap: true, markers: true };
+const layers = { heatmap: true, markers: true, baseMap: 'osm' };
 
 const renderPanel = (overrides = {}) =>
   render(
@@ -188,5 +188,35 @@ describe('ControlPanel', () => {
     fireEvent.click(heatmapCheckbox);
 
     expect(onLayers).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders all base map radio options from config', () => {
+    renderPanel();
+
+    for (const tile of TILE_LAYERS) {
+      expect(screen.getByText(tile.label)).toBeTruthy();
+    }
+  });
+
+  it('checks the active base map radio button', () => {
+    renderPanel();
+
+    const radios = screen.getAllByRole('radio');
+    const osmRadio = radios.find((r) => r.value === 'osm');
+    expect(osmRadio.checked).toBe(true);
+
+    const positronRadio = radios.find((r) => r.value === 'positron');
+    expect(positronRadio.checked).toBe(false);
+  });
+
+  it('calls onLayers with the selected base map id', () => {
+    const onLayers = vi.fn();
+    renderPanel({ onLayers });
+
+    const positronLabel = screen.getByText(TILE_LAYERS.find((t) => t.id === 'positron').label);
+    const radio = positronLabel.closest('label').querySelector('input[type="radio"]');
+    fireEvent.click(radio);
+
+    expect(onLayers).toHaveBeenCalledWith({ baseMap: 'positron' });
   });
 });
