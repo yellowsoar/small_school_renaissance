@@ -5,7 +5,7 @@
  * A map of public data is something people cite: "look at 南投縣 in 130". That
  * only works if the view is addressable, so the filter state lives in the URL.
  */
-import { PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
+import { MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
 
 const VALID_TIERS = new Set(RISK_TIERS.map((tier) => tier.id));
 const MIN_YEAR = PROJECTION_YEARS.at(0);
@@ -44,11 +44,15 @@ export const filtersFromSearch = (search) => {
   const year = Number.parseInt(params.get('year'), 10);
   const counties = splitList(params.get('county'));
 
+  // Truncate `q` to prevent expensive filterSchools iterations on crafted
+  // deep links and avoid exceeding browser URL length limits (#210).
+  const rawQ = params.get('q')?.trim() ?? '';
+
   return {
     year: Number.isInteger(year) && year >= MIN_YEAR && year <= MAX_YEAR ? year : DEFAULT_YEAR,
     counties: new Set(counties),
     tiers: new Set(splitList(params.get('tier')).filter((tier) => VALID_TIERS.has(tier))),
-    search: params.get('q')?.trim() ?? '',
+    search: rawQ.slice(0, MAX_QUERY_LENGTH),
     excludeClosed: params.get('closed') !== '1',
   };
 };
@@ -84,7 +88,10 @@ export const searchFromFilters = (filters) => {
       [...filters.tiers].sort((a, b) => order.indexOf(a) - order.indexOf(b)).join(','),
     );
   }
-  if (filters.search.trim()) params.set('q', filters.search.trim());
+  // Defensive truncation: even if search state somehow exceeds the limit
+  // (e.g. programmatic update), the serialized URL stays bounded (#210).
+  const trimmed = filters.search.trim();
+  if (trimmed) params.set('q', trimmed.slice(0, MAX_QUERY_LENGTH));
   if (!filters.excludeClosed) params.set('closed', '1');
 
   const query = params.toString();
