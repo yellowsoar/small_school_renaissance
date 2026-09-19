@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { PROJECTION_YEARS, RISK_TIERS, TILE_LAYERS } from '../config/index.js';
+import { MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS, TILE_LAYERS } from '../config/index.js';
 
 const toggle = (set, value) => {
   const next = new Set(set);
@@ -76,6 +76,7 @@ export default function ControlPanel({
           type="search"
           className="panel__input"
           placeholder="例如：插角國小、烏來區"
+          maxLength={MAX_QUERY_LENGTH}
           value={filters.search}
           onChange={(event) => onChange({ search: event.target.value })}
         />
