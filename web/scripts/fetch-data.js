@@ -123,29 +123,35 @@ if (updateIntegrity) {
   await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
   console.log(`\u2705 data-integrity.json updated (sha256: ${hash})`);
 } else if (!skipIntegrity) {
-  // Verify against the stored hash (if configured).
+  // Verify against the stored hash — fail-closed by default (#227).
+  // Missing, empty, or unreadable integrity metadata aborts the build.
+  // Use --skip-integrity to opt out during local development.
   try {
     const raw = await readFile(integrityPath, 'utf-8');
     const { sha256: expectedHash } = JSON.parse(raw);
-    verifyCsvIntegrity(body, expectedHash);
-    if (expectedHash) {
-      console.log('\u2705 CSV integrity verified (sha256 match)');
-    } else {
-      console.warn(
-        '\u26a0\ufe0f  data-integrity.json sha256 is empty \u2014 run with --update-integrity after verifying the upstream data',
+
+    if (!expectedHash) {
+      console.error(
+        '\u274c data-integrity.json sha256 is empty. Run with --update-integrity after verifying the upstream data, or use --skip-integrity for local development.',
       );
+      process.exit(1);
     }
+
+    verifyCsvIntegrity(body, expectedHash);
+    console.log('\u2705 CSV integrity verified (sha256 match)');
   } catch (err) {
     if (err.code === 'ENOENT') {
-      console.warn(
-        '\u26a0\ufe0f  data-integrity.json not found \u2014 integrity check skipped. Run with --update-integrity to create it.',
+      console.error(
+        '\u274c data-integrity.json not found. Run with --update-integrity to create it, or use --skip-integrity for local development.',
       );
+      process.exit(1);
     } else if (err.message.includes('integrity check failed')) {
       console.error(`\u274c ${err.message}`);
       process.exit(1);
     } else {
       // Malformed JSON, unexpected read error, etc.
-      console.warn(`\u26a0\ufe0f  could not read data-integrity.json: ${err.message} \u2014 integrity check skipped`);
+      console.error(`\u274c could not read data-integrity.json: ${err.message}. Use --skip-integrity to bypass.`);
+      process.exit(1);
     }
   }
 }
