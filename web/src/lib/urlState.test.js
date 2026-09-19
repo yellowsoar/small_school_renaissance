@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
+import { MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
 import {
   DEFAULT_YEAR,
   defaultFilters,
@@ -74,6 +74,20 @@ describe('filtersFromSearch', () => {
     expect(filtersFromSearch('').excludeClosed).toBe(true);
     expect(filtersFromSearch('?year=120').excludeClosed).toBe(true);
   });
+
+  it('truncates an overlong q parameter to MAX_QUERY_LENGTH (#210)', () => {
+    const overlong = '國'.repeat(MAX_QUERY_LENGTH + 50);
+    const parsed = filtersFromSearch(`?q=${overlong}`);
+    expect(parsed.search.length).toBe(MAX_QUERY_LENGTH);
+    expect(parsed.search).toBe('國'.repeat(MAX_QUERY_LENGTH));
+  });
+
+  it('preserves q at exactly MAX_QUERY_LENGTH without truncation (#210)', () => {
+    const exact = '國'.repeat(MAX_QUERY_LENGTH);
+    const parsed = filtersFromSearch(`?q=${exact}`);
+    expect(parsed.search.length).toBe(MAX_QUERY_LENGTH);
+    expect(parsed.search).toBe(exact);
+  });
 });
 
 describe('pruneCounties', () => {
@@ -134,6 +148,13 @@ describe('searchFromFilters', () => {
   it('adds closed=1 when excludeClosed is false', () => {
     const query = searchFromFilters(filters({ excludeClosed: false }));
     expect(query).toContain('closed=1');
+  });
+
+  it('truncates an overlong search to MAX_QUERY_LENGTH in the serialized URL (#210)', () => {
+    const overlong = '國'.repeat(MAX_QUERY_LENGTH + 50);
+    const query = searchFromFilters(filters({ search: overlong }));
+    const reparsed = filtersFromSearch(query);
+    expect(reparsed.search.length).toBe(MAX_QUERY_LENGTH);
   });
 });
 
