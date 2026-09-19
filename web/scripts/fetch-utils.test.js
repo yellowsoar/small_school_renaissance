@@ -10,6 +10,18 @@ describe('fetchWithRetry', () => {
   const url = 'https://example.com/data.csv';
   let originalFetch;
 
+  /**
+   * Helper: create a mock Response-like object for successful fetch.
+   * Provides `.ok`, `.status`, `.headers`, and `.text()` needed by the
+   * updated fetchWithRetry that reads body inside the retry loop (#211).
+   */
+  const okResponse = (body = 'csv-data', contentType = 'text/csv') => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'content-type': contentType }),
+    text: vi.fn().mockResolvedValue(body),
+  });
+
   beforeEach(() => {
     originalFetch = globalThis.fetch;
     vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -20,13 +32,14 @@ describe('fetchWithRetry', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns the response on a successful first attempt', async () => {
-    const mockRes = { ok: true, status: 200 };
+  it('returns { body, contentType } on a successful first attempt', async () => {
+    const mockRes = okResponse('my-csv', 'text/csv');
     globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
 
     const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
 
-    expect(res).toBe(mockRes);
+    expect(res).toEqual({ body: 'my-csv', contentType: 'text/csv' });
+    expect(mockRes.text).toHaveBeenCalledTimes(1);
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(globalThis.fetch).toHaveBeenCalledWith(url, {
       signal: expect.any(AbortSignal),
@@ -35,12 +48,12 @@ describe('fetchWithRetry', () => {
 
   it('retries on HTTP error and succeeds on second attempt', async () => {
     const fail = { ok: false, status: 503, statusText: 'Service Unavailable' };
-    const ok = { ok: true, status: 200 };
+    const ok = okResponse();
     globalThis.fetch = vi.fn().mockResolvedValueOnce(fail).mockResolvedValueOnce(ok);
 
     const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
 
-    expect(res).toBe(ok);
+    expect(res).toEqual({ body: 'csv-data', contentType: 'text/csv' });
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     expect(console.warn).toHaveBeenCalledTimes(1);
   });
@@ -77,12 +90,12 @@ describe('fetchWithRetry', () => {
 
   it('logs "timeout" label for TimeoutError during retry', async () => {
     const timeoutErr = new DOMException('Signal timed out.', 'TimeoutError');
-    const ok = { ok: true, status: 200 };
+    const ok = okResponse();
     globalThis.fetch = vi.fn().mockRejectedValueOnce(timeoutErr).mockResolvedValueOnce(ok);
 
     const res = await fetchWithRetry(url, { retries: 1, timeout: 1 });
 
-    expect(res).toBe(ok);
+    expect(res).toEqual({ body: 'csv-data', contentType: 'text/csv' });
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('timeout'));
   });
 
@@ -96,7 +109,7 @@ describe('fetchWithRetry', () => {
   });
 
   it('uses default retries=2 and timeout=30000', async () => {
-    const ok = { ok: true, status: 200 };
+    const ok = okResponse();
     globalThis.fetch = vi.fn().mockResolvedValue(ok);
 
     await fetchWithRetry(url);
@@ -125,12 +138,12 @@ describe('fetchWithRetry', () => {
 
   it('still retries on 5xx server error after 4xx skip logic', async () => {
     const fail = { ok: false, status: 502, statusText: 'Bad Gateway' };
-    const ok = { ok: true, status: 200 };
+    const ok = okResponse();
     globalThis.fetch = vi.fn().mockResolvedValueOnce(fail).mockResolvedValueOnce(ok);
 
     const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
 
-    expect(res).toBe(ok);
+    expect(res).toEqual({ body: 'csv-data', contentType: 'text/csv' });
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     expect(console.warn).toHaveBeenCalledTimes(1);
   });
@@ -154,7 +167,7 @@ describe('fetchWithRetry', () => {
 
     const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
 
-    expect(res.ok).toBe(true);
+    expect(res.body).toBe('ok');
     // 429 is retriable -- two calls (initial + retry).
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     expect(console.warn).toHaveBeenCalledTimes(1);
@@ -214,6 +227,45 @@ describe('fetchWithRetry', () => {
     );
 
     vi.useRealTimers();
+  });
+
+  /* -------------------------------------------------------------- */
+  /*  Response body retry coverage (#211)                              */
+  /* -------------------------------------------------------------- */
+
+  it('retries when response body read fails (e.g. stream error)', async () => {
+    const failBody = {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/csv' }),
+      text: vi.fn().mockRejectedValue(new Error('network error during body read')),
+    };
+    const okBody = okResponse('recovered-csv', 'text/csv');
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(failBody).mockResolvedValueOnce(okBody);
+
+    const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
+
+    expect(res).toEqual({ body: 'recovered-csv', contentType: 'text/csv' });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('network error during body read'),
+    );
+  });
+
+  it('returns empty contentType when Content-Type header is absent', async () => {
+    const mockRes = {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      text: vi.fn().mockResolvedValue('col1,col2\na,b'),
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
+
+    const res = await fetchWithRetry(url, { retries: 0 });
+
+    expect(res).toEqual({ body: 'col1,col2\na,b', contentType: '' });
+    expect(mockRes.text).toHaveBeenCalledTimes(1);
   });
 });
 

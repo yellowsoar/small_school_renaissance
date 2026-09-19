@@ -81,11 +81,10 @@ console.log(`\u2699\ufe0f  downloading ${redactUrl(SOURCE_URL)}`);
 
 let body;
 try {
-  const response = await fetchWithRetry(SOURCE_URL);
+  const { body: downloadedBody, contentType } = await fetchWithRetry(SOURCE_URL);
 
   // Warn on unexpected Content-Type (GitHub raw sometimes returns
   // application/octet-stream, so this is non-fatal).
-  const contentType = response.headers.get('content-type') ?? '';
   if (
     contentType &&
     !contentType.includes('text/') &&
@@ -96,7 +95,7 @@ try {
     );
   }
 
-  body = await response.text();
+  body = downloadedBody;
 } catch (err) {
   const detail =
     err.name === 'TimeoutError' ? 'timeout after 30s' : err.message;
