@@ -21,7 +21,7 @@ teardown() {
   rm -rf "$TEST_TMPDIR"
 }
 
-# ── sed_inplace ──────────────────────────────────────────────────────────────────────────────
+# ── sed_inplace ──────────────────────────────────────────────────────────────────────────────────
 
 @test "sed_inplace: successful substitution" {
   echo "hello world" > "$TEST_TMPDIR/f.txt"
@@ -47,6 +47,18 @@ teardown() {
   sed_inplace "$TEST_TMPDIR/f.txt" 's/line2/replaced/'
   grep -q "replaced" "$TEST_TMPDIR/f.txt"
   [ "$(wc -l < "$TEST_TMPDIR/f.txt" | tr -d ' ')" = "3" ]
+}
+
+@test "sed_inplace: preserves original file permissions (#218)" {
+  echo "hello world" > "$TEST_TMPDIR/f.txt"
+  chmod 0644 "$TEST_TMPDIR/f.txt"
+  sed_inplace "$TEST_TMPDIR/f.txt" 's/hello/goodbye/'
+  # Content replaced correctly
+  [ "$(cat "$TEST_TMPDIR/f.txt")" = "goodbye world" ]
+  # Permission mode preserved (not downgraded to mktemp default 0600)
+  local mode
+  mode=$(stat -c '%a' "$TEST_TMPDIR/f.txt" 2>/dev/null || stat -f '%Lp' "$TEST_TMPDIR/f.txt" 2>/dev/null)
+  [ "$mode" = "644" ]
 }
 
 # ── remove_rows_mismatch_header ────────────────────────────────────────

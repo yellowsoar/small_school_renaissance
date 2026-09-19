@@ -9,6 +9,11 @@ sed_inplace() {
 	shift
 	local tmpfile
 	tmpfile=$(mktemp "${file}.XXXXXX")
+	# Preserve original file permissions (GNU stat → BSD stat fallback).
+	# Failure is non-fatal: falls back to mktemp default (0600).
+	local perms
+	perms=$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file" 2>/dev/null) || true
+	[ -n "$perms" ] && chmod "$perms" "$tmpfile" || true
 	if sed "$@" "$file" > "$tmpfile" && mv -f "$tmpfile" "$file"; then
 		return 0
 	else
