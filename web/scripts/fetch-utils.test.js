@@ -348,4 +348,28 @@ describe('validateCsvContent', () => {
     const csv = [VALID_HEADER, ...rows].join('\n');
     expect(() => validateCsvContent(csv)).not.toThrow();
   });
+
+  /* -------------------------------------------------------------- */
+  /*  RFC 4180 multiline field handling (#209)                         */
+  /* -------------------------------------------------------------- */
+
+  it('rejects CSV where multiline quoted fields inflate physical line count above threshold (#209)', () => {
+    // 50 actual records, each with a quoted field containing 2 embedded
+    // newlines -> physical line count = 1 (header) + 50 * 3 = 151, which
+    // would pass the old split('\n') check but must fail the record-based
+    // count (50 < MIN_DATA_ROWS).
+    const multilineRow = '"value_a","line1\nline2\nline3"';
+    const rows = Array(50).fill(multilineRow);
+    const csv = ['alpha,beta', ...rows].join('\n');
+    expect(() => validateCsvContent(csv, ['alpha', 'beta'])).toThrow('50 data row(s)');
+    expect(() => validateCsvContent(csv, ['alpha', 'beta'])).toThrow('truncated');
+  });
+
+  it('accepts CSV with multiline quoted fields when actual record count meets threshold (#209)', () => {
+    // 100 actual records with an embedded newline in a quoted field.
+    const multilineRow = '"value_a","line1\nline2"';
+    const rows = Array(100).fill(multilineRow);
+    const csv = ['alpha,beta', ...rows].join('\n');
+    expect(() => validateCsvContent(csv, ['alpha', 'beta'])).not.toThrow();
+  });
 });

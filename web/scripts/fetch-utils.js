@@ -4,6 +4,8 @@
  * Relies on AbortSignal.timeout() — requires Node.js >= 20.
  */
 
+import Papa from 'papaparse';
+
 import { REQUIRED_HEADERS } from '../src/lib/csv-schema.js';
 import { classifyResponse, withRetry, DEFAULT_RETRIES } from '../src/lib/retry-core.js';
 
@@ -57,8 +59,12 @@ export async function fetchWithRetry(
  * 1. Content is non-empty.
  * 2. Content does not look like HTML (error pages, login pages).
  * 3. The header line contains all `requiredHeaders` (column-level match).
- * 4. At least one data row exists beyond the header.
+ * 4. At least one data row exists beyond the header (RFC 4180 record count).
  * 5. Data row count meets the minimum threshold (truncation guard).
+ *
+ * Record counting uses PapaParse to correctly handle RFC 4180 quoted fields
+ * that contain embedded newlines, instead of splitting on physical newlines
+ * which over-counts rows in multi-line fields (#209).
  *
  * @param {string} body - The raw response body text
  * @param {string[]} requiredHeaders - Column names that must appear in the
@@ -95,16 +101,19 @@ export function validateCsvContent(
     );
   }
 
-  // At least one data row beyond the header
-  const lines = body.trim().split('\n');
-  if (lines.length < 2) {
+  // Use PapaParse for accurate RFC 4180 record counting.
+  // Physical newline splitting over-counts when quoted fields contain
+  // embedded newlines (#209).
+  const { data } = Papa.parse(body, { header: true, skipEmptyLines: true });
+
+  if (data.length < 1) {
     throw new Error('CSV contains a header but no data rows');
   }
 
   // Guard against truncated downloads: the full dataset has ~2,600 rows.
-  if (lines.length < MIN_DATA_ROWS + 1) {
+  if (data.length < MIN_DATA_ROWS) {
     throw new Error(
-      `CSV has only ${lines.length - 1} data row(s), expected at least ${MIN_DATA_ROWS}` +
+      `CSV has only ${data.length} data row(s), expected at least ${MIN_DATA_ROWS}` +
         ` \u2014 the download may be truncated`,
     );
   }
