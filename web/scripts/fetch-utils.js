@@ -4,6 +4,8 @@
  * Relies on AbortSignal.timeout() — requires Node.js >= 20.
  */
 
+import { createHash } from 'node:crypto';
+
 import Papa from 'papaparse';
 
 import { REQUIRED_HEADERS } from '../src/lib/csv-schema.js';
@@ -58,6 +60,36 @@ export async function fetchWithRetry(
       },
     },
   );
+}
+
+/* ------------------------------------------------------------------ */
+/*  CSV integrity verification (#222)                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Compute a SHA-256 hash of the given content and optionally verify it
+ * against an expected value.
+ *
+ * Pure function: all I/O (reading data-integrity.json, writing files)
+ * is the caller's responsibility.
+ *
+ * @param {string} body - The raw CSV content to hash
+ * @param {string} [expectedHash] - Expected SHA-256 hex digest. When
+ *   non-empty the function throws if the computed hash does not match.
+ *   Empty string or undefined skips the check (unconfigured state).
+ * @returns {string} The computed SHA-256 hex digest
+ * @throws {Error} When expectedHash is non-empty and does not match
+ */
+export function verifyCsvIntegrity(body, expectedHash) {
+  const actual = createHash('sha256').update(body, 'utf-8').digest('hex');
+
+  if (expectedHash && actual !== expectedHash) {
+    throw new Error(
+      `CSV integrity check failed: expected sha256 ${expectedHash}, got ${actual}`,
+    );
+  }
+
+  return actual;
 }
 
 /**

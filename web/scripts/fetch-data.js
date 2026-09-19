@@ -11,13 +11,13 @@
  * Configuration lives in .env — see .env.example. Real environment variables
  * always take precedence over the file.
  *
- * Usage: node scripts/fetch-data.js [--force]
+ * Usage: node scripts/fetch-data.js [--force] [--update-integrity] [--skip-integrity]
  */
-import { mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchWithRetry, validateCsvContent } from './fetch-utils.js';
+import { fetchWithRetry, validateCsvContent, verifyCsvIntegrity } from './fetch-utils.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -45,7 +45,10 @@ const SOURCE_URL =
   `https://raw.githubusercontent.com/${DATA_OWNER}/${DATA_REPO}/${DATA_BRANCH}/${DATA_PATH}`;
 
 const target = resolve(root, 'public/data/113-107.csv');
+const integrityPath = resolve(root, 'data-integrity.json');
 const force = process.argv.includes('--force');
+const updateIntegrity = process.argv.includes('--update-integrity');
+const skipIntegrity = process.argv.includes('--skip-integrity');
 
 /**
  * Return a redacted URL safe for build logs: origin + pathname only.
@@ -72,7 +75,7 @@ const exists = async (path) => {
   }
 };
 
-if (!force && (await exists(target))) {
+if (!force && !updateIntegrity && (await exists(target))) {
   console.log('\u2705 dataset already present, skipping download (use --force to refresh)');
   process.exit(0);
 }
@@ -108,6 +111,43 @@ try {
 } catch (err) {
   console.error(`\u274c downloaded file is not valid CSV: ${err.message}`);
   process.exit(1);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Integrity verification (#222)                                       */
+/* ------------------------------------------------------------------ */
+
+if (updateIntegrity) {
+  // Compute and persist the hash for the just-validated CSV.
+  const hash = verifyCsvIntegrity(body);
+  await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
+  console.log(`\u2705 data-integrity.json updated (sha256: ${hash})`);
+} else if (!skipIntegrity) {
+  // Verify against the stored hash (if configured).
+  try {
+    const raw = await readFile(integrityPath, 'utf-8');
+    const { sha256: expectedHash } = JSON.parse(raw);
+    verifyCsvIntegrity(body, expectedHash);
+    if (expectedHash) {
+      console.log('\u2705 CSV integrity verified (sha256 match)');
+    } else {
+      console.warn(
+        '\u26a0\ufe0f  data-integrity.json sha256 is empty \u2014 run with --update-integrity after verifying the upstream data',
+      );
+    }
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      console.warn(
+        '\u26a0\ufe0f  data-integrity.json not found \u2014 integrity check skipped. Run with --update-integrity to create it.',
+      );
+    } else if (err.message.includes('integrity check failed')) {
+      console.error(`\u274c ${err.message}`);
+      process.exit(1);
+    } else {
+      // Malformed JSON, unexpected read error, etc.
+      console.warn(`\u26a0\ufe0f  could not read data-integrity.json: ${err.message} \u2014 integrity check skipped`);
+    }
+  }
 }
 
 // Write to a temporary file first, then atomically rename to the target.
