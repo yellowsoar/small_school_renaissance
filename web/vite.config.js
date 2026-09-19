@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { GOOGLE_FONTS_URL } from './src/config/fonts.js';
 
 export default defineConfig(({ command, mode }) => {
   // Only load BASE_* vars from .env — avoid pulling in every variable,
@@ -13,7 +14,15 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     base: command === 'build' ? base : '/',
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        name: 'inject-google-fonts-url',
+        transformIndexHtml(html) {
+          return html.replaceAll('__GOOGLE_FONTS_URL__', GOOGLE_FONTS_URL);
+        },
+      },
+    ],
     build: {
       target: 'es2022',
       sourcemap: true,

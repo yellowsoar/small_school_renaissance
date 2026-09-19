@@ -26,17 +26,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Preload starts the download early without blocking rendering.
          The stylesheet is activated by main.jsx after the app boots.
-         See #61 for why the synchronous <link rel="stylesheet"> was removed. -->
+         See #61 for why the synchronous <link rel="stylesheet"> was removed.
+         __GOOGLE_FONTS_URL__ is replaced at build time by vite.config.js
+         using the single source of truth in src/config/fonts.js (#223). -->
     <link
       rel="preload"
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap"
+      href="__GOOGLE_FONTS_URL__"
       as="style"
     />
     <noscript>
       <!-- Fallback: load fonts synchronously when JS is disabled. -->
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap"
+        href="__GOOGLE_FONTS_URL__"
       />
     </noscript>
   </head>
