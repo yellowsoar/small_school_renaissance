@@ -26,9 +26,14 @@ const MIN_DATA_ROWS = 100;
 /**
  * Fetch a URL with timeout and automatic retry.
  *
+ * The entire request lifecycle — including response body consumption —
+ * is covered by the retry loop.  If the body read fails (e.g. stream
+ * error or timeout), the request is retried automatically (#211).
+ *
  * @param {string} url - URL to fetch
  * @param {{ retries?: number, timeout?: number }} options
- * @returns {Promise<Response>} A successful response (res.ok === true)
+ * @returns {Promise<{ body: string, contentType: string }>} The response
+ *   body text and Content-Type header value (empty string when absent)
  * @throws {Error|DOMException} After all retries are exhausted
  */
 export async function fetchWithRetry(
@@ -38,7 +43,10 @@ export async function fetchWithRetry(
   return withRetry(
     async () => {
       const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
-      return classifyResponse(res);
+      classifyResponse(res);
+      const contentType = res.headers.get('content-type') ?? '';
+      const body = await res.text();
+      return { body, contentType };
     },
     {
       retries,
