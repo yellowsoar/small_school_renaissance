@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useUrlFilters } from './useUrlFilters.js';
 
@@ -151,5 +151,28 @@ describe('useUrlFilters', () => {
 
     expect(result.current[0].year).toBe(118);
     expect(result.current[0].search).toBe('烏來');
+  });
+
+  it('survives replaceState throwing SecurityError without losing filter state (#210)', () => {
+    const { result } = renderHook(() => useUrlFilters());
+
+    // Stub replaceState to throw, simulating an overlong URL.
+    const original = window.history.replaceState;
+    window.history.replaceState = vi.fn(() => {
+      throw new DOMException('SecurityError');
+    });
+
+    // Updating filters should not throw, even though replaceState does.
+    act(() => {
+      const [, update] = result.current;
+      update({ year: 118, search: '插角' });
+    });
+
+    // In-memory filter state is preserved.
+    expect(result.current[0].year).toBe(118);
+    expect(result.current[0].search).toBe('插角');
+
+    // Restore for other tests.
+    window.history.replaceState = original;
   });
 });

@@ -43,7 +43,16 @@ export function useUrlFilters(knownCounties = null) {
 
   useEffect(() => {
     const next = `${window.location.pathname}${searchFromFilters(filters)}${window.location.hash}`;
-    if (next !== currentUrl()) window.history.replaceState(null, '', next);
+    if (next !== currentUrl()) {
+      // replaceState can throw SecurityError when the serialized URL exceeds
+      // the browser's length limit. Keep the in-memory filter state intact
+      // so the map remains functional even if the URL cannot be updated (#210).
+      try {
+        window.history.replaceState(null, '', next);
+      } catch {
+        // URL too long or SecurityError — filter state is still usable in memory.
+      }
+    }
   }, [filters]);
 
   // Someone can still arrive here via back/forward from another page.

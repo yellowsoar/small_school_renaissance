@@ -9,6 +9,12 @@ export const DATA_URL = `${import.meta.env.BASE_URL}data/113-107.csv`;
  *  data sources (#207). */
 export const MAX_CSV_BYTES = 10 * 1024 * 1024;
 
+/** Maximum allowed length for the URL search query parameter `q`.
+ *  200 characters is generous for Chinese school/district searches
+ *  while preventing expensive filterSchools iterations on crafted
+ *  deep links and avoiding browser URL length limits (#210). */
+export const MAX_QUERY_LENGTH = 200;
+
 /** Base (observed) school year in the dataset, in 民國 years. */
 export const BASE_YEAR = 113;
 
