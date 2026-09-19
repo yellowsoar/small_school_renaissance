@@ -11,9 +11,15 @@
     <!-- style-src 'unsafe-inline' is required by Leaflet, which injects
          inline styles for tile/marker positioning at runtime. Remove if
          Leaflet ever supports a nonce-based approach. -->
+    <!-- frame-ancestors is intentionally omitted: per CSP Level 2 it is
+         only enforced via HTTP header, not <meta>. GitHub Pages does not
+         support custom response headers. To enable clickjacking protection,
+         deploy behind a CDN that supports custom headers (e.g. Cloudflare
+         Pages, Netlify) and set frame-ancestors 'none' + X-Frame-Options:
+         DENY there. See #221. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://tile.openstreetmap.org https://*.basemaps.cartocdn.com data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none';"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://tile.openstreetmap.org https://*.basemaps.cartocdn.com data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
     />
     <link rel="preconnect" href="https://tile.openstreetmap.org" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
