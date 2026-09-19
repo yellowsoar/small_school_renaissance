@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchWithRetry, validateCsvContent } from './fetch-utils.js';
+import { fetchWithRetry, validateCsvContent, verifyCsvIntegrity } from './fetch-utils.js';
 import {
   REQUIRED_HEADERS,
   FIRST_PROJECTION_YEAR,
@@ -272,14 +272,14 @@ describe('fetchWithRetry', () => {
 describe('validateCsvContent', () => {
   // Programmatically generate valid header and CSV from REQUIRED_HEADERS
   // so the fixture stays in sync with the expanded projection columns (#194).
-  const EXTRA_COLUMNS = ['鄉鎮市區', '地址', '電話', '網址', '地區屬性', '學生人數'];
+  const EXTRA_COLUMNS = ['\u9109\u93ae\u5e02\u5340', '\u5730\u5740', '\u96fb\u8a71', '\u7db2\u5740', '\u5730\u5340\u5c6c\u6027', '\u5b78\u751f\u4eba\u6578'];
   const ALL_COLUMNS = [...REQUIRED_HEADERS, ...EXTRA_COLUMNS];
   const VALID_HEADER = ALL_COLUMNS.join(',');
   const VALID_DATA_VALUES = [
-    '013501', '大同國小', '臺北市',  // 學校代碼, 學校名稱, 縣市名稱
-    '25.05', '121.52',               // 緯度, 經度
-    ...Array(LAST_PROJECTION_YEAR - FIRST_PROJECTION_YEAR + 1).fill('280'), // 推估 columns
-    '中山區', '中山北路', '02-1234', 'http://example.com', '一般地區', '300', // extras
+    '013501', '\u5927\u540c\u570b\u5c0f', '\u81fa\u5317\u5e02',  // \u5b78\u6821\u4ee3\u78bc, \u5b78\u6821\u540d\u7a31, \u7e23\u5e02\u540d\u7a31
+    '25.05', '121.52',               // \u7def\u5ea6, \u7d93\u5ea6
+    ...Array(LAST_PROJECTION_YEAR - FIRST_PROJECTION_YEAR + 1).fill('280'), // \u63a8\u4f30 columns
+    '\u4e2d\u5c71\u5340', '\u4e2d\u5c71\u5317\u8def', '02-1234', 'http://example.com', '\u4e00\u822c\u5730\u5340', '300', // extras
   ];
   const VALID_DATA_ROW = VALID_DATA_VALUES.join(',');
   // Use 100 data rows so the fixture also satisfies the MIN_DATA_ROWS
@@ -316,12 +316,12 @@ describe('validateCsvContent', () => {
   it('throws when required headers are missing', () => {
     const bad = 'col_a,col_b,col_c\n1,2,3';
     expect(() => validateCsvContent(bad)).toThrow('CSV header missing required columns');
-    expect(() => validateCsvContent(bad)).toThrow('學校代碼');
+    expect(() => validateCsvContent(bad)).toThrow('\u5b78\u6821\u4ee3\u78bc');
   });
 
   it('throws when only some required headers are present', () => {
-    const partial = '學校代碼,學校名稱,foo\n1,test,bar';
-    expect(() => validateCsvContent(partial)).toThrow('緯度');
+    const partial = '\u5b78\u6821\u4ee3\u78bc,\u5b78\u6821\u540d\u7a31,foo\n1,test,bar';
+    expect(() => validateCsvContent(partial)).toThrow('\u7def\u5ea6');
   });
 
   it('throws when CSV has a header but no data rows', () => {
@@ -358,9 +358,9 @@ describe('validateCsvContent', () => {
   /*  Column-level match regression tests (#67)                       */
   /* -------------------------------------------------------------- */
 
-  it('rejects substring collision: "大緯度計" does not satisfy "緯度" requirement', () => {
-    const csv = '學校代碼,學校名稱,縣市名稱,大緯度計,經度,推估114年人數\n1,test,city,25,121,100';
-    expect(() => validateCsvContent(csv)).toThrow('緯度');
+  it('rejects substring collision: "\u5927\u7def\u5ea6\u8a08" does not satisfy "\u7def\u5ea6" requirement', () => {
+    const csv = '\u5b78\u6821\u4ee3\u78bc,\u5b78\u6821\u540d\u7a31,\u7e23\u5e02\u540d\u7a31,\u5927\u7def\u5ea6\u8a08,\u7d93\u5ea6,\u63a8\u4f30114\u5e74\u4eba\u6578\n1,test,city,25,121,100';
+    expect(() => validateCsvContent(csv)).toThrow('\u7def\u5ea6');
   });
 
   it('accepts quoted CSV headers after unquoting', () => {
@@ -374,14 +374,14 @@ describe('validateCsvContent', () => {
   /*  Incomplete projection columns regression test (#194)             */
   /* -------------------------------------------------------------- */
 
-  it('throws when only 推估114年人數 is present but 推估115年人數 is missing (#194)', () => {
+  it('throws when only \u63a8\u4f30114\u5e74\u4eba\u6578 is present but \u63a8\u4f30115\u5e74\u4eba\u6578 is missing (#194)', () => {
     // Build a header with base columns + only the first projection column
     const incompleteHeader = [
-      '學校代碼', '學校名稱', '縣市名稱', '緯度', '經度', '推估114年人數',
+      '\u5b78\u6821\u4ee3\u78bc', '\u5b78\u6821\u540d\u7a31', '\u7e23\u5e02\u540d\u7a31', '\u7def\u5ea6', '\u7d93\u5ea6', '\u63a8\u4f30114\u5e74\u4eba\u6578',
     ].join(',');
-    const csv = `${incompleteHeader}\n013501,大同國小,臺北市,25.05,121.52,280`;
+    const csv = `${incompleteHeader}\n013501,\u5927\u540c\u570b\u5c0f,\u81fa\u5317\u5e02,25.05,121.52,280`;
     expect(() => validateCsvContent(csv)).toThrow('CSV header missing required columns');
-    expect(() => validateCsvContent(csv)).toThrow('推估115年人數');
+    expect(() => validateCsvContent(csv)).toThrow('\u63a8\u4f30115\u5e74\u4eba\u6578');
   });
 
   /* -------------------------------------------------------------- */
@@ -423,5 +423,45 @@ describe('validateCsvContent', () => {
     const rows = Array(100).fill(multilineRow);
     const csv = ['alpha,beta', ...rows].join('\n');
     expect(() => validateCsvContent(csv, ['alpha', 'beta'])).not.toThrow();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  CSV integrity verification (#222)                                   */
+/* ------------------------------------------------------------------ */
+
+describe('verifyCsvIntegrity', () => {
+  it('returns computed hash when it matches expectedHash', () => {
+    const body = 'col1,col2\na,b\n';
+    // Use the function itself with no expected hash to obtain the digest,
+    // then verify the matching path returns the same value.
+    const expected = verifyCsvIntegrity(body);
+
+    const result = verifyCsvIntegrity(body, expected);
+    expect(result).toBe(expected);
+  });
+
+  it('throws when computed hash does not match expectedHash', () => {
+    const body = 'col1,col2\na,b\n';
+    const wrongHash = 'deadbeef'.repeat(8); // 64-char hex, guaranteed mismatch
+
+    expect(() => verifyCsvIntegrity(body, wrongHash)).toThrow('integrity check failed');
+    expect(() => verifyCsvIntegrity(body, wrongHash)).toThrow(wrongHash);
+  });
+
+  it('returns computed hash without throwing when expectedHash is empty string', () => {
+    const body = 'some,csv,data\n1,2,3\n';
+    const result = verifyCsvIntegrity(body, '');
+
+    expect(typeof result).toBe('string');
+    expect(result).toHaveLength(64); // SHA-256 hex = 64 chars
+  });
+
+  it('returns computed hash without throwing when expectedHash is undefined', () => {
+    const body = 'some,csv,data\n1,2,3\n';
+    const result = verifyCsvIntegrity(body, undefined);
+
+    expect(typeof result).toBe('string');
+    expect(result).toHaveLength(64);
   });
 });
