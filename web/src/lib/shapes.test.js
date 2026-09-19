@@ -45,3 +45,26 @@ describe('star geometry', () => {
     }
   });
 });
+
+describe('triangle geometry', () => {
+  it('keeps every point inside the viewBox', () => {
+    for (const value of numbers(SHAPES.triangle.attributes.points)) {
+      expect(value, `triangle point ${value}`).toBeGreaterThanOrEqual(0);
+      expect(value, `triangle point ${value}`).toBeLessThanOrEqual(GLYPH_SIZE);
+    }
+  });
+
+  it('has its apex horizontally centered at HALF', () => {
+    const coords = numbers(SHAPES.triangle.attributes.points);
+    // First point pair is the apex (topX, topY)
+    expect(coords[0]).toBe(GLYPH_SIZE / 2);
+  });
+
+  it('has two base vertices at the same y coordinate (isosceles)', () => {
+    const coords = numbers(SHAPES.triangle.attributes.points);
+    // Points: [topX, topY, rightX, rightY, leftX, leftY]
+    const rightY = coords[3];
+    const leftY = coords[5];
+    expect(rightY).toBe(leftY);
+  });
+});
