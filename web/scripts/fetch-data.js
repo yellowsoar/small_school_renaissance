@@ -117,6 +117,26 @@ try {
 /*  Integrity verification (#222)                                       */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Auto-bootstrap the integrity hash for local development (#229).
+ *
+ * When integrity metadata is unavailable (empty hash, missing file, or
+ * corrupt JSON), CI always fails closed.  Outside CI the developer
+ * experience takes priority: compute the hash from the just-validated
+ * CSV and persist it so subsequent runs verify normally.
+ *
+ * @param {string} reason - human-readable explanation for the warning
+ */
+const autoBootstrap = async (reason) => {
+  console.warn(
+    `\u26a0\ufe0f  ${reason} \u2014 auto-bootstrapping for local development.\n` +
+    '   Commit a verified hash with --update-integrity for production use.',
+  );
+  const hash = verifyCsvIntegrity(body);
+  await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
+  console.log(`\u2705 data-integrity.json bootstrapped (sha256: ${hash})`);
+};
+
 if (updateIntegrity) {
   // Compute and persist the hash for the just-validated CSV.
   const hash = verifyCsvIntegrity(body);
@@ -124,35 +144,56 @@ if (updateIntegrity) {
   console.log(`\u2705 data-integrity.json updated (sha256: ${hash})`);
 } else if (!skipIntegrity) {
   // Verify against the stored hash — fail-closed by default (#227).
-  // Missing, empty, or unreadable integrity metadata aborts the build.
+  // Missing, empty, or unreadable integrity metadata aborts the build
+  // in CI; outside CI it auto-bootstraps for developer convenience (#229).
   // Use --skip-integrity to opt out during local development.
+  let needsBootstrap = false;
+  let bootstrapReason = '';
+
   try {
     const raw = await readFile(integrityPath, 'utf-8');
     const { sha256: expectedHash } = JSON.parse(raw);
 
     if (!expectedHash) {
-      console.error(
-        '\u274c data-integrity.json sha256 is empty. Run with --update-integrity after verifying the upstream data, or use --skip-integrity for local development.',
-      );
-      process.exit(1);
+      if (process.env.CI) {
+        console.error(
+          '\u274c data-integrity.json sha256 is empty. Run with --update-integrity after verifying the upstream data, or use --skip-integrity for local development.',
+        );
+        process.exit(1);
+      }
+      needsBootstrap = true;
+      bootstrapReason = 'data-integrity.json sha256 is empty';
+    } else {
+      verifyCsvIntegrity(body, expectedHash);
+      console.log('\u2705 CSV integrity verified (sha256 match)');
     }
-
-    verifyCsvIntegrity(body, expectedHash);
-    console.log('\u2705 CSV integrity verified (sha256 match)');
   } catch (err) {
     if (err.code === 'ENOENT') {
-      console.error(
-        '\u274c data-integrity.json not found. Run with --update-integrity to create it, or use --skip-integrity for local development.',
-      );
-      process.exit(1);
+      if (process.env.CI) {
+        console.error(
+          '\u274c data-integrity.json not found. Run with --update-integrity to create it, or use --skip-integrity for local development.',
+        );
+        process.exit(1);
+      }
+      needsBootstrap = true;
+      bootstrapReason = 'data-integrity.json not found';
     } else if (err.message.includes('integrity check failed')) {
+      // Real integrity mismatch: always fail-closed, all environments.
       console.error(`\u274c ${err.message}`);
       process.exit(1);
     } else {
       // Malformed JSON, unexpected read error, etc.
-      console.error(`\u274c could not read data-integrity.json: ${err.message}. Use --skip-integrity to bypass.`);
-      process.exit(1);
+      if (process.env.CI) {
+        console.error(`\u274c could not read data-integrity.json: ${err.message}. Use --skip-integrity to bypass.`);
+        process.exit(1);
+      }
+      needsBootstrap = true;
+      bootstrapReason = `could not read data-integrity.json (${err.message})`;
     }
+  }
+
+  if (needsBootstrap) {
+    await autoBootstrap(bootstrapReason);
   }
 }
 
