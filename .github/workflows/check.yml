@@ -47,12 +47,36 @@ jobs:
           PCT=$(jq -r '.total.lines.pct | floor' coverage/coverage-summary.json)
           echo "pct=$PCT" >> "$GITHUB_OUTPUT"
 
+      # Transition bootstrap: if data-integrity.json has no hash yet,
+      # seed it so the verify step has a baseline.  Once a verified hash
+      # is committed (via update-integrity.yml), this block is a no-op
+      # and CI always performs real SHA-256 verification.
+      #
+      # This is NOT the same as the old unconditional --update-integrity:
+      # that flag ran every build and silently overwrote the hash, so
+      # verification was permanently bypassed.  This block only fires
+      # during the one-time transition from an empty hash (#231).
+      - name: Bootstrap integrity hash (transition only)
+        run: |
+          HASH=$(jq -r '.sha256 // empty' data-integrity.json 2>/dev/null || echo '')
+          if [ -z "$HASH" ]; then
+            echo "::warning::data-integrity.json sha256 is empty — bootstrapping."
+            echo "::warning::Run the 'Update CSV Integrity Hash' workflow to commit a verified hash."
+            node scripts/fetch-data.js --force --update-integrity
+          else
+            echo "Committed hash present ($HASH), skipping bootstrap."
+          fi
+        env:
+          DATA_OWNER: ${{ vars.DATA_OWNER || 'g0v' }}
+          DATA_REPO: ${{ vars.DATA_REPO || 'small_school_renaissance' }}
+          DATA_BRANCH: ${{ vars.DATA_BRANCH || 'gh-pages' }}
+          DATA_PATH: ${{ vars.DATA_PATH || 'docs/113-107.csv' }}
+          DATA_SOURCE_URL: ${{ vars.DATA_SOURCE_URL || '' }}
+
       # Download the upstream CSV and verify its SHA-256 hash against the
-      # committed value in data-integrity.json (#231).  --force bypasses
-      # the "already present" early-exit so CI always downloads fresh.
-      # If the hash is empty or missing, fetch-data.js exits non-zero
-      # (fail-closed, #227).  To bootstrap or rotate the hash, run the
-      # "Update CSV Integrity Hash" workflow (update-integrity.yml).
+      # value in data-integrity.json (#231).  --force bypasses the
+      # "already present" early-exit so CI always downloads fresh.
+      # To rotate the hash, run the "Update CSV Integrity Hash" workflow.
       - name: Download and verify CSV integrity
         run: node scripts/fetch-data.js --force
         env:
