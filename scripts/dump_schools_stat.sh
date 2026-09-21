@@ -25,6 +25,7 @@ source "$(dirname "$0")/lib.sh"
 FAILED_DOWNLOADS=()
 
 main() {
+	local SUCCESS_COUNT=0
 	mkdir -p "./${NAME_DIR}"
 	for YEAR_CURRENT in $(seq ${YEAR_START} ${YEAR_END}); do
 		echo "⚙️ Working on ${YEAR_CURRENT}"
@@ -35,6 +36,7 @@ main() {
 				local downloaded_path="./${NAME_DIR}/${YEAR_CURRENT}${FILE_NAME}.${FILE_EXT}"
 				if atomic_download "${URL_TARGET}" "$downloaded_path"; then
 					echo "✅ File Downloaded: ${YEAR_CURRENT}${FILE_NAME}.${FILE_EXT}"
+					((SUCCESS_COUNT++)) || true
 				else
 					echo "⚠️  download or validation failed: ${URL_TARGET}" >&2
 					FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
@@ -52,6 +54,11 @@ main() {
 			echo "ℹ️  no convertible file found for ${YEAR_CURRENT}${FILE_NAME}"
 		fi
 	done
+
+	if [ "$SUCCESS_COUNT" -eq 0 ] && [ ${#FAILED_DOWNLOADS[@]} -eq 0 ]; then
+		echo "❌ No files were downloaded at all — upstream may be unreachable" >&2
+		exit 1
+	fi
 
 	if [ ${#FAILED_DOWNLOADS[@]} -gt 0 ]; then
 		echo "⚠️  ${#FAILED_DOWNLOADS[@]} download(s) failed:" >&2
