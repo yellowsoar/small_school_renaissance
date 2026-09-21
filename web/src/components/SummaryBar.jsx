@@ -1,8 +1,8 @@
-import { RISK_TIERS } from '../config/index.js';
+import { requireTier } from '../config/index.js';
 import { useDebouncedAnnounce } from '../hooks/useDebouncedAnnounce.js';
 
 const integer = new Intl.NumberFormat('zh-Hant-TW');
-const AT_RISK_MAX = RISK_TIERS.find((t) => t.id === 'high').max;
+const AT_RISK_MAX = requireTier('high').max;
 
 const handleToggleKeyDown = (callback) => (event) => {
   if (event.key === 'Enter' || event.key === ' ') {

@@ -125,10 +125,27 @@ export const RISK_TIERS = [
 ];
 
 /**
+ * Defensive lookup for a RISK_TIERS entry by id. Throws a descriptive
+ * error when the requested id does not exist, so config typos surface
+ * immediately at module load instead of producing an opaque TypeError
+ * on `.max` access (#239).
+ */
+export const requireTier = (id) => {
+  const tier = RISK_TIERS.find((t) => t.id === id);
+  if (!tier) {
+    throw new Error(
+      `RISK_TIERS 設定錯誤：找不到 id="${id}" 的分級。` +
+        `可用的 id：${RISK_TIERS.map((t) => t.id).join('、')}`,
+    );
+  }
+  return tier;
+};
+
+/**
  * Schools at or below this projected headcount feed the density heatmap.
  * Derived from RISK_TIERS to stay in sync with the watch-tier ceiling (#106).
  */
-export const HEATMAP_THRESHOLD = RISK_TIERS.find((t) => t.id === 'watch').max;
+export const HEATMAP_THRESHOLD = requireTier('watch').max;
 
 export const HEATMAP_OPTIONS = {
   radius: 45,

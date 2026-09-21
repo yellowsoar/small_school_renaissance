@@ -10,6 +10,7 @@ import {
   HEATMAP_THRESHOLD,
   HEATMAP_OPTIONS,
   METHODOLOGY,
+  requireTier,
 } from './index.js';
 
 describe('config', () => {
@@ -112,6 +113,35 @@ describe('config', () => {
       expect(tier.color).toMatch(/^#[0-9a-fA-F]{6}$/);
       expect(typeof tier.describe).toBe('function');
       expect(tier.describe()).toBeTruthy();
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // requireTier (#239)
+  // ---------------------------------------------------------------------------
+
+  it('requireTier returns the correct tier for every valid id', () => {
+    for (const tier of RISK_TIERS) {
+      const result = requireTier(tier.id);
+      expect(result).toBe(tier);
+      expect(result.id).toBe(tier.id);
+      expect(result.max).toBe(tier.max);
+    }
+  });
+
+  it('requireTier throws a descriptive error for an unknown id', () => {
+    expect(() => requireTier('nonexistent')).toThrow('RISK_TIERS 設定錯誤');
+    expect(() => requireTier('nonexistent')).toThrow('nonexistent');
+  });
+
+  it('requireTier error message lists all available ids', () => {
+    try {
+      requireTier('bogus');
+      expect.fail('should have thrown');
+    } catch (error) {
+      for (const tier of RISK_TIERS) {
+        expect(error.message).toContain(tier.id);
+      }
     }
   });
 
