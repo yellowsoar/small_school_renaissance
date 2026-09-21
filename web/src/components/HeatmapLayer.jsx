@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet.heat';
+import { createHeatLayer } from '../lib/heatmapAdapter.js';
 import { HEATMAP_OPTIONS, HEATMAP_THRESHOLD } from '../config/index.js';
 
 /**
@@ -30,7 +29,7 @@ export default function HeatmapLayer({ schools, year, visible }) {
   useEffect(() => {
     if (!visible) return undefined;
 
-    const heat = L.heatLayer([], HEATMAP_OPTIONS).addTo(map);
+    const heat = createHeatLayer(HEATMAP_OPTIONS).addTo(map);
     setLayer(heat);
 
     return () => {
