@@ -177,7 +177,7 @@ CSV
   [[ "$output" == *"All rows match header"* ]]
 }
 
-# ── convert_to_csv_if_needed ─────────────────────────────────────────────
+# ── convert_to_csv_if_needed ───────────────────────────────────────────
 
 @test "convert_to_csv_if_needed: returns 0 when CSV already exists" {
   echo "name,age" > "$NAME_DIR/existing.csv"
@@ -288,7 +288,7 @@ MOCK
   [ -f "$NAME_DIR/valid.csv" ]
 }
 
-# ── validate_not_html (#163) ─────────────────────────────────────
+# ── validate_not_html (#163) ───────────────────────────────────────
 
 @test "validate_not_html: detects HTML file and deletes it (#163)" {
   echo '<!DOCTYPE html><html><head><title>Maintenance</title></head><body>Under maintenance</body></html>' > "$TEST_TMPDIR/test.ods"
@@ -319,7 +319,7 @@ MOCK
   [ "$status" -eq 0 ]
 }
 
-# ── atomic_download (#195) ───────────────────────────────────────
+# ── atomic_download (#195) ─────────────────────────────────────────
 
 @test "atomic_download: successful download atomically renames to final path (#195)" {
   # Mock download_file to write valid CSV content to the temp path
@@ -369,4 +369,37 @@ MOCK
   local leftover
   leftover=$(find "$TEST_TMPDIR/$NAME_DIR" -name 'test_file.ods.*' | wc -l)
   [ "$leftover" -eq 0 ]
+}
+
+# ── check_file (#241) ──────────────────────────────────────────────
+
+@test "check_file: silent on HTTP server error exit code 8 (#241)" {
+  # Mock wget to exit 8 (server error / 404)
+  wget() { echo "HTTP/1.1 404 Not Found" >&2; return 8; }
+  export -f wget
+  run check_file "http://example.com/missing.csv"
+  [ "$status" -eq 8 ]
+  # No warning should be emitted for expected server errors
+  [[ "$output" != *"⚠️"* ]]
+}
+
+@test "check_file: warns on network error exit code 4 (#241)" {
+  # Mock wget to exit 4 (network failure)
+  wget() { echo "Network is unreachable" >&2; return 4; }
+  export -f wget
+  run check_file "http://example.com/test.csv"
+  [ "$status" -eq 4 ]
+  # Warning should be emitted for network errors
+  [[ "$output" == *"⚠️"* ]]
+  [[ "$output" == *"network error"* ]]
+  [[ "$output" == *"wget exit 4"* ]]
+}
+
+@test "check_file: silent on success exit code 0 (#241)" {
+  # Mock wget to exit 0 (file exists)
+  wget() { return 0; }
+  export -f wget
+  run check_file "http://example.com/exists.csv"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"⚠️"* ]]
 }
