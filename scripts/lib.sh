@@ -118,11 +118,20 @@ convert_to_csv_if_needed() {
 				&& remove_rows_mismatch_header "$csv_path"; then
 				echo "✅ File converted to ${csv_path}"
 				rm -rf "$soffice_sandbox"
-				# Verify converted CSV has data rows (not just header) (#141)
-				local line_count
-				line_count=$(wc -l < "$csv_path")
-				if [ "$line_count" -lt 2 ]; then
-					echo "⚠️ Converted CSV from ${ext} is empty or has no data rows: ${csv_path} (${line_count} lines), trying next format..." >&2
+				# Verify converted CSV has data rows (not just header) (#141, #262)
+				# Uses Python csv.reader for RFC 4180 logical record count,
+				# consistent with remove_rows_mismatch_header.
+				local record_count
+				record_count=$(python3 -c '
+import csv, sys
+with open(sys.argv[1], newline="") as f:
+    reader = csv.reader(f)
+    try: next(reader)  # skip header
+    except StopIteration: print(0); sys.exit(0)
+    print(sum(1 for _ in reader))
+' "$csv_path")
+				if [ "$record_count" -lt 1 ]; then
+					echo "⚠️ Converted CSV from ${ext} has header but no data rows: ${csv_path}, trying next format..." >&2
 					rm -f "$csv_path"
 					continue
 				fi
