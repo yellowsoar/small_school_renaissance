@@ -131,7 +131,7 @@ with open(sys.argv[1], newline="") as f:
     print(sum(1 for _ in reader))
 ' "$csv_path")
 				if [ "$record_count" -lt 1 ]; then
-					echo "⚠️ Converted CSV from ${ext} has header but no data rows: ${csv_path}, trying next format..." >&2
+					echo "⚠️ Converted CSV from ${ext} is empty or has no data rows: ${csv_path}, trying next format..." >&2
 					rm -f "$csv_path"
 					continue
 				fi
