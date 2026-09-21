@@ -14,12 +14,102 @@ import { classifyResponse, withRetry, DEFAULT_RETRIES } from '../src/lib/retry-c
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
+ * Maximum response body size (bytes) that fetchWithRetry will accept.
+ * Aligned with the browser-side MAX_CSV_BYTES in fetchWithTimeout (#207).
+ */
+const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
  * Minimum number of data rows (excluding header) required for the CSV to
  * pass build-time validation.  The full dataset contains ~2,600 schools;
  * 100 is a conservative floor (~4%) that catches truncated downloads
  * without false-positiving on legitimate future dataset shrinkage.
  */
 const MIN_DATA_ROWS = 100;
+
+/* ------------------------------------------------------------------ */
+/*  Size-limited body reader                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Read the full response body as text, enforcing a byte-size ceiling.
+ *
+ * When `maxBytes` is provided:
+ * 1. Reject early if the Content-Length header exceeds the limit.
+ * 2. Stream the body via `response.body.getReader()`, accumulating
+ *    chunks and aborting when the cumulative size exceeds `maxBytes`.
+ * 3. Fall back to `response.text()` + post-check when ReadableStream
+ *    body is unavailable (e.g. mocked responses in tests).
+ *
+ * When `maxBytes` is omitted or undefined, delegates to `response.text()`
+ * with zero overhead (existing behavior).
+ *
+ * @param {Response} response  Fetch API Response (after classifyResponse)
+ * @param {number} [maxBytes]  Optional byte-size ceiling
+ * @returns {Promise<string>}  The response body as text
+ * @throws {Error}             With `name: 'SizeLimitError'` and
+ *                             `retriable: false` when the limit is exceeded
+ */
+async function readBodyWithLimit(response, maxBytes) {
+  // No limit requested — fast path, zero overhead.
+  if (maxBytes == null) {
+    return response.text();
+  }
+
+  // Early rejection via Content-Length header when available.
+  const contentLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw Object.assign(
+      new Error(
+        `Response size ${contentLength} bytes exceeds limit of ${maxBytes} bytes`,
+      ),
+      { name: 'SizeLimitError', retriable: false },
+    );
+  }
+
+  // Streaming read with cumulative size check.
+  if (response.body) {
+    const reader = response.body.getReader();
+    const chunks = [];
+    let received = 0;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      received += value.byteLength;
+      if (received > maxBytes) {
+        reader.cancel();
+        throw Object.assign(
+          new Error(
+            `Response size exceeds limit of ${maxBytes} bytes (received ${received}+ bytes)`,
+          ),
+          { name: 'SizeLimitError', retriable: false },
+        );
+      }
+      chunks.push(value);
+    }
+
+    const decoder = new TextDecoder();
+    return (
+      chunks.map((c) => decoder.decode(c, { stream: true })).join('') +
+      decoder.decode()
+    );
+  }
+
+  // Fallback: response.body is null (e.g. mocked Response in tests).
+  const text = await response.text();
+  const byteLength = new TextEncoder().encode(text).byteLength;
+  if (byteLength > maxBytes) {
+    throw Object.assign(
+      new Error(
+        `Response size ${byteLength} bytes exceeds limit of ${maxBytes} bytes`,
+      ),
+      { name: 'SizeLimitError', retriable: false },
+    );
+  }
+  return text;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Fetch with retry                                                    */
@@ -32,22 +122,25 @@ const MIN_DATA_ROWS = 100;
  * is covered by the retry loop.  If the body read fails (e.g. stream
  * error or timeout), the request is retried automatically (#211).
  *
+ * When `maxBytes` is provided (defaults to 10 MB), the response body
+ * size is enforced via streaming read with early abort (#259).
+ *
  * @param {string} url - URL to fetch
- * @param {{ retries?: number, timeout?: number }} options
+ * @param {{ retries?: number, timeout?: number, maxBytes?: number }} options
  * @returns {Promise<{ body: string, contentType: string }>} The response
  *   body text and Content-Type header value (empty string when absent)
  * @throws {Error|DOMException} After all retries are exhausted
  */
 export async function fetchWithRetry(
   url,
-  { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS } = {},
+  { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS, maxBytes = MAX_BODY_BYTES } = {},
 ) {
   return withRetry(
     async () => {
       const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
       classifyResponse(res);
       const contentType = res.headers.get('content-type') ?? '';
-      const body = await res.text();
+      const body = await readBodyWithLimit(res, maxBytes);
       return { body, contentType };
     },
     {
