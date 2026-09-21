@@ -178,13 +178,13 @@ export const parseSchools = (csvText) => {
     }
   }
 
-  // --- Duplicate ID disambiguation (#45) -----------------------------------
+  // --- Duplicate ID disambiguation (#45, #252) -----------------------------
   const idCounts = new Map();
   for (const school of schools) {
     const count = (idCounts.get(school.id) ?? 0) + 1;
     idCounts.set(school.id, count);
     if (count > 1) {
-      school.id = `${school.id}#${count}`;
+      school.id = `${school.id}::dup${count}`;
     }
   }
 
