@@ -267,6 +267,113 @@ describe('fetchWithRetry', () => {
     expect(res).toEqual({ body: 'col1,col2\na,b', contentType: '' });
     expect(mockRes.text).toHaveBeenCalledTimes(1);
   });
+
+  /* -------------------------------------------------------------- */
+  /*  Response body size limit (#259)                                  */
+  /* -------------------------------------------------------------- */
+
+  it('rejects early via Content-Length when response exceeds maxBytes', async () => {
+    const largeRes = {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/csv', 'content-length': '20000' }),
+      text: vi.fn().mockResolvedValue('should-not-be-read'),
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue(largeRes);
+
+    const err = await fetchWithRetry(url, { retries: 0, timeout: 1000, maxBytes: 100 })
+      .catch((e) => e);
+
+    expect(err.name).toBe('SizeLimitError');
+    expect(err.message).toMatch(/20000 bytes exceeds limit of 100 bytes/);
+    // text() should NOT have been called — early rejection via header.
+    expect(largeRes.text).not.toHaveBeenCalled();
+  });
+
+  it('rejects via fallback post-check when body exceeds maxBytes (response.body is null)', async () => {
+    const bigBody = 'x'.repeat(200);
+    const mockRes = {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/csv' }),
+      text: vi.fn().mockResolvedValue(bigBody),
+      body: null,
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
+
+    const err = await fetchWithRetry(url, { retries: 0, timeout: 1000, maxBytes: 100 })
+      .catch((e) => e);
+
+    expect(err.name).toBe('SizeLimitError');
+    expect(err.message).toMatch(/200 bytes exceeds limit of 100 bytes/);
+    // text() WAS called because fallback path reads first, checks after.
+    expect(mockRes.text).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts response within maxBytes limit', async () => {
+    const smallBody = 'col1,col2\na,b';
+    const mockRes = {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/csv' }),
+      text: vi.fn().mockResolvedValue(smallBody),
+      body: null,
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
+
+    const res = await fetchWithRetry(url, { retries: 0, timeout: 1000, maxBytes: 10000 });
+
+    expect(res).toEqual({ body: smallBody, contentType: 'text/csv' });
+  });
+
+  it('does not retry SizeLimitError (retriable: false)', async () => {
+    const largeRes = {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/csv', 'content-length': '20000' }),
+      text: vi.fn().mockResolvedValue('data'),
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue(largeRes);
+
+    await expect(
+      fetchWithRetry(url, { retries: 2, timeout: 1000, maxBytes: 100 }),
+    ).rejects.toThrow('exceeds limit');
+    // Only 1 call — SizeLimitError has retriable: false, no retries.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('uses default maxBytes (10 MB) when not specified', async () => {
+    // Normal-sized response passes with the default 10 MB ceiling.
+    const ok = okResponse('small-csv', 'text/csv');
+    globalThis.fetch = vi.fn().mockResolvedValue(ok);
+
+    const res = await fetchWithRetry(url, { retries: 0, timeout: 1000 });
+
+    expect(res).toEqual({ body: 'small-csv', contentType: 'text/csv' });
+  });
+
+  it('enforces streaming size limit via response.body.getReader()', async () => {
+    const encoder = new TextEncoder();
+    const bigChunk = encoder.encode('x'.repeat(200));
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(bigChunk);
+        controller.close();
+      },
+    });
+    const mockRes = new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'text/csv' },
+    });
+    globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
+
+    const err = await fetchWithRetry(url, { retries: 0, timeout: 1000, maxBytes: 100 })
+      .catch((e) => e);
+
+    expect(err.name).toBe('SizeLimitError');
+    expect(err.message).toMatch(/exceeds limit of 100 bytes/);
+  });
 });
 
 describe('validateCsvContent', () => {
