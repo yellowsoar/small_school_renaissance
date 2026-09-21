@@ -125,6 +125,7 @@ convert_to_csv_if_needed() {
 				return 0
 			else
 				echo "❌ Conversion failed for ${src} (exit code: $?)" >&2
+				rm -f "$csv_path"          # Remove residual CSV to prevent silent reuse (#260)
 				rm -rf "$soffice_sandbox"
 				return 2
 			fi
