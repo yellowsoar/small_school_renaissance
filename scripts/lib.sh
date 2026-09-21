@@ -153,15 +153,30 @@ validate_not_html() {
 # Check if a remote URL exists (HTTP HEAD request).
 # Limits redirects to 3 hops to avoid following login/WAF redirects (#163).
 # Requires WGET_TIMEOUT to be set by the caller.
+#
+# Distinguishes HTTP server errors (exit 8) from network-level failures
+# (#241).  Server errors (404 etc.) are expected and stay silent.
+# Network failures (DNS, SSL, timeout — exit != 8) emit a diagnostic
+# warning to stderr so operators can tell "file not found" apart from
+# "server unreachable".
 # Usage: check_file <url>
 check_file() {
-	wget \
+	local url="$1"
+	local stderr_output
+	stderr_output=$(wget \
 		--spider \
 		--max-redirect=3 \
 		${WGET_TIMEOUT} \
-		"${1}" \
-		>/dev/null \
-		2>&1
+		"${url}" \
+		2>&1 >/dev/null) || {
+		local rc=$?
+		# Exit code 8 = server error (HTTP 4xx/5xx) — expected for
+		# missing files; stay silent to match pre-#241 behavior.
+		if [ "$rc" -ne 8 ]; then
+			echo "⚠️  check_file: network error for ${url} (wget exit ${rc}): ${stderr_output}" >&2
+		fi
+		return "$rc"
+	}
 }
 
 # Download a file from a remote URL.
