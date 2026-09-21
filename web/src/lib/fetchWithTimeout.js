@@ -94,26 +94,21 @@ async function readBodyWithLimit(response, maxBytes) {
     const chunks = [];
     let received = 0;
 
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-        received += value.byteLength;
-        if (received > maxBytes) {
-          reader.cancel();
-          throw Object.assign(
-            new Error(
-              `Response size exceeds limit of ${maxBytes} bytes (received ${received}+ bytes)`,
-            ),
-            { name: 'SizeLimitError', retriable: false },
-          );
-        }
-        chunks.push(value);
+      received += value.byteLength;
+      if (received > maxBytes) {
+        reader.cancel();
+        throw Object.assign(
+          new Error(
+            `Response size exceeds limit of ${maxBytes} bytes (received ${received}+ bytes)`,
+          ),
+          { name: 'SizeLimitError', retriable: false },
+        );
       }
-    } catch (err) {
-      if (err.name === 'SizeLimitError' || err.name === 'AbortError') throw err;
-      throw err;
+      chunks.push(value);
     }
 
     const decoder = new TextDecoder();
