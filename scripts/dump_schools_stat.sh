@@ -16,7 +16,7 @@ YEAR_END=$(( $(date +%Y) - 1911 ))
 WAIT_MIN=3
 WAIT_MAX=5
 
-WGET_TIMEOUT="--connect-timeout=10 --read-timeout=30"
+WGET_TIMEOUT=(--connect-timeout=10 --read-timeout=30)
 
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"

@@ -152,7 +152,7 @@ validate_not_html() {
 
 # Check if a remote URL exists (HTTP HEAD request).
 # Limits redirects to 3 hops to avoid following login/WAF redirects (#163).
-# Requires WGET_TIMEOUT to be set by the caller.
+# Requires WGET_TIMEOUT to be set by the caller (as an array).
 #
 # Distinguishes HTTP server errors (exit 8) from network-level failures
 # (#241).  Server errors (404 etc.) are expected and stay silent.
@@ -166,7 +166,7 @@ check_file() {
 	stderr_output=$(wget \
 		--spider \
 		--max-redirect=3 \
-		${WGET_TIMEOUT} \
+		"${WGET_TIMEOUT[@]}" \
 		"${url}" \
 		2>&1 >/dev/null) || {
 		local rc=$?
@@ -181,7 +181,7 @@ check_file() {
 
 # Download a file from a remote URL.
 # Limits redirects to 3 hops to avoid following login/WAF redirects (#163).
-# Requires WGET_TIMEOUT to be set by the caller.
+# Requires WGET_TIMEOUT to be set by the caller (as an array).
 # Usage: download_file <url> [output_path]
 #   With 1 arg:  wget -N -P "./${NAME_DIR}" (timestamp-checked, directory mode)
 #   With 2 args: wget -O "$2" (explicit output path mode)
@@ -192,7 +192,7 @@ download_file() {
 			-O "${2}" \
 			--quiet \
 			--max-redirect=3 \
-			${WGET_TIMEOUT} \
+			"${WGET_TIMEOUT[@]}" \
 			"${url}"
 	else
 		wget \
@@ -200,7 +200,7 @@ download_file() {
 			-P "./${NAME_DIR}" \
 			--quiet \
 			--max-redirect=3 \
-			${WGET_TIMEOUT} \
+			"${WGET_TIMEOUT[@]}" \
 			"${url}"
 	fi
 }
