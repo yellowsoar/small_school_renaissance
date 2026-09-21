@@ -29,7 +29,7 @@ export default defineConfig(({ command, mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            leaflet: ['leaflet', 'leaflet.heat', 'react-leaflet'],
+            leaflet: ['leaflet', '@linkurious/leaflet-heat', 'react-leaflet'],
           },
         },
       },
