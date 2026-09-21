@@ -232,6 +232,7 @@ export const parseSchools = (csvText) => {
 /** Applies the control-panel filters. Kept pure so it is trivially memoizable. */
 export const filterSchools = (schools, { year, counties, tiers, search }) => {
   const needle = search.trim().toLowerCase();
+  const tokens = needle ? needle.split(/\s+/).filter(Boolean) : [];
 
   return schools.filter((school) => {
     if (counties.size > 0 && !counties.has(school.county)) return false;
@@ -241,9 +242,7 @@ export const filterSchools = (schools, { year, counties, tiers, search }) => {
       if (!tier || !tiers.has(tier.id)) return false;
     }
 
-    if (needle) {
-      // Split on whitespace for multi-token AND search (#90).
-      const tokens = needle.split(/\s+/).filter(Boolean);
+    if (tokens.length > 0) {
       const fields = [school.name, school.county, school.town].map((f) =>
         f.toLowerCase(),
       );
