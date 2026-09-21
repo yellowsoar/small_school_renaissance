@@ -238,3 +238,63 @@ atomic_download() {
 		return "$rc"
 	fi
 }
+
+# Run the download-and-convert pipeline for all years and file formats.
+# Accepts two callback function names to customise URL and filename
+# construction — the only parts that differ between data sources (#263).
+#
+# Requires these variables to be set by the caller:
+#   NAME_DIR, NAME_EXT, YEAR_START, YEAR_END, WAIT_MIN, WAIT_MAX, WGET_TIMEOUT
+#
+# Usage: run_download_pipeline <url_builder_func> <name_builder_func>
+#   url_builder_func:  called as "$func" "$YEAR" "$EXT"  -> prints download URL
+#   name_builder_func: called as "$func" "$YEAR"         -> prints base filename (no extension)
+run_download_pipeline() {
+	local url_builder="$1"
+	local name_builder="$2"
+	local -a FAILED_DOWNLOADS=()
+	local SUCCESS_COUNT=0
+
+	mkdir -p "./${NAME_DIR}"
+	for YEAR_CURRENT in $(seq ${YEAR_START} ${YEAR_END}); do
+		echo "⚙️ Working on ${YEAR_CURRENT}"
+		local base_name
+		base_name=$("$name_builder" "$YEAR_CURRENT")
+		for FILE_EXT in "${NAME_EXT[@]}"; do
+			local URL_TARGET
+			URL_TARGET=$("$url_builder" "$YEAR_CURRENT" "$FILE_EXT")
+			echo "⚙️ Checking URL: ${URL_TARGET}"
+			if check_file "${URL_TARGET}"; then
+				local downloaded_path="./${NAME_DIR}/${base_name}.${FILE_EXT}"
+				if atomic_download "${URL_TARGET}" "$downloaded_path"; then
+					echo "✅ File Downloaded: ${base_name}.${FILE_EXT}"
+					((SUCCESS_COUNT++)) || true
+				else
+					echo "⚠️  download or validation failed: ${URL_TARGET}" >&2
+					FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
+				fi
+			fi
+			sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
+		done
+
+		local rc=0
+		convert_to_csv_if_needed "${base_name}" || rc=$?
+		if [ "$rc" -eq 2 ]; then
+			echo "⚠️  conversion failed for ${base_name}" >&2
+			FAILED_DOWNLOADS+=("${YEAR_CURRENT}/csv-conversion")
+		elif [ "$rc" -eq 1 ]; then
+			echo "ℹ️  no convertible file found for ${base_name}"
+		fi
+	done
+
+	if [ "$SUCCESS_COUNT" -eq 0 ] && [ ${#FAILED_DOWNLOADS[@]} -eq 0 ]; then
+		echo "❌ No files were downloaded at all — upstream may be unreachable" >&2
+		exit 1
+	fi
+
+	if [ ${#FAILED_DOWNLOADS[@]} -gt 0 ]; then
+		echo "⚠️  ${#FAILED_DOWNLOADS[@]} download(s) failed:" >&2
+		printf '  - %s\n' "${FAILED_DOWNLOADS[@]}" >&2
+		exit 1
+	fi
+}
