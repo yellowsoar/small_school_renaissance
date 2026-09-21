@@ -13,10 +13,8 @@ const mocks = vi.hoisted(() => {
   return { heatLayer: vi.fn(() => mockLayer), mockLayer };
 });
 
-vi.mock('leaflet.heat', () => ({}));
-
-vi.mock('leaflet', () => ({
-  default: { heatLayer: mocks.heatLayer },
+vi.mock('@linkurious/leaflet-heat', () => ({
+  heatLayer: mocks.heatLayer,
 }));
 
 /* ------------------------------------------------------------------ */
@@ -30,7 +28,7 @@ const { createHeatLayer } = await import('./heatmapAdapter.js');
 /* ------------------------------------------------------------------ */
 
 describe('heatmapAdapter', () => {
-  it('delegates to L.heatLayer with the given options', () => {
+  it('delegates to heatLayer with the given options', () => {
     const opts = { radius: 45, blur: 22 };
     createHeatLayer(opts);
 
