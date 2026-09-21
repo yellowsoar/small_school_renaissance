@@ -407,6 +407,19 @@ a {
   accent-color: var(--accent);
 }
 
+.panel__basemap {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.panel__sublabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  padding: 0;
+}
+
 /* ---------- legend ---------- */
 
 .legend__title {
