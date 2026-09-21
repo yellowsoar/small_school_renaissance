@@ -1,13 +1,13 @@
 import Papa from 'papaparse';
-import { PROJECTION_YEARS, RISK_TIERS, TW_BOUNDS } from '../config/index.js';
+import { PROJECTION_YEARS, RISK_TIERS, TW_BOUNDS, requireTier } from '../config/index.js';
 import { REQUIRED_HEADERS } from './csv-schema.js';
 
 /**
  * Thresholds derived from RISK_TIERS so summarize() and the tier system
  * stay in sync when tier boundaries are adjusted (#106).
  */
-const CLOSED_MAX = RISK_TIERS.find((t) => t.id === 'closed').max;
-const AT_RISK_MAX = RISK_TIERS.find((t) => t.id === 'high').max;
+const CLOSED_MAX = requireTier('closed').max;
+const AT_RISK_MAX = requireTier('high').max;
 
 /**
  * Maximum tolerable ratio of dropped rows (invalid coordinates) before
