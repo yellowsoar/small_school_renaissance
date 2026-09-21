@@ -229,4 +229,41 @@ describe('SchoolMarkers', () => {
 
     expect(marker.getAttribute('aria-label')).toBe('\u6e2c\u8a66\u570b\u5c0f\uff08\u9ad8\u98a8\u96aa\uff09');
   });
+
+  it('skips redundant setAttribute calls on re-render when nothing changed', () => {
+    const school = makeSchool();
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(tier);
+
+    const { rerender } = render(
+      <SchoolMarkers schools={[school]} year={130} visible={true} />,
+    );
+
+    const marker = screen.getByTestId('marker');
+    const spy = vi.spyOn(marker, 'setAttribute');
+
+    // Re-render with identical props — effect should early-return
+    rerender(<SchoolMarkers schools={[school]} year={130} visible={true} />);
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('keyboard listener survives across re-renders without DOM swap', () => {
+    const school = makeSchool();
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(tier);
+
+    const { rerender } = render(
+      <SchoolMarkers schools={[school]} year={130} visible={true} />,
+    );
+
+    // Re-render with same props — no DOM swap, listener must persist
+    rerender(<SchoolMarkers schools={[school]} year={130} visible={true} />);
+
+    const marker = screen.getByTestId('marker');
+    fireEvent.keyDown(marker, { key: 'Enter' });
+
+    expect(mocks.openPopup).toHaveBeenCalledTimes(1);
+  });
 });
