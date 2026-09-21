@@ -14,16 +14,14 @@ const mocks = vi.hoisted(() => {
   };
   mockLayer.addTo = vi.fn(() => mockLayer);
   return {
-    heatLayer: vi.fn(() => mockLayer),
+    createHeatLayer: vi.fn(() => mockLayer),
     mockLayer,
     mockMap: {},
   };
 });
 
-vi.mock('leaflet.heat', () => ({}));
-
-vi.mock('leaflet', () => ({
-  default: { heatLayer: mocks.heatLayer },
+vi.mock('../lib/heatmapAdapter.js', () => ({
+  createHeatLayer: mocks.createHeatLayer,
 }));
 
 vi.mock('react-leaflet', () => ({
@@ -42,14 +40,14 @@ describe('HeatmapLayer', () => {
   it('creates a heat layer and adds it to the map when visible', () => {
     render(<HeatmapLayer schools={[]} year={120} visible={true} />);
 
-    expect(mocks.heatLayer).toHaveBeenCalledWith([], HEATMAP_OPTIONS);
+    expect(mocks.createHeatLayer).toHaveBeenCalledWith(HEATMAP_OPTIONS);
     expect(mocks.mockLayer.addTo).toHaveBeenCalledWith(mocks.mockMap);
   });
 
   it('does not create a heat layer when not visible', () => {
     render(<HeatmapLayer schools={[]} year={120} visible={false} />);
 
-    expect(mocks.heatLayer).not.toHaveBeenCalled();
+    expect(mocks.createHeatLayer).not.toHaveBeenCalled();
   });
 
   it('removes the layer when visibility changes to false', () => {
