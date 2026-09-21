@@ -13,39 +13,22 @@ const NONE = [];
  * Wrapper that re-applies keyboard a11y attributes after Leaflet's
  * setIcon() replaces the DOM element.
  *
- * Uses a ref to track the current DOM element and ariaLabel, skipping
- * redundant DOM writes when neither has changed (#243).
+ * Coupling assumption: iconFor(tier) caches by tier.id, and ariaLabel
+ * contains tier.label. Every setIcon() DOM swap (tier change) therefore
+ * produces a new ariaLabel, so [ariaLabel] as the dependency array is
+ * sufficient to catch all DOM replacements. If icon derivation is ever
+ * decoupled from ariaLabel, revert to a deps-free effect or
+ * MutationObserver (#255).
  */
 function AccessibleMarker({ position, icon, title, alt, ariaLabel, children }) {
   const markerRef = useRef(null);
-  const setupRef = useRef(null);
 
-  // Detect setIcon() DOM swaps and ariaLabel changes — still runs every
-  // render, but skips DOM work when nothing changed.
   useEffect(() => {
     const marker = markerRef.current;
     if (!marker) return;
     const el = marker.getElement();
     if (!el) return;
 
-    const prev = setupRef.current;
-
-    // Same element, same ariaLabel — nothing to do
-    if (prev && prev.el === el && prev.ariaLabel === ariaLabel) return;
-
-    // Element changed (setIcon DOM swap) — tear down old listener
-    if (prev && prev.el !== el && prev.handler) {
-      prev.el.removeEventListener('keydown', prev.handler);
-    }
-
-    // Only ariaLabel changed on the same element — update attribute only
-    if (prev && prev.el === el) {
-      el.setAttribute('aria-label', ariaLabel);
-      setupRef.current = { ...prev, ariaLabel };
-      return;
-    }
-
-    // Full setup: new element or first mount
     el.setAttribute('tabindex', '0');
     el.setAttribute('role', 'button');
     el.setAttribute('aria-label', ariaLabel);
@@ -58,18 +41,10 @@ function AccessibleMarker({ position, icon, title, alt, ariaLabel, children }) {
     };
     el.addEventListener('keydown', onKeydown);
 
-    setupRef.current = { el, handler: onKeydown, ariaLabel };
-  }); // no deps — runs after every render to catch setIcon() DOM swaps
-
-  // Unmount-only cleanup
-  useEffect(() => {
     return () => {
-      const prev = setupRef.current;
-      if (prev && prev.el && prev.handler) {
-        prev.el.removeEventListener('keydown', prev.handler);
-      }
+      el.removeEventListener('keydown', onKeydown);
     };
-  }, []);
+  }, [ariaLabel]); // re-runs on tier change, which also triggers setIcon() DOM swap
 
   return (
     <Marker ref={markerRef} position={position} icon={icon} title={title} alt={alt}>
