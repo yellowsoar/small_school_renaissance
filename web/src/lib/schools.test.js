@@ -195,8 +195,8 @@ describe('parseSchools', () => {
 
     expect(schools).toHaveLength(3);
     expect(schools[0].id).toBe('24.9,121.5');
-    expect(schools[1].id).toBe('24.9,121.5#2');
-    expect(schools[2].id).toBe('24.9,121.5#3');
+    expect(schools[1].id).toBe('24.9,121.5::dup2');
+    expect(schools[2].id).toBe('24.9,121.5::dup3');
   });
 
   it('does not add a suffix when only one school uses a fallback ID', () => {
@@ -205,7 +205,7 @@ describe('parseSchools', () => {
     );
 
     expect(schools[0].id).toBe('24.87235152,121.40522708');
-    expect(schools[0].id).not.toContain('#');
+    expect(schools[0].id).not.toContain('::dup');
   });
 
   it('disambiguates explicit duplicate school codes the same way', () => {
@@ -217,7 +217,7 @@ describe('parseSchools', () => {
     );
 
     expect(schools[0].id).toBe('DUP001');
-    expect(schools[1].id).toBe('DUP001#2');
+    expect(schools[1].id).toBe('DUP001::dup2');
   });
 
   it('does not affect summarize() totals after disambiguation', () => {
