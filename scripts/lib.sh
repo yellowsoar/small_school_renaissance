@@ -77,13 +77,15 @@ print(removed)
 }
 
 # Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
+# Tries all available formats in priority order; stops at the first
+# successful conversion.  Previously stopped at the first failure (#261).
 # Skips if CSV already exists. soffice supports all three formats.
 # Requires NAME_DIR to be set by the caller.
 #
 # Return codes (#85):
 #   0 = success (CSV already exists or conversion completed with data)
 #   1 = no convertible spreadsheet source found (expected, not an error)
-#   2 = soffice conversion, row-cleanup, or empty-result failed (abnormal)
+#   2 = all available formats failed conversion (abnormal)
 #
 # Security: soffice runs with --headless, --norestore and an isolated
 # UserInstallation directory so that no embedded macros can execute and
@@ -94,10 +96,12 @@ convert_to_csv_if_needed() {
 
 	[ -f "$csv_path" ] && return 0
 
+	local tried=0
 	local ext src
 	for ext in ods xlsx xls; do
 		src="./${NAME_DIR}/${base}.${ext}"
 		if [ -f "$src" ]; then
+			tried=1
 			# Sandboxed profile: empty UserInstallation ensures zero
 			# trusted macro certificates and no user-level config.
 			local soffice_sandbox
@@ -118,20 +122,21 @@ convert_to_csv_if_needed() {
 				local line_count
 				line_count=$(wc -l < "$csv_path")
 				if [ "$line_count" -lt 2 ]; then
-					echo "❌ Converted CSV is empty or has no data rows: ${csv_path} (${line_count} lines)" >&2
+					echo "⚠️ Converted CSV from ${ext} is empty or has no data rows: ${csv_path} (${line_count} lines), trying next format..." >&2
 					rm -f "$csv_path"
-					return 2
+					continue
 				fi
 				return 0
 			else
-				echo "❌ Conversion failed for ${src} (exit code: $?)" >&2
+				echo "⚠️ Conversion from ${ext} failed for ${src} (exit code: $?), trying next format..." >&2
 				rm -f "$csv_path"          # Remove residual CSV to prevent silent reuse (#260)
 				rm -rf "$soffice_sandbox"
-				return 2
+				continue
 			fi
 		fi
 	done
-	return 1
+	[ "$tried" -eq 0 ] && return 1  # No convertible spreadsheet source found
+	return 2  # All available formats failed
 }
 
 # Validate that a downloaded file is not HTML (e.g. a redirected
