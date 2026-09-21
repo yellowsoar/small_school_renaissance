@@ -59,13 +59,16 @@ jobs:
 
       - name: Detect drift
         id: drift
+        env:
+          OLD_HASH: ${{ steps.old.outputs.hash }}
+          NEW_HASH: ${{ steps.new.outputs.hash }}
         run: |
-          if [ "${{ steps.old.outputs.hash }}" = "${{ steps.new.outputs.hash }}" ]; then
+          if [ "$OLD_HASH" = "$NEW_HASH" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Hash unchanged: ${{ steps.new.outputs.hash }}"
+            echo "Hash unchanged: $NEW_HASH"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Hash changed: ${{ steps.old.outputs.hash }} -> ${{ steps.new.outputs.hash }}"
+            echo "Hash changed: $OLD_HASH -> $NEW_HASH"
           fi
 
       # --- Update mode: commit the new hash ---
@@ -73,6 +76,9 @@ jobs:
         if: >
           steps.drift.outputs.changed == 'true' &&
           (github.event_name == 'workflow_dispatch' && inputs.mode == 'update')
+        env:
+          OLD_HASH: ${{ steps.old.outputs.hash }}
+          NEW_HASH: ${{ steps.new.outputs.hash }}
         working-directory: .
         run: |
           git config user.name "github-actions[bot]"
@@ -80,14 +86,16 @@ jobs:
           git add web/data-integrity.json
           git commit -m "chore: update CSV integrity hash
 
-          Old: ${{ steps.old.outputs.hash }}
-          New: ${{ steps.new.outputs.hash }}"
+          Old: ${OLD_HASH}
+          New: ${NEW_HASH}"
           git push
 
       - name: Report update result
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'update'
+        env:
+          CHANGED: ${{ steps.drift.outputs.changed }}
         run: |
-          if [ "${{ steps.drift.outputs.changed }}" = 'true' ]; then
+          if [ "$CHANGED" = 'true' ]; then
             echo "::notice::data-integrity.json updated and committed."
           else
             echo "::notice::Hash unchanged, nothing to commit."
@@ -101,6 +109,9 @@ jobs:
            (github.event_name == 'workflow_dispatch' && inputs.mode == 'check'))
         env:
           GH_TOKEN: ${{ github.token }}
+          OLD_HASH: ${{ steps.old.outputs.hash }}
+          NEW_HASH: ${{ steps.new.outputs.hash }}
+          DATA_SRC: ${{ env.DATA_SOURCE_URL || format('https://raw.githubusercontent.com/{0}/{1}/{2}/{3}', env.DATA_OWNER, env.DATA_REPO, env.DATA_BRANCH, env.DATA_PATH) }}
         working-directory: .
         run: |
           # Avoid duplicate issues: check for an existing open issue.
@@ -114,9 +125,9 @@ jobs:
             --title '⚠️ Upstream CSV integrity hash changed' \
             --body "The scheduled integrity check detected that the upstream CSV hash has changed.
 
-          **Old hash:** \`${{ steps.old.outputs.hash }}\`
-          **New hash:** \`${{ steps.new.outputs.hash }}\`
-          **Source:** \`${{ env.DATA_SOURCE_URL || format('https://raw.githubusercontent.com/{0}/{1}/{2}/{3}', env.DATA_OWNER, env.DATA_REPO, env.DATA_BRANCH, env.DATA_PATH) }}\`
+          **Old hash:** \`${OLD_HASH}\`
+          **New hash:** \`${NEW_HASH}\`
+          **Source:** \`${DATA_SRC}\`
 
           ### Action required
 
