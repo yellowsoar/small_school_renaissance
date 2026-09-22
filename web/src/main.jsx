@@ -4,6 +4,11 @@ import 'leaflet/dist/leaflet.css';
 import './styles/global.css';
 import App from './App.jsx';
 import { GOOGLE_FONTS_URL } from './config/fonts.js';
+import { enforceTopFrame } from './lib/frameGuard.js';
+
+// Block rendering inside iframes to mitigate clickjacking. (#315)
+// Throws if framed, halting module evaluation before React mounts.
+enforceTopFrame();
 
 // Activate the preloaded Google Fonts stylesheet without blocking rendering.
 // The <link rel="preload"> in index.html downloads the CSS early; this
