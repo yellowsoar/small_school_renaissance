@@ -21,6 +21,15 @@ export const FIRST_PROJECTION_YEAR = 114;
 /** The last projection year in the upstream CSV dataset (民國 year). */
 export const LAST_PROJECTION_YEAR = 130;
 
+/** Maximum allowed CSV response size in bytes (10 MB).
+ *  The full dataset is ~2.5 MB; 10 MB provides a 4x safety margin
+ *  while preventing memory exhaustion from corrupted or hijacked
+ *  data sources (#207).
+ *
+ *  Single source of truth: both the browser-side fetchWithTimeout and
+ *  the build-time fetchWithRetry import this constant (#283). */
+export const MAX_CSV_BYTES = 10 * 1024 * 1024;
+
 const BASE_HEADERS = [
   '學校代碼',
   '學校名稱',
