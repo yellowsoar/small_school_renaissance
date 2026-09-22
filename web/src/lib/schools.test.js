@@ -917,8 +917,18 @@ describe('filterSchools', () => {
     expect(ids({ search: '不存在的學校' })).toEqual([]);
   });
 
-  it('does not let a search term straddle two fields', () => {
-    expect(ids({ search: '插角國小南投縣' })).toEqual([]);
+  it('matches a search term that straddles two fields via concatenation (#281)', () => {
+    expect(ids({ search: '插角國小南投縣' })).toEqual(['c']);
+  });
+
+  // --- Cross-field continuous input (regression tests for #281) ------------
+
+  it('matches Chinese continuous county+town input without spaces (#281)', () => {
+    expect(ids({ search: '南投縣仁愛鄉' })).toEqual(['c']);
+  });
+
+  it('matches cross-field input from URL query parameters (#281)', () => {
+    expect(ids({ search: '新北市三峻區' })).toEqual(['a', 'b']);
   });
 
   // --- Multi-token AND search (regression tests for #90) -------------------
