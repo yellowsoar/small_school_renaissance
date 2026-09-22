@@ -288,7 +288,7 @@ MOCK
   [ -f "$NAME_DIR/valid.csv" ]
 }
 
-# ── validate_not_html (#163) ───────────────────────────────────────
+# ── validate_not_html (#163) ───────────────────────────────────────────
 
 @test "validate_not_html: detects HTML file and deletes it (#163)" {
   echo '<!DOCTYPE html><html><head><title>Maintenance</title></head><body>Under maintenance</body></html>' > "$TEST_TMPDIR/test.ods"
@@ -319,7 +319,7 @@ MOCK
   [ "$status" -eq 0 ]
 }
 
-# ── atomic_download (#195) ─────────────────────────────────────────
+# ── atomic_download (#195) ─────────────────────────────────────────────
 
 @test "atomic_download: successful download atomically renames to final path (#195)" {
   # Mock download_file to write valid CSV content to the temp path
@@ -371,7 +371,7 @@ MOCK
   [ "$leftover" -eq 0 ]
 }
 
-# ── check_file (#241) ──────────────────────────────────────────────
+# ── check_file (#241) ──────────────────────────────────────────────────
 
 @test "check_file: silent on HTTP server error exit code 8 (#241)" {
   # Mock wget to exit 8 (server error / 404)
@@ -432,4 +432,139 @@ MOCK
   [ "$status" -ne 0 ]
   [[ "$output" == *"availability check failed"* ]]
   [[ "$output" == *"download(s) failed"* ]]
+}
+
+# ── compute_checksum (#314) ───────────────────────────────────────────
+
+@test "compute_checksum: returns correct SHA-256 for known content (#314)" {
+  echo -n "hello world" > "$TEST_TMPDIR/known.txt"
+  run compute_checksum "$TEST_TMPDIR/known.txt"
+  [ "$status" -eq 0 ]
+  # SHA-256 of "hello world" (no newline)
+  [ "$output" = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9" ]
+}
+
+@test "compute_checksum: different content produces different hash (#314)" {
+  echo -n "hello world" > "$TEST_TMPDIR/a.txt"
+  echo -n "hello earth" > "$TEST_TMPDIR/b.txt"
+  local hash_a hash_b
+  hash_a=$(compute_checksum "$TEST_TMPDIR/a.txt")
+  hash_b=$(compute_checksum "$TEST_TMPDIR/b.txt")
+  [ "$hash_a" != "$hash_b" ]
+}
+
+# ── validate_checksum (#314) ──────────────────────────────────────────
+
+@test "validate_checksum: passes when hash matches (#314)" {
+  echo -n "hello world" > "$TEST_TMPDIR/match.txt"
+  run validate_checksum "$TEST_TMPDIR/match.txt" "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_TMPDIR/match.txt" ]
+}
+
+@test "validate_checksum: fails and deletes file on mismatch (#314)" {
+  echo -n "hello world" > "$TEST_TMPDIR/mismatch.txt"
+  run validate_checksum "$TEST_TMPDIR/mismatch.txt" "0000000000000000000000000000000000000000000000000000000000000000"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Checksum mismatch"* ]]
+  [ ! -f "$TEST_TMPDIR/mismatch.txt" ]
+}
+
+@test "validate_checksum: skips when expected hash is empty (#314)" {
+  echo -n "hello world" > "$TEST_TMPDIR/skip.txt"
+  run validate_checksum "$TEST_TMPDIR/skip.txt" ""
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_TMPDIR/skip.txt" ]
+}
+
+# ── lookup_checksum (#314) ────────────────────────────────────────────
+
+@test "lookup_checksum: returns hash for existing key (#314)" {
+  echo '{"data/file.csv": "abc123"}' > "$CHECKSUM_FILE"
+  run lookup_checksum "data/file.csv"
+  [ "$status" -eq 0 ]
+  [ "$output" = "abc123" ]
+}
+
+@test "lookup_checksum: returns empty for missing key (#314)" {
+  echo '{"data/file.csv": "abc123"}' > "$CHECKSUM_FILE"
+  run lookup_checksum "data/other.csv"
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "lookup_checksum: returns empty when manifest does not exist (#314)" {
+  rm -f "$CHECKSUM_FILE"
+  run lookup_checksum "data/file.csv"
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "lookup_checksum: returns empty on corrupt manifest (#314)" {
+  echo "not json" > "$CHECKSUM_FILE"
+  run lookup_checksum "data/file.csv"
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+# ── record_checksum (#314) ────────────────────────────────────────────
+
+@test "record_checksum: inserts new key into empty manifest (#314)" {
+  echo '{}' > "$CHECKSUM_FILE"
+  record_checksum "data/file.csv" "abc123"
+  run python3 -c "import json; d=json.load(open('$CHECKSUM_FILE')); print(d['data/file.csv'])"
+  [ "$output" = "abc123" ]
+}
+
+@test "record_checksum: updates existing key (#314)" {
+  echo '{"data/file.csv": "old_hash"}' > "$CHECKSUM_FILE"
+  record_checksum "data/file.csv" "new_hash"
+  run python3 -c "import json; d=json.load(open('$CHECKSUM_FILE')); print(d['data/file.csv'])"
+  [ "$output" = "new_hash" ]
+}
+
+@test "record_checksum: creates manifest when missing (#314)" {
+  rm -f "$CHECKSUM_FILE"
+  record_checksum "data/file.csv" "abc123"
+  [ -f "$CHECKSUM_FILE" ]
+  run python3 -c "import json; d=json.load(open('$CHECKSUM_FILE')); print(d['data/file.csv'])"
+  [ "$output" = "abc123" ]
+}
+
+# ── atomic_download with checksum (#314) ────────────────────────────
+
+@test "atomic_download: passes when checksum matches (#314)" {
+  download_file() { echo -n "hello world" > "$2"; }
+  export -f download_file
+
+  local expected_hash="b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+  local final_path="$TEST_TMPDIR/$NAME_DIR/verified.csv"
+  run atomic_download "http://example.com/test.csv" "$final_path" "$expected_hash"
+  [ "$status" -eq 0 ]
+  [ -f "$final_path" ]
+}
+
+@test "atomic_download: fails and cleans up when checksum mismatches (#314)" {
+  download_file() { echo -n "tampered content" > "$2"; }
+  export -f download_file
+
+  local expected_hash="b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+  local final_path="$TEST_TMPDIR/$NAME_DIR/tampered.csv"
+  run atomic_download "http://example.com/test.csv" "$final_path" "$expected_hash"
+  [ "$status" -ne 0 ]
+  [ ! -f "$final_path" ]
+  # No leftover temp files
+  local leftover
+  leftover=$(find "$TEST_TMPDIR/$NAME_DIR" -name 'tampered.csv.*' | wc -l)
+  [ "$leftover" -eq 0 ]
+}
+
+@test "atomic_download: skips checksum when hash is empty (#314)" {
+  download_file() { printf 'name,age\nAlice,30\n' > "$2"; }
+  export -f download_file
+
+  local final_path="$TEST_TMPDIR/$NAME_DIR/no_hash.csv"
+  run atomic_download "http://example.com/test.csv" "$final_path" ""
+  [ "$status" -eq 0 ]
+  [ -f "$final_path" ]
 }
