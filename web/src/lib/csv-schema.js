@@ -30,6 +30,26 @@ export const LAST_PROJECTION_YEAR = 130;
  *  the build-time fetchWithRetry import this constant (#283). */
 export const MAX_CSV_BYTES = 10 * 1024 * 1024;
 
+/**
+ * PapaParse error codes that indicate field-alignment corruption (#208, #311).
+ * These codes mean the row's column count or quoting is broken, so
+ * downstream field access (student counts, projections) is unreliable.
+ *
+ * Single source of truth: both the build-time validator (fetch-utils.js)
+ * and the browser-side parser (schools.js) share this list.
+ */
+export const CRITICAL_PARSE_ERROR_CODES = ['TooFewFields', 'TooManyFields', 'InvalidQuotes'];
+
+/**
+ * Maximum tolerable ratio of critical parse errors before the dataset is
+ * rejected (#208, #311). 1% is conservative: a handful of edge-case rows
+ * in ~2,600 won't trip this, but a structurally damaged CSV will.
+ *
+ * Single source of truth: both the build-time validator (fetch-utils.js)
+ * and the browser-side parser (schools.js) share this threshold.
+ */
+export const MAX_CRITICAL_ERROR_RATIO = 0.01;
+
 const BASE_HEADERS = [
   '學校代碼',
   '學校名稱',
