@@ -1,7 +1,11 @@
 name: Regenerate Lockfile
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - refactor/replace-leaflet-heat-316-CU-86eyut540
+    paths:
+      - .github/workflows/regen-lockfile.yml
 
 jobs:
   regen:
@@ -12,6 +16,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: refactor/replace-leaflet-heat-316-CU-86eyut540
+          fetch-depth: 0
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
