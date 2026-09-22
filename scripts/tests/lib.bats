@@ -15,6 +15,11 @@ setup() {
   LIB_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
   # shellcheck source=../lib.sh
   source "$LIB_DIR/lib.sh"
+
+  # Override CHECKSUM_FILE to use temp dir instead of repo path (#314).
+  # lib.sh sets it to the scripts/ directory; tests must not modify the
+  # real manifest.
+  export CHECKSUM_FILE="$TEST_TMPDIR/data-checksums.json"
 }
 
 teardown() {
