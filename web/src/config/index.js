@@ -1,13 +1,11 @@
 import { FIRST_PROJECTION_YEAR, LAST_PROJECTION_YEAR } from '../lib/csv-schema.js';
 
+// Re-export MAX_CSV_BYTES from the single source of truth (csv-schema.js, #283).
+// Existing browser-side imports continue to work unchanged.
+export { MAX_CSV_BYTES } from '../lib/csv-schema.js';
+
 /** Dataset lives in public/data/, so it is resolved against the Vite base path. */
 export const DATA_URL = `${import.meta.env.BASE_URL}data/113-107.csv`;
-
-/** Maximum allowed CSV response size in bytes (10 MB).
- *  The full dataset is ~2.5 MB; 10 MB provides a 4x safety margin
- *  while preventing memory exhaustion from corrupted or hijacked
- *  data sources (#207). */
-export const MAX_CSV_BYTES = 10 * 1024 * 1024;
 
 /** Maximum allowed length for the URL search query parameter `q`.
  *  200 characters is generous for Chinese school/district searches
