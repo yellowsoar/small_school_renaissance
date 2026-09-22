@@ -59,8 +59,10 @@ function abortableSleep(ms, signal) {
  * 1. Reject early if the Content-Length header exceeds the limit.
  * 2. Stream the body via `response.body.getReader()`, accumulating
  *    chunks and aborting when the cumulative size exceeds `maxBytes`.
- * 3. Fall back to `response.text()` + post-check when ReadableStream
- *    body is unavailable (e.g. mocked responses in tests).
+ * 3. Fall back to `response.arrayBuffer()` + post-check when
+ *    ReadableStream body is unavailable (e.g. mocked responses in
+ *    tests).  Uses arrayBuffer() instead of text() so oversized
+ *    responses are rejected without allocating the decoded string.
  *
  * When `maxBytes` is omitted or undefined, delegates to `response.text()`
  * with zero overhead (existing behavior).
@@ -119,17 +121,18 @@ async function readBodyWithLimit(response, maxBytes) {
   }
 
   // Fallback: response.body is null (e.g. mocked Response in tests).
-  const text = await response.text();
-  const byteLength = new TextEncoder().encode(text).byteLength;
-  if (byteLength > maxBytes) {
+  // Use arrayBuffer() so oversized responses are rejected before
+  // allocating the decoded text string (peak memory O(n) vs O(2n)).
+  const buf = await response.arrayBuffer();
+  if (buf.byteLength > maxBytes) {
     throw Object.assign(
       new Error(
-        `Response size ${byteLength} bytes exceeds limit of ${maxBytes} bytes`,
+        `Response size ${buf.byteLength} bytes exceeds limit of ${maxBytes} bytes`,
       ),
       { name: 'SizeLimitError', retriable: false },
     );
   }
-  return text;
+  return new TextDecoder().decode(buf);
 }
 
 /* ------------------------------------------------------------------ */
