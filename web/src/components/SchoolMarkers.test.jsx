@@ -266,4 +266,31 @@ describe('SchoolMarkers', () => {
 
     expect(mocks.openPopup).toHaveBeenCalledTimes(1);
   });
+
+  it('renders a marker for an unprojected school', () => {
+    const school = makeSchool({
+      unprojected: true,
+      projections: new Map([[130, null]]),
+    });
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(null);
+
+    render(<SchoolMarkers schools={[school]} year={130} visible={true} />);
+
+    expect(screen.getByTestId('marker')).toBeTruthy();
+  });
+
+  it('sets correct aria-label for unprojected school', () => {
+    const school = makeSchool({
+      unprojected: true,
+      projections: new Map([[130, null]]),
+    });
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(null);
+
+    render(<SchoolMarkers schools={[school]} year={130} visible={true} />);
+
+    const marker = screen.getByTestId('marker');
+    expect(marker.getAttribute('aria-label')).toBe('\u6e2c\u8a66\u570b\u5c0f\uff08\u7121\u63a8\u4f30\u8cc7\u6599\uff09');
+  });
 });

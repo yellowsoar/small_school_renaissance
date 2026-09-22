@@ -29,9 +29,9 @@ describe('Legend', () => {
     render(<Legend year={114} />);
 
     for (const tier of RISK_TIERS) {
-      const glyph = screen.getByTestId(`glyph-${tier.shape}`);
-      expect(glyph).toBeTruthy();
-      expect(glyph.getAttribute('data-color')).toBe(tier.color);
+      const glyphs = screen.getAllByTestId(`glyph-${tier.shape}`);
+      const match = glyphs.find((g) => g.getAttribute('data-color') === tier.color);
+      expect(match).toBeTruthy();
     }
   });
 
@@ -55,5 +55,15 @@ describe('Legend', () => {
     render(<Legend year={114} />);
 
     expect(screen.getByLabelText('圖例')).toBeTruthy();
+  });
+
+  it('renders the unprojected marker entry in the legend', () => {
+    render(<Legend year={114} />);
+
+    expect(screen.getByText('無推估資料')).toBeTruthy();
+    expect(screen.getByText('缺少推估資料')).toBeTruthy();
+    const glyphs = screen.getAllByTestId('glyph-circle');
+    const unprojectedGlyph = glyphs.find((g) => g.getAttribute('data-color') === '#999');
+    expect(unprojectedGlyph).toBeTruthy();
   });
 });

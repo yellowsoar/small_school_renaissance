@@ -123,6 +123,18 @@ export const RISK_TIERS = [
 ];
 
 /**
+ * Neutral marker definition for schools with no projection data.
+ * Separated from RISK_TIERS because "no data" is not a risk level.
+ */
+export const UNPROJECTED_MARKER = {
+  id: 'unprojected',
+  label: '無推估資料',
+  shape: 'circle',
+  color: '#999',
+  describe: () => '缺少推估資料',
+};
+
+/**
  * Defensive lookup for a RISK_TIERS entry by id. Throws a descriptive
  * error when the requested id does not exist, so config typos surface
  * immediately at module load instead of producing an opaque TypeError
