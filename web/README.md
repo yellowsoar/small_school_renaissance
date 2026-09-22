@@ -49,7 +49,7 @@ npm run coverage   # 覆蓋率報告
 - `sparkline.test.js` 涵蓋趨勢線幾何。重點是「基準線錨定在 0」：若以最小值為基準，40 → 38 會被畫得跟 40 → 0 一樣陡。
 - `shapes.test.js` 確認每個風險分級都有對應圖形、未知圖形會退回圓形、星形頂點不會超出 viewBox。
 
-測試設定放在 `vitest.config.js`，與 `vite.config.js` 分開：這些是純函式，不需要 React plugin 也不需要 Pages 的 base path。`markerIcons.js` 不列入覆蓋率，它只是把 `shapes.js` 接到 Leaflet，需要 DOM 才跑得起來。
+測試設定放在 `vitest.config.js`，與 `vite.config.js` 分開：vitest 引入 React plugin 以支援 Hook 與元件測試的 JSX 轉換，分開設定是為了避免繼承 Pages base path 等建置設定。`markerIcons.js` 不列入覆蓋率，它只是把 `shapes.js` 接到 Leaflet，需要 DOM 才跑得起來。
 
 ## Lint
 
@@ -122,26 +122,43 @@ web/
 ├── index.html
 ├── package.json
 ├── vite.config.js               # base path、build 設定
-├── vitest.config.js             # 測試設定
+├── vitest.config.js             # 測試設定（含 React plugin）
+├── vitest.setup.js              # 測試 setup（自動 cleanup）
 ├── eslint.config.js             # 瀏覽器與 Node 兩組環境分開
 ├── .env.example                 # 環境變數文件
 ├── scripts/
-│   └── fetch-data.js            # 建置前下載 CSV 到 public/data/
+│   ├── fetch-data.js            # 建置前下載 CSV 到 public/data/
+│   ├── fetch-utils.js           # 下載用工具函式（重試、驗證、串流讀取）
+│   └── fetch-utils.test.js      # fetch-utils 測試
 └── src/
     ├── App.jsx                  # 版面組裝與狀態
+    ├── App.test.jsx             # App 元件測試
     ├── main.jsx
-    ├── config/index.js          # 風險分級、熱區、地圖常數、推估方法說明
+    ├── config/
+    │   ├── index.js             # 風險分級、熱區、地圖常數、推估方法說明
+    │   ├── index.test.js
+    │   ├── fonts.js             # Google Fonts 非同步載入設定
+    │   └── fonts.test.js
     ├── lib/
     │   ├── schools.js           # CSV → 正規化資料、篩選、統計（純函式）
     │   ├── urlState.js          # 篩選條件 ↔ query string
     │   ├── sparkline.js         # 趨勢線幾何
     │   ├── shapes.js            # 圖示幾何，地圖與圖例共用的唯一來源
     │   ├── markerIcons.js       # Leaflet divIcon 產生與快取
-    │   └── *.test.js            # Vitest 測試
+    │   ├── sanitize.js          # URL 安全驗證
+    │   ├── fetchWithTimeout.js  # 瀏覽器端 fetch 逾時與重試
+    │   ├── backoff.js           # 全抖動指數退避（Full Jitter Exponential Backoff）
+    │   ├── retry-core.js        # 可重試狀態碼判斷
+    │   ├── body-reader.js       # Response body 串流讀取與大小限制
+    │   ├── csv-schema.js        # CSV 欄位定義與驗證常數
+    │   ├── heatmapAdapter.js    # leaflet.heat 建立與更新封裝
+    │   └── *.test.js            # Vitest 測試（每個模組一份，markerIcons 除外）
     ├── hooks/
     │   ├── useSchoolData.js     # 載入 + 解析，支援 AbortController 與重試
     │   ├── useUrlFilters.js     # 篩選狀態與網址同步
-    │   └── useVisibleSchools.js # 依視窗範圍與縮放層級裁切點位
+    │   ├── useVisibleSchools.js # 依視窗範圍與縮放層級裁切點位
+    │   ├── useDebouncedAnnounce.js # 無障礙防抖播報
+    │   └── *.test.js            # 每個 Hook 一份測試
     ├── components/
     │   ├── SchoolMap.jsx
     │   ├── HeatmapLayer.jsx     # leaflet.heat 的命令式包裝
@@ -152,7 +169,8 @@ web/
     │   ├── ControlPanel.jsx
     │   ├── SummaryBar.jsx
     │   ├── Legend.jsx
-    │   └── ErrorBoundary.jsx
+    │   ├── ErrorBoundary.jsx
+    │   └── *.test.jsx           # 每個元件一份測試
     └── styles/global.css
 ```
 
