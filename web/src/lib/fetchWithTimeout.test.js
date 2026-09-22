@@ -437,6 +437,56 @@ describe('maxBytes size limit (#207)', () => {
     // Non-retriable — only the initial attempt.
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
+
+  /* -------------------------------------------------------------- */
+  /*  Fallback path (body: null) with arrayBuffer() (#264)             */
+  /* -------------------------------------------------------------- */
+
+  it('rejects via fallback when body is null and size exceeds maxBytes (#264)', async () => {
+    const largeText = 'x'.repeat(200);
+    const encoded = new TextEncoder().encode(largeText);
+    const mockRes = {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers(),
+      body: null,
+      arrayBuffer: vi.fn().mockResolvedValue(encoded.buffer),
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
+
+    await expect(
+      fetchWithTimeout('https://example.com/data.csv', {
+        retries: 0,
+        maxBytes: 100,
+      }),
+    ).rejects.toMatchObject({ name: 'SizeLimitError' });
+
+    // arrayBuffer() was called, confirming fallback path was exercised.
+    expect(mockRes.arrayBuffer).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns text via fallback when body is null and size is within maxBytes (#264)', async () => {
+    const smallText = 'small CSV';
+    const encoded = new TextEncoder().encode(smallText);
+    const mockRes = {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers(),
+      body: null,
+      arrayBuffer: vi.fn().mockResolvedValue(encoded.buffer),
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
+
+    const text = await fetchWithTimeout('https://example.com/data.csv', {
+      retries: 0,
+      maxBytes: 10_000,
+    });
+
+    expect(text).toBe(smallText);
+    expect(mockRes.arrayBuffer).toHaveBeenCalledTimes(1);
+  });
 });
 
 /* ------------------------------------------------------------------ */
