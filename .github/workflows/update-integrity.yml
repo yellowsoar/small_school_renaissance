@@ -17,12 +17,15 @@ on:
     - cron: '0 4 * * 1'
 
 permissions:
-  contents: write
-  issues: write
+  contents: read  # workflow-level: read-only default
 
 jobs:
-  integrity:
+  detect:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.drift.outputs.changed }}
+      old-hash: ${{ steps.old.outputs.hash }}
+      new-hash: ${{ steps.new.outputs.hash }}
     defaults:
       run:
         working-directory: web
@@ -71,15 +74,36 @@ jobs:
             echo "Hash changed: $OLD_HASH -> $NEW_HASH"
           fi
 
-      # --- Update mode: commit the new hash ---
+      - name: Upload integrity artifact
+        if: steps.drift.outputs.changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: data-integrity
+          path: web/data-integrity.json
+          retention-days: 1
+
+  commit:
+    needs: detect
+    if: >-
+      needs.detect.outputs.changed == 'true' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.mode == 'update'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Download integrity artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: data-integrity
+          path: web
+
       - name: Commit updated hash
-        if: >
-          steps.drift.outputs.changed == 'true' &&
-          (github.event_name == 'workflow_dispatch' && inputs.mode == 'update')
         env:
-          OLD_HASH: ${{ steps.old.outputs.hash }}
-          NEW_HASH: ${{ steps.new.outputs.hash }}
-        working-directory: .
+          OLD_HASH: ${{ needs.detect.outputs.old-hash }}
+          NEW_HASH: ${{ needs.detect.outputs.new-hash }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -91,28 +115,31 @@ jobs:
           git push
 
       - name: Report update result
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'update'
-        env:
-          CHANGED: ${{ steps.drift.outputs.changed }}
-        run: |
-          if [ "$CHANGED" = 'true' ]; then
-            echo "::notice::data-integrity.json updated and committed."
-          else
-            echo "::notice::Hash unchanged, nothing to commit."
-          fi
+        run: echo "::notice::data-integrity.json updated and committed."
 
-      # --- Check mode (schedule or manual): open issue on drift ---
+  alert:
+    needs: detect
+    if: >-
+      needs.detect.outputs.changed == 'true' &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'check'))
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
       - name: Open issue on upstream drift
-        if: >
-          steps.drift.outputs.changed == 'true' &&
-          (github.event_name == 'schedule' ||
-           (github.event_name == 'workflow_dispatch' && inputs.mode == 'check'))
         env:
           GH_TOKEN: ${{ github.token }}
-          OLD_HASH: ${{ steps.old.outputs.hash }}
-          NEW_HASH: ${{ steps.new.outputs.hash }}
-          DATA_SRC: ${{ env.DATA_SOURCE_URL || format('https://raw.githubusercontent.com/{0}/{1}/{2}/{3}', env.DATA_OWNER, env.DATA_REPO, env.DATA_BRANCH, env.DATA_PATH) }}
-        working-directory: .
+          GH_REPO: ${{ github.repository }}
+          OLD_HASH: ${{ needs.detect.outputs.old-hash }}
+          NEW_HASH: ${{ needs.detect.outputs.new-hash }}
+          DATA_SRC: >-
+            ${{ vars.DATA_SOURCE_URL ||
+                format('https://raw.githubusercontent.com/{0}/{1}/{2}/{3}',
+                  vars.DATA_OWNER  || 'g0v',
+                  vars.DATA_REPO   || 'small_school_renaissance',
+                  vars.DATA_BRANCH || 'gh-pages',
+                  vars.DATA_PATH   || 'docs/113-107.csv') }}
         run: |
           # Avoid duplicate issues: check for an existing open issue.
           EXISTING=$(gh issue list --state open --search 'upstream CSV integrity hash changed' --json number --jq '.[0].number' 2>/dev/null || echo '')
