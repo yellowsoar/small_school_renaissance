@@ -28,11 +28,23 @@ export function fullJitter(attempt, base = BACKOFF_BASE_MS, cap = BACKOFF_CAP_MS
 }
 
 /**
+ * Strict IMF-fixdate pattern (RFC 9110 §5.6.7).
+ *
+ * Example: "Fri, 18 Sep 2026 01:45:00 GMT"
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc9110#section-5.6.7
+ */
+const IMF_FIXDATE = /^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+
+/**
  * Parse a Retry-After HTTP header value into milliseconds.
  *
  * Supports two formats defined by RFC 9110 §10.2.3:
  * - Delay-seconds: a non-negative integer (e.g. "120" → 120 000 ms)
  * - HTTP-date: an IMF-fixdate string (e.g. "Fri, 18 Sep 2026 01:45:00 GMT")
+ *
+ * Non-standard date formats (ISO 8601, US locale, etc.) are rejected
+ * to avoid cross-browser parsing inconsistencies.
  *
  * Returns 0 when the header is absent, unparseable, or in the past.
  *
@@ -48,11 +60,13 @@ export function parseRetryAfter(header) {
     return Math.round(seconds) * 1000;
   }
 
-  // Try HTTP-date format.
-  const date = new Date(header);
-  if (!Number.isNaN(date.getTime())) {
-    const delay = date.getTime() - Date.now();
-    return delay > 0 ? delay : 0;
+  // Only accept IMF-fixdate (RFC 9110 §5.6.7); reject non-standard formats.
+  if (IMF_FIXDATE.test(header.trim())) {
+    const date = new Date(header);
+    if (!Number.isNaN(date.getTime())) {
+      const delay = date.getTime() - Date.now();
+      return delay > 0 ? delay : 0;
+    }
   }
 
   return 0;
