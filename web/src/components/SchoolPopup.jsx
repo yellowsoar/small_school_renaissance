@@ -27,7 +27,7 @@ export default function SchoolPopup({ school, year, tier }) {
 
       {school.unprojected ? (
         <p className="popup__headline popup__headline--muted">
-          缺少 {REFERENCE_YEAR} 學年對照資料，無法推估
+          此校無推估資料，無法顯示趨勢
         </p>
       ) : (
         <>

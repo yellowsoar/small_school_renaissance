@@ -159,6 +159,28 @@ describe('parseSchools', () => {
     expect(schools[0].projections.get(130)).toBeNull();
   });
 
+  // --- unprojected flag semantic edge cases (regression tests for #300) -----
+
+  it('sets unprojected=false when reference is null but projections exist (#300)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: 42, 參考學生人數: '' })]),
+    );
+
+    expect(schools[0].reference).toBeNull();
+    expect(schools[0].unprojected).toBe(false);
+    expect(schools[0].projections.get(130)).toBe(42);
+  });
+
+  it('sets unprojected=true when reference exists but all projections are null (#300)', () => {
+    const { schools } = parseSchools(
+      csv([row({ projected: null, 參考學生人數: '171' })]),
+    );
+
+    expect(schools[0].reference).toBe(171);
+    expect(schools[0].unprojected).toBe(true);
+    expect(schools[0].projections.get(130)).toBeNull();
+  });
+
   it('turns blank optional fields into null instead of empty strings', () => {
     const { schools } = parseSchools(
       csv([row({ projected: 10, 地址: '', 網址: '', 電話: '   ' })]),

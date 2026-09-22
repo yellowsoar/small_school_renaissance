@@ -99,7 +99,7 @@ const toSchool = (row) => {
     delta: num(row['學生人數差異']),
     deltaRatio: num(row['學生人數變化百分比']),
     projections,
-    /** True when the trend could not be computed (no reference year data). */
+    /** True when all projection values are null (no trend data available). */
     unprojected: [...projections.values()].every((value) => value == null),
   };
 };

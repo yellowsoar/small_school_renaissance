@@ -56,7 +56,7 @@ describe('SchoolPopup', () => {
     expect(screen.getByText('125 學年推估')).toBeTruthy();
   });
 
-  it('shows the unprojected message when reference data is missing', () => {
+  it('shows the unprojected message when projection data is missing', () => {
     const school = makeSchool({
       unprojected: true,
       projections: new Map(
@@ -66,7 +66,7 @@ describe('SchoolPopup', () => {
 
     render(<SchoolPopup school={school} year={130} tier={null} />);
 
-    expect(screen.getByText(new RegExp(`缺少 ${REFERENCE_YEAR} 學年對照資料`))).toBeTruthy();
+    expect(screen.getByText('此校無推估資料，無法顯示趨勢')).toBeTruthy();
   });
 
   it('shows "無推估" when tier is null but school is projected', () => {
