@@ -19,7 +19,20 @@ export default defineConfig(({ command, mode }) => {
       {
         name: 'inject-google-fonts-url',
         transformIndexHtml(html) {
-          return html.replaceAll('__GOOGLE_FONTS_URL__', GOOGLE_FONTS_URL);
+          let result = html.replaceAll('__GOOGLE_FONTS_URL__', GOOGLE_FONTS_URL);
+
+          // Vite dev server injects <style> elements for CSS HMR (Hot Module
+          // Replacement). The production CSP blocks inline <style> elements
+          // via style-src-elem. Relax this during development by adding
+          // 'unsafe-inline' to style-src-elem so HMR works correctly (#277).
+          if (command === 'serve') {
+            result = result.replace(
+              "style-src-elem 'self'",
+              "style-src-elem 'self' 'unsafe-inline'",
+            );
+          }
+
+          return result;
         },
       },
     ],
