@@ -9,10 +9,10 @@ on:
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
+# Restrict the default to read-only; each job declares exactly what it
+# needs so build-time code never receives unnecessary tokens (#305).
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -22,12 +22,18 @@ concurrency:
 
 jobs:
   build:
+    permissions:
+      contents: read
+      pages: write      # configure-pages + upload-pages-artifact
     uses: ./.github/workflows/check.yml
     with:
       with-pages-upload: true
 
   deploy:
     needs: build
+    permissions:
+      pages: write      # deploy-pages
+      id-token: write   # OIDC token for Pages deployment
     runs-on: ubuntu-latest
     environment:
       name: github-pages
