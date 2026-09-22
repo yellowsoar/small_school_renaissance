@@ -286,17 +286,18 @@ describe('fetchWithRetry', () => {
 
     expect(err.name).toBe('SizeLimitError');
     expect(err.message).toMatch(/20000 bytes exceeds limit of 100 bytes/);
-    // text() should NOT have been called — early rejection via header.
+    // text() should NOT have been called \u2014 early rejection via header.
     expect(largeRes.text).not.toHaveBeenCalled();
   });
 
   it('rejects via fallback post-check when body exceeds maxBytes (response.body is null)', async () => {
     const bigBody = 'x'.repeat(200);
+    const encoded = new TextEncoder().encode(bigBody);
     const mockRes = {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'text/csv' }),
-      text: vi.fn().mockResolvedValue(bigBody),
+      arrayBuffer: vi.fn().mockResolvedValue(encoded.buffer),
       body: null,
     };
     globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
@@ -306,17 +307,18 @@ describe('fetchWithRetry', () => {
 
     expect(err.name).toBe('SizeLimitError');
     expect(err.message).toMatch(/200 bytes exceeds limit of 100 bytes/);
-    // text() WAS called because fallback path reads first, checks after.
-    expect(mockRes.text).toHaveBeenCalledTimes(1);
+    // arrayBuffer() was called, confirming fallback path was exercised.
+    expect(mockRes.arrayBuffer).toHaveBeenCalledTimes(1);
   });
 
   it('accepts response within maxBytes limit', async () => {
     const smallBody = 'col1,col2\na,b';
+    const encoded = new TextEncoder().encode(smallBody);
     const mockRes = {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'text/csv' }),
-      text: vi.fn().mockResolvedValue(smallBody),
+      arrayBuffer: vi.fn().mockResolvedValue(encoded.buffer),
       body: null,
     };
     globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
@@ -338,7 +340,7 @@ describe('fetchWithRetry', () => {
     await expect(
       fetchWithRetry(url, { retries: 2, timeout: 1000, maxBytes: 100 }),
     ).rejects.toThrow('exceeds limit');
-    // Only 1 call — SizeLimitError has retriable: false, no retries.
+    // Only 1 call \u2014 SizeLimitError has retriable: false, no retries.
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(console.warn).not.toHaveBeenCalled();
   });
