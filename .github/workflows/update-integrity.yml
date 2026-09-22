@@ -127,19 +127,39 @@ jobs:
     permissions:
       issues: write
     steps:
-      - name: Open issue on upstream drift
+      - name: Redact source URL
+        id: redact
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          OLD_HASH: ${{ needs.detect.outputs.old-hash }}
-          NEW_HASH: ${{ needs.detect.outputs.new-hash }}
-          DATA_SRC: >-
+          RAW_URL: >-
             ${{ vars.DATA_SOURCE_URL ||
                 format('https://raw.githubusercontent.com/{0}/{1}/{2}/{3}',
                   vars.DATA_OWNER  || 'g0v',
                   vars.DATA_REPO   || 'small_school_renaissance',
                   vars.DATA_BRANCH || 'gh-pages',
                   vars.DATA_PATH   || 'docs/113-107.csv') }}
+        run: |
+          # Strip userinfo, query string, and fragment from the source URL
+          # so that signed URLs or credential-bearing URLs are never
+          # published verbatim in public GitHub issues (#299).
+          REDACTED=$(python3 -c "
+import sys, urllib.parse
+try:
+    u = urllib.parse.urlparse(sys.argv[1])
+    host = u.hostname or ''
+    port = f':{u.port}' if u.port else ''
+    print(f'{u.scheme}://{host}{port}{u.path}')
+except Exception:
+    print('(source URL redacted)')
+" "$RAW_URL")
+          echo "url=$REDACTED" >> "$GITHUB_OUTPUT"
+
+      - name: Open issue on upstream drift
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OLD_HASH: ${{ needs.detect.outputs.old-hash }}
+          NEW_HASH: ${{ needs.detect.outputs.new-hash }}
+          DATA_SRC: ${{ steps.redact.outputs.url }}
         run: |
           # Avoid duplicate issues: check for an existing open issue.
           EXISTING=$(gh issue list --state open --search 'upstream CSV integrity hash changed' --json number --jq '.[0].number' 2>/dev/null || echo '')
