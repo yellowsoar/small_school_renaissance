@@ -40,7 +40,7 @@ remove_rows_mismatch_header() {
 	local tmpfile
 	tmpfile=$(mktemp "${file}.XXXXXX")
 
-	echo "\u2699\ufe0f Removing rows that its column mismatches the header..."
+	echo "⚙️ Removing rows that its column mismatches the header..."
 	local removed
 	removed=$(python3 -c '
 import csv, sys
@@ -74,9 +74,9 @@ print(removed)
 	fi
 
 	if [ "$removed" -gt 0 ]; then
-		echo "\u26a0\ufe0f  Removed ${removed} row(s) from ${file}"
+		echo "⚠️  Removed ${removed} row(s) from ${file}"
 	else
-		echo "\u2705 All rows match header for ${file}"
+		echo "✅ All rows match header for ${file}"
 	fi
 }
 
@@ -111,7 +111,7 @@ convert_to_csv_if_needed() {
 			local soffice_sandbox
 			soffice_sandbox=$(mktemp -d "${TMPDIR:-/tmp}/soffice-sandbox.XXXXXX")
 
-			echo "\u2699\ufe0f Converting ${ext} to csv for ${src}"
+			echo "⚙️ Converting ${ext} to csv for ${src}"
 			if soffice \
 				--headless \
 				--norestore \
@@ -120,7 +120,7 @@ convert_to_csv_if_needed() {
 				--outdir "./${NAME_DIR}" \
 				"$src" \
 				&& remove_rows_mismatch_header "$csv_path"; then
-				echo "\u2705 File converted to ${csv_path}"
+				echo "✅ File converted to ${csv_path}"
 				rm -rf "$soffice_sandbox"
 				# Verify converted CSV has data rows (not just header) (#141, #262)
 				# Uses Python csv.reader for RFC 4180 logical record count,
@@ -135,13 +135,13 @@ with open(sys.argv[1], newline="") as f:
     print(sum(1 for _ in reader))
 ' "$csv_path")
 				if [ "$record_count" -lt 1 ]; then
-					echo "\u26a0\ufe0f Converted CSV from ${ext} is empty or has no data rows: ${csv_path}, trying next format..." >&2
+					echo "⚠️ Converted CSV from ${ext} is empty or has no data rows: ${csv_path}, trying next format..." >&2
 					rm -f "$csv_path"
 					continue
 				fi
 				return 0
 			else
-				echo "\u26a0\ufe0f Conversion from ${ext} failed for ${src} (exit code: $?), trying next format..." >&2
+				echo "⚠️ Conversion from ${ext} failed for ${src} (exit code: $?), trying next format..." >&2
 				rm -f "$csv_path"          # Remove residual CSV to prevent silent reuse (#260)
 				rm -rf "$soffice_sandbox"
 				continue
@@ -182,7 +182,7 @@ validate_checksum() {
 	local actual
 	actual=$(compute_checksum "$file")
 	if [ "$actual" != "$expected_hash" ]; then
-		echo "\u274c Checksum mismatch for ${file}: expected ${expected_hash}, got ${actual}" >&2
+		echo "❌ Checksum mismatch for ${file}: expected ${expected_hash}, got ${actual}" >&2
 		rm -f "$file"
 		return 1
 	fi
@@ -238,7 +238,7 @@ validate_not_html() {
 	local mime
 	mime=$(file --mime-type -b "$file")
 	if [ "$mime" = "text/html" ]; then
-		echo "\u274c ${file} is HTML, not a spreadsheet (${mime}) \u2014 possible redirect to login/maintenance page" >&2
+		echo "❌ ${file} is HTML, not a spreadsheet (${mime}) — possible redirect to login/maintenance page" >&2
 		rm -f "$file"
 		return 1
 	fi
@@ -250,7 +250,7 @@ validate_not_html() {
 #
 # Distinguishes HTTP server errors (exit 8) from network-level failures
 # (#241).  Server errors (404 etc.) are expected and stay silent.
-# Network failures (DNS, SSL, timeout \u2014 exit != 8) emit a diagnostic
+# Network failures (DNS, SSL, timeout — exit != 8) emit a diagnostic
 # warning to stderr so operators can tell "file not found" apart from
 # "server unreachable".
 # Usage: check_file <url>
@@ -264,10 +264,10 @@ check_file() {
 		"${url}" \
 		2>&1 >/dev/null) || {
 		local rc=$?
-		# Exit code 8 = server error (HTTP 4xx/5xx) \u2014 expected for
+		# Exit code 8 = server error (HTTP 4xx/5xx) — expected for
 		# missing files; stay silent to match pre-#241 behavior.
 		if [ "$rc" -ne 8 ]; then
-			echo "\u26a0\ufe0f  check_file: network error for ${url} (wget exit ${rc}): ${stderr_output}" >&2
+			echo "⚠️  check_file: network error for ${url} (wget exit ${rc}): ${stderr_output}" >&2
 		fi
 		return "$rc"
 	}
@@ -321,7 +321,7 @@ atomic_download() {
 
 # Run the download-and-convert pipeline for all years and file formats.
 # Accepts two callback function names to customise URL and filename
-# construction \u2014 the only parts that differ between data sources (#263).
+# construction — the only parts that differ between data sources (#263).
 #
 # Integrity verification (#314): before each download, looks up the
 # expected SHA-256 from the checksums manifest.  After a successful
@@ -342,13 +342,13 @@ run_download_pipeline() {
 
 	mkdir -p "./${NAME_DIR}"
 	for YEAR_CURRENT in $(seq ${YEAR_START} ${YEAR_END}); do
-		echo "\u2699\ufe0f Working on ${YEAR_CURRENT}"
+		echo "⚙️ Working on ${YEAR_CURRENT}"
 		local base_name
 		base_name=$("$name_builder" "$YEAR_CURRENT")
 		for FILE_EXT in "${NAME_EXT[@]}"; do
 			local URL_TARGET
 			URL_TARGET=$("$url_builder" "$YEAR_CURRENT" "$FILE_EXT")
-			echo "\u2699\ufe0f Checking URL: ${URL_TARGET}"
+			echo "⚙️ Checking URL: ${URL_TARGET}"
 			local check_rc=0
 			check_file "${URL_TARGET}" || check_rc=$?
 			if [ "$check_rc" -eq 0 ]; then
@@ -360,18 +360,18 @@ run_download_pipeline() {
 					expected_hash=$(lookup_checksum "$checksum_key")
 				fi
 				if atomic_download "${URL_TARGET}" "$downloaded_path" "$expected_hash"; then
-					echo "\u2705 File Downloaded: ${base_name}.${FILE_EXT}"
+					echo "✅ File Downloaded: ${base_name}.${FILE_EXT}"
 					# Record actual hash after successful download (#314)
 					local actual_hash
 					actual_hash=$(compute_checksum "$downloaded_path")
 					record_checksum "$checksum_key" "$actual_hash"
 					((SUCCESS_COUNT++)) || true
 				else
-					echo "\u26a0\ufe0f  download or validation failed: ${URL_TARGET}" >&2
+					echo "⚠️  download or validation failed: ${URL_TARGET}" >&2
 					FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
 				fi
 			elif [ "$check_rc" -ne 8 ]; then
-				echo "\u26a0\ufe0f  availability check failed (network): ${URL_TARGET}" >&2
+				echo "⚠️  availability check failed (network): ${URL_TARGET}" >&2
 				FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}/availability-check")
 			fi
 			sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
@@ -380,20 +380,20 @@ run_download_pipeline() {
 		local rc=0
 		convert_to_csv_if_needed "${base_name}" || rc=$?
 		if [ "$rc" -eq 2 ]; then
-			echo "\u26a0\ufe0f  conversion failed for ${base_name}" >&2
+			echo "⚠️  conversion failed for ${base_name}" >&2
 			FAILED_DOWNLOADS+=("${YEAR_CURRENT}/csv-conversion")
 		elif [ "$rc" -eq 1 ]; then
-			echo "\u2139\ufe0f  no convertible file found for ${base_name}"
+			echo "ℹ️  no convertible file found for ${base_name}"
 		fi
 	done
 
 	if [ "$SUCCESS_COUNT" -eq 0 ] && [ ${#FAILED_DOWNLOADS[@]} -eq 0 ]; then
-		echo "\u274c No files were downloaded at all \u2014 upstream may be unreachable" >&2
+		echo "❌ No files were downloaded at all — upstream may be unreachable" >&2
 		exit 1
 	fi
 
 	if [ ${#FAILED_DOWNLOADS[@]} -gt 0 ]; then
-		echo "\u26a0\ufe0f  ${#FAILED_DOWNLOADS[@]} download(s) failed:" >&2
+		echo "⚠️  ${#FAILED_DOWNLOADS[@]} download(s) failed:" >&2
 		printf '  - %s\n' "${FAILED_DOWNLOADS[@]}" >&2
 		exit 1
 	fi
