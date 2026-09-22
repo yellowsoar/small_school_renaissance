@@ -255,8 +255,9 @@ export const filterSchools = (schools, { year, counties, tiers, search }) => {
       const fields = [school.name, school.county, school.town].map((f) =>
         f.toLowerCase(),
       );
+      const joined = fields.join('');
       const allMatch = tokens.every((token) =>
-        fields.some((field) => field.includes(token)),
+        fields.some((field) => field.includes(token)) || joined.includes(token),
       );
       if (!allMatch) return false;
     }
