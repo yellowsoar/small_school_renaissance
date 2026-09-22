@@ -2,6 +2,10 @@
 # Shared helper functions for data-pipeline shell scripts.
 # Source this file after setting NAME_DIR.
 
+# Path to the checksums manifest (alongside lib.sh).
+# Used by integrity verification functions (#314).
+CHECKSUM_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/data-checksums.json"
+
 # Cross-platform sed in-place edit using mktemp + mv.
 # Usage: sed_inplace <file> <sed-args...>
 sed_inplace() {
@@ -9,7 +13,7 @@ sed_inplace() {
 	shift
 	local tmpfile
 	tmpfile=$(mktemp "${file}.XXXXXX")
-	# Preserve original file permissions (GNU stat → BSD stat fallback).
+	# Preserve original file permissions (GNU stat -> BSD stat fallback).
 	# Failure is non-fatal: falls back to mktemp default (0600).
 	local perms
 	perms=$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file" 2>/dev/null) || true
@@ -148,6 +152,81 @@ with open(sys.argv[1], newline="") as f:
 	return 2  # All available formats failed
 }
 
+# --- Integrity verification (#314) -------------------------------------------
+# SHA-256 checksum functions for downloaded files.  Uses Python3 hashlib
+# for cross-platform compatibility (sha256sum is GNU-only; macOS ships
+# shasum).  Python3 is already a runtime dependency of this library.
+
+# Compute SHA-256 hash of a file.
+# Usage: compute_checksum <file>
+# Prints: hex digest to stdout
+compute_checksum() {
+	local file="$1"
+	python3 -c '
+import hashlib, sys
+h = hashlib.sha256()
+with open(sys.argv[1], "rb") as f:
+    for chunk in iter(lambda: f.read(65536), b""):
+        h.update(chunk)
+print(h.hexdigest())
+' "$file"
+}
+
+# Validate a file against an expected SHA-256 hash.
+# Skips validation when expected_hash is empty (TOFU first-download).
+# Deletes the file and returns 1 on mismatch.
+# Usage: validate_checksum <file> <expected_hash>
+validate_checksum() {
+	local file="$1" expected_hash="$2"
+	[ -z "$expected_hash" ] && return 0
+	local actual
+	actual=$(compute_checksum "$file")
+	if [ "$actual" != "$expected_hash" ]; then
+		echo "❌ Checksum mismatch for ${file}: expected ${expected_hash}, got ${actual}" >&2
+		rm -f "$file"
+		return 1
+	fi
+}
+
+# Look up the expected checksum for a key from the manifest.
+# Prints the hex hash to stdout, or empty string if not found.
+# Usage: lookup_checksum <key>
+lookup_checksum() {
+	local key="$1"
+	[ -f "$CHECKSUM_FILE" ] || { echo ""; return 0; }
+	python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+    print(data.get(sys.argv[2], ""))
+except (json.JSONDecodeError, OSError):
+    print("")
+' "$CHECKSUM_FILE" "$key"
+}
+
+# Record (upsert) a checksum in the manifest.
+# Creates the manifest if it does not exist.
+# Usage: record_checksum <key> <hash>
+record_checksum() {
+	local key="$1" hash="$2"
+	python3 -c '
+import json, sys, os
+path, key, val = sys.argv[1], sys.argv[2], sys.argv[3]
+data = {}
+if os.path.isfile(path):
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        data = {}
+data[key] = val
+with open(path, "w") as f:
+    json.dump(data, f, indent=2, sort_keys=True)
+    f.write("\n")
+' "$CHECKSUM_FILE" "$key" "$hash"
+}
+
 # Validate that a downloaded file is not HTML (e.g. a redirected
 # login/maintenance/WAF page).  Uses `file --mime-type` for content
 # sniffing.  Deletes the file and returns non-zero if HTML is detected.
@@ -220,16 +299,17 @@ download_file() {
 	fi
 }
 
-# Atomic download: download to temp file, validate not HTML, then rename.
-# Prevents partial/corrupt files from polluting the data pipeline (#195).
-# Usage: atomic_download <url> <final_path>
+# Atomic download: download to temp file, validate, then rename.
+# Chains MIME-type check (#195) and optional SHA-256 verification (#314).
+# Usage: atomic_download <url> <final_path> [expected_hash]
 atomic_download() {
-	local url="$1" final="$2"
+	local url="$1" final="$2" expected_hash="${3:-}"
 	local tmp
 	tmp=$(mktemp "${final}.XXXXXX")
 
 	if download_file "$url" "$tmp" \
-		&& validate_not_html "$tmp"; then
+		&& validate_not_html "$tmp" \
+		&& validate_checksum "$tmp" "$expected_hash"; then
 		mv -f "$tmp" "$final"
 		return 0
 	else
@@ -242,6 +322,11 @@ atomic_download() {
 # Run the download-and-convert pipeline for all years and file formats.
 # Accepts two callback function names to customise URL and filename
 # construction — the only parts that differ between data sources (#263).
+#
+# Integrity verification (#314): before each download, looks up the
+# expected SHA-256 from the checksums manifest.  After a successful
+# download, records the actual hash.  Set CHECKSUM_UPDATE=1 to skip
+# verification and force re-record (for known upstream changes).
 #
 # Requires these variables to be set by the caller:
 #   NAME_DIR, NAME_EXT, YEAR_START, YEAR_END, WAIT_MIN, WAIT_MAX, WGET_TIMEOUT
@@ -268,8 +353,18 @@ run_download_pipeline() {
 			check_file "${URL_TARGET}" || check_rc=$?
 			if [ "$check_rc" -eq 0 ]; then
 				local downloaded_path="./${NAME_DIR}/${base_name}.${FILE_EXT}"
-				if atomic_download "${URL_TARGET}" "$downloaded_path"; then
+				# Integrity verification (#314): look up expected hash
+				local checksum_key="${NAME_DIR}/${base_name}.${FILE_EXT}"
+				local expected_hash=""
+				if [ "${CHECKSUM_UPDATE:-}" != "1" ]; then
+					expected_hash=$(lookup_checksum "$checksum_key")
+				fi
+				if atomic_download "${URL_TARGET}" "$downloaded_path" "$expected_hash"; then
 					echo "✅ File Downloaded: ${base_name}.${FILE_EXT}"
+					# Record actual hash after successful download (#314)
+					local actual_hash
+					actual_hash=$(compute_checksum "$downloaded_path")
+					record_checksum "$checksum_key" "$actual_hash"
 					((SUCCESS_COUNT++)) || true
 				else
 					echo "⚠️  download or validation failed: ${URL_TARGET}" >&2
