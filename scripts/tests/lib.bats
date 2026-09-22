@@ -403,3 +403,33 @@ MOCK
   [ "$status" -eq 0 ]
   [[ "$output" != *"⚠️"* ]]
 }
+
+# ── run_download_pipeline: check_file network failure (#307) ───────
+
+@test "run_download_pipeline: records FAILED_DOWNLOADS on check_file network failure (#307)" {
+  # Setup minimal pipeline variables
+  export YEAR_START=113
+  export YEAR_END=113
+  export NAME_EXT=(csv)
+  export WAIT_MIN=0
+  export WAIT_MAX=0
+  export WGET_TIMEOUT=("--connect-timeout=1")
+
+  # Mock check_file to return exit code 4 (network failure)
+  check_file() { return 4; }
+  export -f check_file
+
+  # Mock convert_to_csv_if_needed to report no convertible source
+  convert_to_csv_if_needed() { return 1; }
+  export -f convert_to_csv_if_needed
+
+  # Trivial builder callbacks
+  url_builder() { echo "http://example.com/$1.$2"; }
+  name_builder() { echo "test_$1"; }
+  export -f url_builder name_builder
+
+  run run_download_pipeline url_builder name_builder
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"availability check failed"* ]]
+  [[ "$output" == *"download(s) failed"* ]]
+}
