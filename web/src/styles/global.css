@@ -136,19 +136,23 @@ a {
   margin: 0;
 }
 
-.summary__item dt {
+.summary__item dt,
+.summary__label {
+  display: block;
   font-size: 0.8125rem;
   color: var(--ink-soft);
 }
 
-.summary__item dd {
+.summary__item dd,
+.summary__value {
+  display: block;
   margin: 0;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 1.375rem;
   line-height: 1.2;
 }
 
-/* ---------- summary toggle (#144) ---------- */
+/* ---------- summary toggle (#144, #295) ---------- */
 
 .summary__toggle {
   cursor: pointer;
@@ -157,6 +161,9 @@ a {
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   transition: border-color 0.15s ease, opacity 0.15s ease;
 }
 
@@ -174,7 +181,7 @@ a {
   opacity: 0.45;
 }
 
-.summary__toggle--excluded dd {
+.summary__toggle--excluded .summary__value {
   text-decoration: line-through;
 }
 
@@ -606,7 +613,8 @@ a {
     overflow-x: auto;
   }
 
-  .summary__item dd {
+  .summary__item dd,
+  .summary__value {
     font-size: 1.125rem;
   }
 

@@ -148,14 +148,14 @@ describe('SummaryBar', () => {
     expect(screen.queryByText('其中無推估資料')).toBeNull();
   });
 
-  // --- Zero-out toggle (regression tests for #144) -------------------------
+  // --- Zero-out toggle (regression tests for #144, updated for #295) -------
 
-  it('renders the closing stat as a toggle button with role="button"', () => {
+  it('renders the closing stat as a native <button> element', () => {
     renderBar();
 
     const toggle = screen.getByRole('button', { name: /推估歸零/ });
     expect(toggle).toBeTruthy();
-    expect(toggle.getAttribute('tabindex')).toBe('0');
+    expect(toggle.tagName).toBe('BUTTON');
   });
 
   it('sets aria-pressed=true when closed schools are included', () => {
@@ -177,22 +177,6 @@ describe('SummaryBar', () => {
 
     const toggle = screen.getByRole('button', { name: /推估歸零/ });
     fireEvent.click(toggle);
-    expect(props.onToggleClosed).toHaveBeenCalledTimes(1);
-  });
-
-  it('fires onToggleClosed on Enter key', () => {
-    const { props } = renderBar();
-
-    const toggle = screen.getByRole('button', { name: /推估歸零/ });
-    fireEvent.keyDown(toggle, { key: 'Enter' });
-    expect(props.onToggleClosed).toHaveBeenCalledTimes(1);
-  });
-
-  it('fires onToggleClosed on Space key', () => {
-    const { props } = renderBar();
-
-    const toggle = screen.getByRole('button', { name: /推估歸零/ });
-    fireEvent.keyDown(toggle, { key: ' ' });
     expect(props.onToggleClosed).toHaveBeenCalledTimes(1);
   });
 
