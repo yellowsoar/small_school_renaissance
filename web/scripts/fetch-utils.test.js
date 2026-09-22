@@ -12,15 +12,21 @@ describe('fetchWithRetry', () => {
 
   /**
    * Helper: create a mock Response-like object for successful fetch.
-   * Provides `.ok`, `.status`, `.headers`, and `.text()` needed by the
-   * updated fetchWithRetry that reads body inside the retry loop (#211).
+   * Provides `.ok`, `.status`, `.headers`, `.text()`, and `.arrayBuffer()`
+   * needed by fetchWithRetry which reads body via the shared
+   * readBodyWithLimit module (#274).  The fallback path uses
+   * arrayBuffer() when response.body is falsy (plain object mocks).
    */
-  const okResponse = (body = 'csv-data', contentType = 'text/csv') => ({
-    ok: true,
-    status: 200,
-    headers: new Headers({ 'content-type': contentType }),
-    text: vi.fn().mockResolvedValue(body),
-  });
+  const okResponse = (body = 'csv-data', contentType = 'text/csv') => {
+    const encoded = new TextEncoder().encode(body);
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': contentType }),
+      text: vi.fn().mockResolvedValue(body),
+      arrayBuffer: vi.fn().mockResolvedValue(encoded.buffer),
+    };
+  };
 
   beforeEach(() => {
     originalFetch = globalThis.fetch;
@@ -39,7 +45,8 @@ describe('fetchWithRetry', () => {
     const res = await fetchWithRetry(url, { retries: 2, timeout: 1000 });
 
     expect(res).toEqual({ body: 'my-csv', contentType: 'text/csv' });
-    expect(mockRes.text).toHaveBeenCalledTimes(1);
+    // Body read goes through arrayBuffer() fallback (mock has no ReadableStream body).
+    expect(mockRes.arrayBuffer).toHaveBeenCalledTimes(1);
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(globalThis.fetch).toHaveBeenCalledWith(url, {
       signal: expect.any(AbortSignal),
@@ -234,11 +241,13 @@ describe('fetchWithRetry', () => {
   /* -------------------------------------------------------------- */
 
   it('retries when response body read fails (e.g. stream error)', async () => {
+    // The shared readBodyWithLimit falls back to arrayBuffer() for mocks
+    // without a ReadableStream body (#274).
     const failBody = {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'text/csv' }),
-      text: vi.fn().mockRejectedValue(new Error('network error during body read')),
+      arrayBuffer: vi.fn().mockRejectedValue(new Error('network error during body read')),
     };
     const okBody = okResponse('recovered-csv', 'text/csv');
     globalThis.fetch = vi.fn().mockResolvedValueOnce(failBody).mockResolvedValueOnce(okBody);
@@ -254,18 +263,20 @@ describe('fetchWithRetry', () => {
   });
 
   it('returns empty contentType when Content-Type header is absent', async () => {
+    const body = 'col1,col2\na,b';
+    const encoded = new TextEncoder().encode(body);
     const mockRes = {
       ok: true,
       status: 200,
       headers: new Headers(),
-      text: vi.fn().mockResolvedValue('col1,col2\na,b'),
+      arrayBuffer: vi.fn().mockResolvedValue(encoded.buffer),
     };
     globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
 
     const res = await fetchWithRetry(url, { retries: 0 });
 
     expect(res).toEqual({ body: 'col1,col2\na,b', contentType: '' });
-    expect(mockRes.text).toHaveBeenCalledTimes(1);
+    expect(mockRes.arrayBuffer).toHaveBeenCalledTimes(1);
   });
 
   /* -------------------------------------------------------------- */
@@ -277,7 +288,7 @@ describe('fetchWithRetry', () => {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'text/csv', 'content-length': '20000' }),
-      text: vi.fn().mockResolvedValue('should-not-be-read'),
+      arrayBuffer: vi.fn(),
     };
     globalThis.fetch = vi.fn().mockResolvedValue(largeRes);
 
@@ -286,17 +297,18 @@ describe('fetchWithRetry', () => {
 
     expect(err.name).toBe('SizeLimitError');
     expect(err.message).toMatch(/20000 bytes exceeds limit of 100 bytes/);
-    // text() should NOT have been called — early rejection via header.
-    expect(largeRes.text).not.toHaveBeenCalled();
+    // arrayBuffer() should NOT have been called \u2014 early rejection via header.
+    expect(largeRes.arrayBuffer).not.toHaveBeenCalled();
   });
 
   it('rejects via fallback post-check when body exceeds maxBytes (response.body is null)', async () => {
     const bigBody = 'x'.repeat(200);
+    const encoded = new TextEncoder().encode(bigBody);
     const mockRes = {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'text/csv' }),
-      text: vi.fn().mockResolvedValue(bigBody),
+      arrayBuffer: vi.fn().mockResolvedValue(encoded.buffer),
       body: null,
     };
     globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
@@ -306,17 +318,18 @@ describe('fetchWithRetry', () => {
 
     expect(err.name).toBe('SizeLimitError');
     expect(err.message).toMatch(/200 bytes exceeds limit of 100 bytes/);
-    // text() WAS called because fallback path reads first, checks after.
-    expect(mockRes.text).toHaveBeenCalledTimes(1);
+    // arrayBuffer() was called, confirming fallback path was exercised.
+    expect(mockRes.arrayBuffer).toHaveBeenCalledTimes(1);
   });
 
   it('accepts response within maxBytes limit', async () => {
     const smallBody = 'col1,col2\na,b';
+    const encoded = new TextEncoder().encode(smallBody);
     const mockRes = {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'text/csv' }),
-      text: vi.fn().mockResolvedValue(smallBody),
+      arrayBuffer: vi.fn().mockResolvedValue(encoded.buffer),
       body: null,
     };
     globalThis.fetch = vi.fn().mockResolvedValue(mockRes);
@@ -331,14 +344,14 @@ describe('fetchWithRetry', () => {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'text/csv', 'content-length': '20000' }),
-      text: vi.fn().mockResolvedValue('data'),
+      arrayBuffer: vi.fn(),
     };
     globalThis.fetch = vi.fn().mockResolvedValue(largeRes);
 
     await expect(
       fetchWithRetry(url, { retries: 2, timeout: 1000, maxBytes: 100 }),
     ).rejects.toThrow('exceeds limit');
-    // Only 1 call — SizeLimitError has retriable: false, no retries.
+    // Only 1 call \u2014 SizeLimitError has retriable: false, no retries.
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(console.warn).not.toHaveBeenCalled();
   });
