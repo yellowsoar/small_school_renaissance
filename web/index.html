@@ -8,9 +8,20 @@
       name="description"
       content="以教育部統計處開放資料推估 114–130 學年度全台國民小學學生人數，標示可能面臨廢校的學校。"
     />
-    <!-- style-src 'unsafe-inline' is required by Leaflet, which injects
-         inline styles for tile/marker positioning at runtime. Remove if
-         Leaflet ever supports a nonce-based approach. -->
+    <!-- CSP Level 3 granular style directives (style-src-attr, style-src-elem)
+         narrow the scope of 'unsafe-inline' to style *attributes* only.
+         Leaflet injects inline style attributes (element.style.transform = ...)
+         for tile/marker positioning, but does NOT inject <style> elements.
+         - style-src-attr 'unsafe-inline': allows Leaflet's inline style attrs
+         - style-src-elem 'self' https://fonts.googleapis.com: blocks inline
+           <style> elements (main XSS vector), only allows external stylesheets
+         - style-src (L2 fallback): CSP L2 browsers ignore style-src-attr/elem
+           and fall back to style-src, preserving current behavior unchanged.
+         When Leaflet supports nonce-based styles (leaflet/leaflet#7028),
+         remove 'unsafe-inline' from both style-src and style-src-attr.
+         NOTE: Vite dev mode injects <style> elements for CSS HMR. The
+         transformIndexHtml plugin in vite.config.js automatically adds
+         'unsafe-inline' back to style-src-elem during `vite dev` (#277). -->
     <!-- frame-ancestors is intentionally omitted: per CSP Level 2 it is
          only enforced via HTTP header, not <meta>. GitHub Pages does not
          support custom response headers. To enable clickjacking protection,
@@ -24,7 +35,7 @@
          explaining the dependency. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://tile.openstreetmap.org https://*.basemaps.cartocdn.com; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://tile.openstreetmap.org https://*.basemaps.cartocdn.com; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
     />
     <link rel="preconnect" href="https://tile.openstreetmap.org" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
