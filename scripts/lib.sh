@@ -264,7 +264,9 @@ run_download_pipeline() {
 			local URL_TARGET
 			URL_TARGET=$("$url_builder" "$YEAR_CURRENT" "$FILE_EXT")
 			echo "⚙️ Checking URL: ${URL_TARGET}"
-			if check_file "${URL_TARGET}"; then
+			local check_rc=0
+			check_file "${URL_TARGET}" || check_rc=$?
+			if [ "$check_rc" -eq 0 ]; then
 				local downloaded_path="./${NAME_DIR}/${base_name}.${FILE_EXT}"
 				if atomic_download "${URL_TARGET}" "$downloaded_path"; then
 					echo "✅ File Downloaded: ${base_name}.${FILE_EXT}"
@@ -273,6 +275,9 @@ run_download_pipeline() {
 					echo "⚠️  download or validation failed: ${URL_TARGET}" >&2
 					FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
 				fi
+			elif [ "$check_rc" -ne 8 ]; then
+				echo "⚠️  availability check failed (network): ${URL_TARGET}" >&2
+				FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}/availability-check")
 			fi
 			sleep $((RANDOM % (WAIT_MAX - WAIT_MIN + 1) + WAIT_MIN))
 		done
