@@ -94,6 +94,23 @@ describe('parseRetryAfter', () => {
     expect(parseRetryAfter('not-a-number-or-date')).toBe(0);
     expect(parseRetryAfter('abc')).toBe(0);
   });
+
+  it('rejects non-standard date formats (ISO 8601, US locale)', () => {
+    // These are parseable by new Date() but are NOT IMF-fixdate.
+    expect(parseRetryAfter('2026-09-18T01:45:00Z')).toBe(0);
+    expect(parseRetryAfter('Sep 18, 2026')).toBe(0);
+    expect(parseRetryAfter('09/18/2026')).toBe(0);
+    expect(parseRetryAfter('2026-09-18')).toBe(0);
+  });
+
+  it('continues to accept valid IMF-fixdate headers', () => {
+    const futureDate = new Date(Date.now() + 60_000);
+    const imfHeader = futureDate.toUTCString();
+    // toUTCString() produces IMF-fixdate format in all modern engines.
+    const result = parseRetryAfter(imfHeader);
+    expect(result).toBeGreaterThan(58_000);
+    expect(result).toBeLessThanOrEqual(61_000);
+  });
 });
 
 describe('exported constants', () => {
