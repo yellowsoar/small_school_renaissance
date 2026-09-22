@@ -24,10 +24,12 @@
          'unsafe-inline' back to style-src-elem during `vite dev` (#277). -->
     <!-- frame-ancestors is intentionally omitted: per CSP Level 2 it is
          only enforced via HTTP header, not <meta>. GitHub Pages does not
-         support custom response headers. To enable clickjacking protection,
-         deploy behind a CDN that supports custom headers (e.g. Cloudflare
-         Pages, Netlify) and set frame-ancestors 'none' + X-Frame-Options:
-         DENY there. See #221. -->
+         support custom response headers. A JS-level frame-busting
+         mitigation is active (frameGuard.js, #315) as a best-effort
+         defense. For full protection, deploy behind a CDN that supports
+         custom headers (e.g. Cloudflare Pages, Netlify) and set
+         frame-ancestors 'none' + X-Frame-Options: DENY there.
+         See #221. -->
     <!-- img-src: data: was removed (#254) because no code path uses data
          URI images. All markers use divIcon with inline SVG, heatmap uses
          canvas, and sparklines are inline SVG polylines. If a future
