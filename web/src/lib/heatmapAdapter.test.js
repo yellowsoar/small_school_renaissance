@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
   return { heatLayer: vi.fn(() => mockLayer), mockLayer };
 });
 
-vi.mock('@linkurious/leaflet-heat', () => ({
+vi.mock('leaflet-heatmap-layer', () => ({
   heatLayer: mocks.heatLayer,
 }));
 
@@ -33,9 +33,32 @@ describe('heatmapAdapter', () => {
     createHeatLayer(opts);
 
     const passedOpts = mocks.heatLayer.mock.calls.at(-1)[1];
-    expect(passedOpts).toEqual(opts);
+    expect(passedOpts).toEqual({
+      max: 1.0,
+      scaleRadius: 0,
+      zoomCrossfadeDuration: 0,
+      ...opts,
+    });
     expect(passedOpts).not.toBe(opts);
     expect(passedOpts.gradient).not.toBe(opts.gradient);
+  });
+
+  it('injects compatibility defaults for leaflet-heatmap-layer', () => {
+    createHeatLayer({});
+
+    const passedOpts = mocks.heatLayer.mock.calls.at(-1)[1];
+    expect(passedOpts.max).toBe(1.0);
+    expect(passedOpts.scaleRadius).toBe(0);
+    expect(passedOpts.zoomCrossfadeDuration).toBe(0);
+  });
+
+  it('allows caller options to override compatibility defaults', () => {
+    createHeatLayer({ max: 2.0, scaleRadius: 0.5 });
+
+    const passedOpts = mocks.heatLayer.mock.calls.at(-1)[1];
+    expect(passedOpts.max).toBe(2.0);
+    expect(passedOpts.scaleRadius).toBe(0.5);
+    expect(passedOpts.zoomCrossfadeDuration).toBe(0);
   });
 
   it('returns an object with addTo, setLatLngs, and remove', () => {
