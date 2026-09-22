@@ -544,6 +544,43 @@ describe('validateCsvContent', () => {
     const csv = ['alpha,beta', ...rows].join('\n');
     expect(() => validateCsvContent(csv, ['alpha', 'beta'])).not.toThrow();
   });
+
+  /* -------------------------------------------------------------- */
+  /*  Structural parse error validation (#311)                         */
+  /* -------------------------------------------------------------- */
+
+  it('throws when CSV has critical structural errors above 1% threshold (#311)', () => {
+    // Build a CSV with valid headers but 5% of rows having too few fields.
+    // 100 rows total, 5 with TooFewFields (missing last column) = 5% > 1%.
+    const header = 'alpha,beta,gamma';
+    const goodRow = 'a,b,c';
+    const badRow = 'a,b'; // TooFewFields: only 2 columns instead of 3
+    const rows = [
+      ...Array(95).fill(goodRow),
+      ...Array(5).fill(badRow),
+    ];
+    const csv = [header, ...rows].join('\n');
+    expect(() => validateCsvContent(csv, ['alpha', 'beta', 'gamma'])).toThrow(
+      'structural errors exceed threshold',
+    );
+    expect(() => validateCsvContent(csv, ['alpha', 'beta', 'gamma'])).toThrow(
+      'TooFewFields',
+    );
+  });
+
+  it('accepts CSV with critical structural errors below 1% threshold (#311)', () => {
+    // Build a CSV with valid headers but < 1% of rows having too few fields.
+    // 200 rows total, 1 with TooFewFields = 0.5% < 1%.
+    const header = 'alpha,beta,gamma';
+    const goodRow = 'a,b,c';
+    const badRow = 'a,b'; // TooFewFields
+    const rows = [
+      ...Array(199).fill(goodRow),
+      badRow,
+    ];
+    const csv = [header, ...rows].join('\n');
+    expect(() => validateCsvContent(csv, ['alpha', 'beta', 'gamma'])).not.toThrow();
+  });
 });
 
 /* ------------------------------------------------------------------ */

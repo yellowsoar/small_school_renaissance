@@ -1,6 +1,6 @@
 import Papa from 'papaparse';
 import { PROJECTION_YEARS, RISK_TIERS, TW_BOUNDS, requireTier } from '../config/index.js';
-import { REQUIRED_HEADERS } from './csv-schema.js';
+import { REQUIRED_HEADERS, CRITICAL_PARSE_ERROR_CODES, MAX_CRITICAL_ERROR_RATIO } from './csv-schema.js';
 
 /**
  * Thresholds derived from RISK_TIERS so summarize() and the tier system
@@ -23,20 +23,6 @@ const MAX_DROP_RATIO = 0.3;
  * quality crisis).
  */
 const MIN_DROP_SAMPLE = 10;
-
-/**
- * PapaParse error codes that indicate field-alignment corruption (#208).
- * These codes mean the row's column count or quoting is broken, so
- * downstream field access (student counts, projections) is unreliable.
- */
-const CRITICAL_PARSE_ERROR_CODES = ['TooFewFields', 'TooManyFields', 'InvalidQuotes'];
-
-/**
- * Maximum tolerable ratio of critical parse errors before parseSchools
- * rejects the dataset (#208). 1% is conservative: a handful of edge-case
- * rows in ~2,600 won't trip this, but a structurally damaged CSV will.
- */
-const MAX_CRITICAL_ERROR_RATIO = 0.01;
 
 const num = (value) => {
   if (typeof value !== 'string' && typeof value !== 'number') return null;

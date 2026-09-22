@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 
 import Papa from 'papaparse';
 
-import { REQUIRED_HEADERS, MAX_CSV_BYTES } from '../src/lib/csv-schema.js';
+import { REQUIRED_HEADERS, MAX_CSV_BYTES, CRITICAL_PARSE_ERROR_CODES, MAX_CRITICAL_ERROR_RATIO } from '../src/lib/csv-schema.js';
 import { classifyResponse, withRetry, DEFAULT_RETRIES } from '../src/lib/retry-core.js';
 import { readBodyWithLimit } from '../src/lib/body-reader.js';
 
@@ -105,6 +105,8 @@ export function verifyCsvIntegrity(body, expectedHash) {
  * 3. The header line contains all `requiredHeaders` (column-level match).
  * 4. At least one data row exists beyond the header (RFC 4180 record count).
  * 5. Data row count meets the minimum threshold (truncation guard).
+ * 6. Structural parse errors (field-alignment) do not exceed the shared
+ *    threshold from csv-schema.js, aligned with parseSchools() (#311).
  *
  * Record counting uses PapaParse to correctly handle RFC 4180 quoted fields
  * that contain embedded newlines, instead of splitting on physical newlines
@@ -148,7 +150,7 @@ export function validateCsvContent(
   // Use PapaParse for accurate RFC 4180 record counting.
   // Physical newline splitting over-counts when quoted fields contain
   // embedded newlines (#209).
-  const { data } = Papa.parse(body, { header: true, skipEmptyLines: true });
+  const { data, errors } = Papa.parse(body, { header: true, skipEmptyLines: true });
 
   if (data.length < 1) {
     throw new Error('CSV contains a header but no data rows');
@@ -160,5 +162,25 @@ export function validateCsvContent(
       `CSV has only ${data.length} data row(s), expected at least ${MIN_DATA_ROWS}` +
         ` \u2014 the download may be truncated`,
     );
+  }
+
+  // --- Structural parse-error guard (#311) --------------------------------
+  // Check for field-alignment errors (TooFewFields, TooManyFields,
+  // InvalidQuotes) using the same threshold as parseSchools() (#208).
+  // This prevents CI from deploying a CSV that the browser-side parser
+  // would reject at runtime.
+  if (errors.length > 0) {
+    const critical = errors.filter((e) =>
+      CRITICAL_PARSE_ERROR_CODES.includes(e.code),
+    );
+    if (critical.length > data.length * MAX_CRITICAL_ERROR_RATIO) {
+      throw new Error(
+        `CSV structural errors exceed threshold: ${critical.length}/${data.length} rows` +
+          ` (${((critical.length / data.length) * 100).toFixed(1)}%) have field-alignment errors` +
+          ` (${[...new Set(critical.map((e) => e.code))].join(', ')}),` +
+          ` exceeding the ${MAX_CRITICAL_ERROR_RATIO * 100}% limit` +
+          ` \u2014 the browser-side parser would reject this dataset`,
+      );
+    }
   }
 }
