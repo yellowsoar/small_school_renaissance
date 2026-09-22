@@ -1,0 +1,64 @@
+name: Update Coverage Badge
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write  # Required to push coverage.json to the badges branch
+  actions: read    # Required to download artifacts from the CI workflow run
+
+jobs:
+  badge:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Download coverage artifact
+        id: download
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: coverage-pct
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+        continue-on-error: true
+
+      - name: Generate and push badge
+        if: steps.download.outcome == 'success'
+        run: |
+          PCT=$(cat coverage-pct.txt 2>/dev/null || echo '')
+          if [ -z "$PCT" ]; then
+            echo "::warning::Coverage percentage not available; skipping badge update"
+            exit 0
+          fi
+
+          # Determine badge color
+          if [ "$PCT" -ge 90 ]; then COLOR="brightgreen"
+          elif [ "$PCT" -ge 80 ]; then COLOR="green"
+          elif [ "$PCT" -ge 70 ]; then COLOR="yellowgreen"
+          elif [ "$PCT" -ge 60 ]; then COLOR="yellow"
+          else COLOR="red"; fi
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Switch to badges branch (create orphan if needed)
+          if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
+            git fetch origin badges
+            git checkout -B badges origin/badges
+          else
+            git checkout --orphan badges
+            git rm -rf .
+          fi
+
+          # Write shields.io endpoint JSON
+          printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$PCT" "$COLOR" > coverage.json
+
+          git add coverage.json
+          git diff --cached --quiet && echo "Badge unchanged" && exit 0
+          git commit -m "chore: update coverage badge (${PCT}%)"
+          git push origin badges

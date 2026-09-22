@@ -35,48 +35,27 @@ jobs:
       - name: Run Shell tests
         run: bats scripts/tests/
 
-  coverage-badge:
+  upload-coverage:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: check
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-
-      - name: Generate and push badge
+      - name: Write coverage percentage
+        id: write
         env:
           PCT: ${{ needs.check.outputs.coverage-pct }}
         run: |
           if [ -z "$PCT" ]; then
-            echo "::warning::Coverage percentage not available; skipping badge update"
+            echo "::warning::Coverage percentage not available; skipping artifact upload"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "$PCT" > coverage-pct.txt
 
-          # Determine badge color
-          if [ "$PCT" -ge 90 ]; then COLOR="brightgreen"
-          elif [ "$PCT" -ge 80 ]; then COLOR="green"
-          elif [ "$PCT" -ge 70 ]; then COLOR="yellowgreen"
-          elif [ "$PCT" -ge 60 ]; then COLOR="yellow"
-          else COLOR="red"; fi
-
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Switch to badges branch (create orphan if needed)
-          if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
-            git fetch origin badges
-            git checkout -B badges origin/badges
-          else
-            git checkout --orphan badges
-            git rm -rf .
-          fi
-
-          # Write shields.io endpoint JSON
-          printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$PCT" "$COLOR" > coverage.json
-
-          git add coverage.json
-          git diff --cached --quiet && echo "Badge unchanged" && exit 0
-          git commit -m "chore: update coverage badge (${PCT}%)"
-          git push origin badges
+      - name: Upload coverage artifact
+        if: steps.write.outputs.skip != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-pct
+          path: coverage-pct.txt
+          retention-days: 1
