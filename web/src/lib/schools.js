@@ -178,13 +178,22 @@ export const parseSchools = (csvText) => {
     }
   }
 
-  // --- Duplicate ID disambiguation (#45, #252) -----------------------------
-  const idCounts = new Map();
+  // --- Duplicate ID disambiguation (#45, #252, #276) -----------------------
+  // Two-pass deterministic disambiguation: the suffix encodes coordinates so
+  // the resulting ID is independent of CSV row order.
+  const idFreq = new Map();
   for (const school of schools) {
-    const count = (idCounts.get(school.id) ?? 0) + 1;
-    idCounts.set(school.id, count);
-    if (count > 1) {
-      school.id = `${school.id}::dup${count}`;
+    idFreq.set(school.id, (idFreq.get(school.id) ?? 0) + 1);
+  }
+
+  const coordSeen = new Map();
+  for (const school of schools) {
+    if (idFreq.get(school.id) > 1) {
+      const [lat, lng] = school.position;
+      const coordKey = `${school.id}::${lat},${lng}`;
+      const count = (coordSeen.get(coordKey) ?? 0) + 1;
+      coordSeen.set(coordKey, count);
+      school.id = count > 1 ? `${coordKey}#${count}` : coordKey;
     }
   }
 
