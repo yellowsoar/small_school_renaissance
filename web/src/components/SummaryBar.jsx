@@ -4,13 +4,6 @@ import { useDebouncedAnnounce } from '../hooks/useDebouncedAnnounce.js';
 const integer = new Intl.NumberFormat('zh-Hant-TW');
 const AT_RISK_MAX = requireTier('high').max;
 
-const handleToggleKeyDown = (callback) => (event) => {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault();
-    callback();
-  }
-};
-
 export default function SummaryBar({
   totals,
   year,
@@ -54,22 +47,21 @@ export default function SummaryBar({
       <dl className="summary">
         {stats.map(({ label, value, toggle }) =>
           toggle ? (
-            <div
-              key={label}
-              className={`summary__item summary__toggle${excludeClosed ? ' summary__toggle--excluded' : ''}`}
-              role="button"
-              tabIndex={0}
-              aria-pressed={!excludeClosed}
-              title={
-                excludeClosed
-                  ? '點擊以在地圖上顯示推估歸零學校'
-                  : '點擊以從地圖上隱藏推估歸零學校'
-              }
-              onClick={onToggleClosed}
-              onKeyDown={handleToggleKeyDown(onToggleClosed)}
-            >
-              <dt>{label}</dt>
-              <dd>{integer.format(value)}</dd>
+            <div key={label} className="summary__item">
+              <button
+                type="button"
+                className={`summary__toggle${excludeClosed ? ' summary__toggle--excluded' : ''}`}
+                aria-pressed={!excludeClosed}
+                title={
+                  excludeClosed
+                    ? '點擊以在地圖上顯示推估歸零學校'
+                    : '點擊以從地圖上隱藏推估歸零學校'
+                }
+                onClick={onToggleClosed}
+              >
+                <span className="summary__label">{label}</span>
+                <span className="summary__value">{integer.format(value)}</span>
+              </button>
             </div>
           ) : (
             <div key={label} className="summary__item">
