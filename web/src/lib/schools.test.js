@@ -182,7 +182,7 @@ describe('parseSchools', () => {
     });
   });
 
-  // --- Duplicate ID disambiguation (regression tests for #45) --------------
+  // --- Duplicate ID disambiguation (regression tests for #45, #276) --------
 
   it('disambiguates duplicate fallback IDs when multiple schools share coordinates and lack a school code', () => {
     const { schools } = parseSchools(
@@ -194,9 +194,9 @@ describe('parseSchools', () => {
     );
 
     expect(schools).toHaveLength(3);
-    expect(schools[0].id).toBe('24.9,121.5');
-    expect(schools[1].id).toBe('24.9,121.5::dup2');
-    expect(schools[2].id).toBe('24.9,121.5::dup3');
+    expect(schools[0].id).toBe('24.9,121.5::24.9,121.5');
+    expect(schools[1].id).toBe('24.9,121.5::24.9,121.5#2');
+    expect(schools[2].id).toBe('24.9,121.5::24.9,121.5#3');
   });
 
   it('does not add a suffix when only one school uses a fallback ID', () => {
@@ -205,19 +205,32 @@ describe('parseSchools', () => {
     );
 
     expect(schools[0].id).toBe('24.87235152,121.40522708');
-    expect(schools[0].id).not.toContain('::dup');
+    expect(schools[0].id).not.toContain('::');
   });
 
   it('disambiguates explicit duplicate school codes the same way', () => {
     const { schools } = parseSchools(
       csv([
-        row({ projected: 10, 學校代碼: 'DUP001', 學校名稱: '甲校' }),
-        row({ projected: 20, 學校代碼: 'DUP001', 學校名稱: '乙校' }),
+        row({ projected: 10, 學校代碼: 'DUP001', 學校名稱: '甲校', 緯度: '24.87', 經度: '121.41' }),
+        row({ projected: 20, 學校代碼: 'DUP001', 學校名稱: '乙校', 緯度: '25.05', 經度: '121.52' }),
       ]),
     );
 
-    expect(schools[0].id).toBe('DUP001');
-    expect(schools[1].id).toBe('DUP001::dup2');
+    expect(schools[0].id).toBe('DUP001::24.87,121.41');
+    expect(schools[1].id).toBe('DUP001::25.05,121.52');
+  });
+
+  it('produces the same IDs regardless of CSV row order (#276)', () => {
+    const rowA = row({ projected: 10, 學校代碼: 'DUP001', 學校名稱: '甲校', 緯度: '24.87', 經度: '121.41' });
+    const rowB = row({ projected: 20, 學校代碼: 'DUP001', 學校名稱: '乙校', 緯度: '25.05', 經度: '121.52' });
+
+    const { schools: forward } = parseSchools(csv([rowA, rowB]));
+    const { schools: reversed } = parseSchools(csv([rowB, rowA]));
+
+    const forwardIds = new Set(forward.map((s) => s.id));
+    const reversedIds = new Set(reversed.map((s) => s.id));
+
+    expect(forwardIds).toEqual(reversedIds);
   });
 
   it('does not affect summarize() totals after disambiguation', () => {
