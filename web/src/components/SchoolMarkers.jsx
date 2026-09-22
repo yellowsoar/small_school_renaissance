@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Marker, Popup } from 'react-leaflet';
-import { MAP } from '../config/index.js';
+import { MAP, UNPROJECTED_MARKER } from '../config/index.js';
 import { tierFor } from '../lib/schools.js';
 import { iconFor } from '../lib/markerIcons.js';
 import { useVisibleSchools } from '../hooks/useVisibleSchools.js';
@@ -63,6 +63,25 @@ export default function SchoolMarkers({ schools, year, visible }) {
 
   return onScreen.map((school) => {
     const tier = tierFor(school.projections.get(year));
+
+    if (school.unprojected) {
+      const ariaLabel = `${school.name}\uff08${UNPROJECTED_MARKER.label}\uff09`;
+      return (
+        <AccessibleMarker
+          key={school.id}
+          position={school.position}
+          icon={iconFor(UNPROJECTED_MARKER)}
+          title={school.name}
+          alt={ariaLabel}
+          ariaLabel={ariaLabel}
+        >
+          <Popup minWidth={260} maxWidth={320}>
+            <SchoolPopup school={school} year={year} tier={null} />
+          </Popup>
+        </AccessibleMarker>
+      );
+    }
+
     if (!tier) return null;
 
     const ariaLabel = `${school.name}\uff08${tier.label}\uff09`;
