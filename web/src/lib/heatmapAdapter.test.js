@@ -28,11 +28,14 @@ const { createHeatLayer } = await import('./heatmapAdapter.js');
 /* ------------------------------------------------------------------ */
 
 describe('heatmapAdapter', () => {
-  it('delegates to heatLayer with the given options', () => {
-    const opts = { radius: 45, blur: 22 };
+  it('delegates to heatLayer with an isolated copy of the given options', () => {
+    const opts = { radius: 45, blur: 22, gradient: { 0.5: '#f00' } };
     createHeatLayer(opts);
 
-    expect(mocks.heatLayer).toHaveBeenCalledWith([], opts);
+    const passedOpts = mocks.heatLayer.mock.calls.at(-1)[1];
+    expect(passedOpts).toEqual(opts);
+    expect(passedOpts).not.toBe(opts);
+    expect(passedOpts.gradient).not.toBe(opts.gradient);
   });
 
   it('returns an object with addTo, setLatLngs, and remove', () => {
@@ -64,5 +67,18 @@ describe('heatmapAdapter', () => {
     layer.remove();
 
     expect(mocks.mockLayer.remove).toHaveBeenCalled();
+  });
+
+  it('prevents plugin mutation from polluting the original options', () => {
+    const opts = { radius: 45, gradient: { 0.2: '#ffd166', 0.5: '#f07300' } };
+    createHeatLayer(opts);
+
+    // Simulate plugin mutating the passed gradient object
+    const passedOpts = mocks.heatLayer.mock.calls.at(-1)[1];
+    passedOpts.gradient[0.85] = '#d7263d';
+    passedOpts.radius = 99;
+
+    expect(opts.gradient).not.toHaveProperty('0.85');
+    expect(opts.radius).toBe(45);
   });
 });
