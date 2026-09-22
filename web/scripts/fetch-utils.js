@@ -8,17 +8,11 @@ import { createHash } from 'node:crypto';
 
 import Papa from 'papaparse';
 
-import { REQUIRED_HEADERS } from '../src/lib/csv-schema.js';
+import { REQUIRED_HEADERS, MAX_CSV_BYTES } from '../src/lib/csv-schema.js';
 import { classifyResponse, withRetry, DEFAULT_RETRIES } from '../src/lib/retry-core.js';
 import { readBodyWithLimit } from '../src/lib/body-reader.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-
-/**
- * Maximum response body size (bytes) that fetchWithRetry will accept.
- * Aligned with the browser-side MAX_CSV_BYTES in fetchWithTimeout (#207).
- */
-const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
  * Minimum number of data rows (excluding header) required for the CSV to
@@ -50,7 +44,7 @@ const MIN_DATA_ROWS = 100;
  */
 export async function fetchWithRetry(
   url,
-  { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS, maxBytes = MAX_BODY_BYTES } = {},
+  { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS, maxBytes = MAX_CSV_BYTES } = {},
 ) {
   return withRetry(
     async () => {
