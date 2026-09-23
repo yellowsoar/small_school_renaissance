@@ -412,7 +412,9 @@ run_download_pipeline() {
 	local SUCCESS_COUNT=0
 
 	mkdir -p "./${NAME_DIR}"
-	# SC2086: quote variables in seq call (#322)
+	# SC2086: quote variables in seq call; SC2046: word splitting is
+	# intentional here (seq outputs one integer per line) (#322)
+	# shellcheck disable=SC2046
 	for YEAR_CURRENT in $(seq "${YEAR_START}" "${YEAR_END}"); do
 		echo "⚙️ Working on ${YEAR_CURRENT}"
 		local base_name
@@ -459,12 +461,12 @@ run_download_pipeline() {
 		fi
 	done
 
-	if [ "$SUCCESS_COUNT" -eq 0 ] && [ ${#FAILED_DOWNLOADS[@]} -eq 0 ]; then
+	if [ "$SUCCESS_COUNT" -eq 0 ] && [ "${#FAILED_DOWNLOADS[@]}" -eq 0 ]; then
 		echo "❌ No files were downloaded at all — upstream may be unreachable" >&2
 		exit 1
 	fi
 
-	if [ ${#FAILED_DOWNLOADS[@]} -gt 0 ]; then
+	if [ "${#FAILED_DOWNLOADS[@]}" -gt 0 ]; then
 		echo "⚠️  ${#FAILED_DOWNLOADS[@]} download(s) failed:" >&2
 		printf '  - %s\n' "${FAILED_DOWNLOADS[@]}" >&2
 		exit 1
