@@ -32,7 +32,10 @@ sed_inplace() {
 	# Failure is non-fatal: falls back to mktemp default (0600).
 	local perms
 	perms=$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file" 2>/dev/null) || true
-	[ -n "$perms" ] && chmod "$perms" "$tmpfile" || true
+	# SC2015: use explicit if/then instead of A && B || C (#322)
+	if [ -n "$perms" ]; then
+		chmod "$perms" "$tmpfile" || true
+	fi
 	if sed "$@" "$file" > "$tmpfile" && mv -f "$tmpfile" "$file"; then
 		return 0
 	else
@@ -409,7 +412,8 @@ run_download_pipeline() {
 	local SUCCESS_COUNT=0
 
 	mkdir -p "./${NAME_DIR}"
-	for YEAR_CURRENT in $(seq ${YEAR_START} ${YEAR_END}); do
+	# SC2086: quote variables in seq call (#322)
+	for YEAR_CURRENT in $(seq "${YEAR_START}" "${YEAR_END}"); do
 		echo "⚙️ Working on ${YEAR_CURRENT}"
 		local base_name
 		base_name=$("$name_builder" "$YEAR_CURRENT")
