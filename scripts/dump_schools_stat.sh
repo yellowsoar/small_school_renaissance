@@ -15,6 +15,7 @@ NAME_EXT=(
 
 # shellcheck disable=SC2034
 YEAR_START=87
+# shellcheck disable=SC2034
 YEAR_END=$(( $(date +%Y) - 1911 ))
 
 # shellcheck disable=SC2034
