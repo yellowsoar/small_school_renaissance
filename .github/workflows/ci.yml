@@ -30,7 +30,17 @@ jobs:
           sudo apt-get install -y -qq shellcheck bats
 
       - name: ShellCheck
-        run: shellcheck --severity=warning scripts/dump_schools_*.sh
+        run: |
+          SC_RC=0
+          SC_OUTPUT=$(shellcheck --severity=warning --format=gcc scripts/dump_schools_*.sh 2>&1) || SC_RC=$?
+          if [ "$SC_RC" -ne 0 ]; then
+            echo "## ShellCheck Findings" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$SC_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$SC_OUTPUT"
+            exit "$SC_RC"
+          fi
 
       - name: Run Shell tests
         run: bats scripts/tests/
