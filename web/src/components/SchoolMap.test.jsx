@@ -111,21 +111,40 @@ describe('SchoolMap', () => {
     );
   });
 
-  it('switches to a different tile layer when baseMap changes', () => {
+  it('switches to HOT tile layer when baseMap changes', () => {
     render(
       <SchoolMap
         schools={schools}
         year={year}
-        layers={{ ...layers, baseMap: 'positron' }}
+        layers={{ ...layers, baseMap: 'hot' }}
         overlayData={overlayData}
       />,
     );
 
-    const positron = TILE_LAYERS.find((t) => t.id === 'positron');
+    const hot = TILE_LAYERS.find((t) => t.id === 'hot');
     expect(mocks.tileLayerProps).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: positron.url,
-        attribution: positron.attribution,
+        url: hot.url,
+        attribution: hot.attribution,
+      }),
+    );
+  });
+
+  it('forwards maxNativeZoom for topo tile layer', () => {
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={{ ...layers, baseMap: 'topo' }}
+        overlayData={overlayData}
+      />,
+    );
+
+    const topo = TILE_LAYERS.find((t) => t.id === 'topo');
+    expect(mocks.tileLayerProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: topo.url,
+        maxNativeZoom: 17,
       }),
     );
   });

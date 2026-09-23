@@ -76,6 +76,12 @@ describe('config', () => {
     }
   });
 
+  it('TILE_LAYERS contains no API-key-required URLs (#346)', () => {
+    for (const layer of TILE_LAYERS) {
+      expect(layer.url).not.toMatch(/cartocdn|carto\.com|mapbox|maptiler|stadia/i);
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // RISK_TIERS
   // ---------------------------------------------------------------------------
@@ -130,7 +136,7 @@ describe('config', () => {
   });
 
   it('requireTier throws a descriptive error for an unknown id', () => {
-    expect(() => requireTier('nonexistent')).toThrow('RISK_TIERS 設定錯誤');
+    expect(() => requireTier('nonexistent')).toThrow('RISK_TIERS \u8a2d\u5b9a\u932f\u8aa4');
     expect(() => requireTier('nonexistent')).toThrow('nonexistent');
   });
 

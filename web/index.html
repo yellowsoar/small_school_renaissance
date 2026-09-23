@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>廢校預警 ・ 全台國小學生人數推估</title>
+    <title>\u5ee2\u6821\u9810\u8b66 \u30fb \u5168\u53f0\u570b\u5c0f\u5b78\u751f\u4eba\u6578\u63a8\u4f30</title>
     <meta
       name="description"
-      content="以教育部統計處開放資料推估 114–130 學年度全台國民小學學生人數，標示可能面臨廢校的學校。"
+      content="\u4ee5\u6559\u80b2\u90e8\u7d71\u8a08\u8655\u958b\u653e\u8cc7\u6599\u63a8\u4f30 114\u2013130 \u5b78\u5e74\u5ea6\u5168\u53f0\u570b\u6c11\u5c0f\u5b78\u5b78\u751f\u4eba\u6578\uff0c\u6a19\u793a\u53ef\u80fd\u9762\u81e8\u5ee2\u6821\u7684\u5b78\u6821\u3002"
     />
     <!-- CSP Level 3 granular style directives (style-src-attr, style-src-elem)
          narrow the scope of 'unsafe-inline' to style *attributes* only.
@@ -35,9 +35,11 @@
          canvas, and sparklines are inline SVG polylines. If a future
          feature needs data: URIs for images, add it back with a comment
          explaining the dependency. -->
+    <!-- img-src: cartocdn removed (#346) — CARTO now requires API key
+         registration. Replaced with free HOT and OpenTopoMap tile domains. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://tile.openstreetmap.org https://*.basemaps.cartocdn.com; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.fr https://*.tile.opentopomap.org; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
     />
     <link rel="preconnect" href="https://tile.openstreetmap.org" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -62,7 +64,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <noscript>這個頁面需要 JavaScript 才能顯示地圖。</noscript>
+    <noscript>\u9019\u500b\u9801\u9762\u9700\u8981 JavaScript \u624d\u80fd\u986f\u793a\u5730\u5716\u3002</noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

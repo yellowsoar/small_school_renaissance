@@ -205,19 +205,19 @@ describe('ControlPanel', () => {
     const osmRadio = radios.find((r) => r.value === 'osm');
     expect(osmRadio.checked).toBe(true);
 
-    const positronRadio = radios.find((r) => r.value === 'positron');
-    expect(positronRadio.checked).toBe(false);
+    const hotRadio = radios.find((r) => r.value === 'hot');
+    expect(hotRadio.checked).toBe(false);
   });
 
   it('calls onLayers with the selected base map id', () => {
     const onLayers = vi.fn();
     renderPanel({ onLayers });
 
-    const positronLabel = screen.getByText(TILE_LAYERS.find((t) => t.id === 'positron').label);
-    const radio = positronLabel.closest('label').querySelector('input[type="radio"]');
+    const hotLabel = screen.getByText(TILE_LAYERS.find((t) => t.id === 'hot').label);
+    const radio = hotLabel.closest('label').querySelector('input[type="radio"]');
     fireEvent.click(radio);
 
-    expect(onLayers).toHaveBeenCalledWith({ baseMap: 'positron' });
+    expect(onLayers).toHaveBeenCalledWith({ baseMap: 'hot' });
   });
 
   it('renders overlay layer checkboxes from config', () => {
