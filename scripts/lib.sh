@@ -6,6 +6,14 @@
 # Used by integrity verification functions (#314).
 CHECKSUM_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/data-checksums.json"
 
+# Require Python 3 for CSV processing (RFC 4180 parsing, SHA-256
+# integrity verification, JSON manifest operations).
+if ! command -v python3 >/dev/null 2>&1; then
+	echo "❌ python3 is required by the data pipeline but was not found." >&2
+	echo "   Install Python 3 (https://www.python.org/downloads/) and try again." >&2
+	exit 1
+fi
+
 # Cross-platform sed in-place edit using mktemp + mv.
 # Usage: sed_inplace <file> <sed-args...>
 sed_inplace() {
