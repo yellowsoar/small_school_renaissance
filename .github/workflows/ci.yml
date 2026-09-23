@@ -29,17 +29,13 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck bats
 
-      - name: ShellCheck (diagnostic)
+      - name: ShellCheck
         run: |
-          echo "::group::ShellCheck version"
-          shellcheck --version
-          echo "::endgroup::"
-          echo "::group::ShellCheck findings"
-          shellcheck --severity=warning --format=gcc scripts/dump_schools_*.sh 2>&1 || true
-          echo "::endgroup::"
-          echo "::group::ShellCheck exit code"
-          shellcheck --severity=warning scripts/dump_schools_*.sh
-          echo "::endgroup::"
+          echo '## ShellCheck Results' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          shellcheck --severity=warning --format=gcc scripts/dump_schools_*.sh 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || SC_EXIT=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "${SC_EXIT:-0}"
 
       - name: Run Shell tests
         run: bats scripts/tests/
