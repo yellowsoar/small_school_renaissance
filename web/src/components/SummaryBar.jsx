@@ -1,7 +1,7 @@
 import { requireTier } from '../config/index.js';
 import { useDebouncedAnnounce } from '../hooks/useDebouncedAnnounce.js';
+import { integer } from '../lib/formatters.js';
 
-const integer = new Intl.NumberFormat('zh-Hant-TW');
 const AT_RISK_MAX = requireTier('high').max;
 
 export default function SummaryBar({
