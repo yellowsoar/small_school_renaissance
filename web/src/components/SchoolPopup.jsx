@@ -1,13 +1,7 @@
 import { BASE_YEAR, REFERENCE_YEAR } from '../config/index.js';
+import { integer, percent } from '../lib/formatters.js';
 import { isSafeUrl, normalizeUrl, dialable } from '../lib/sanitize.js';
 import TrendSparkline from './TrendSparkline.jsx';
-
-const integer = new Intl.NumberFormat('zh-Hant-TW');
-const percent = new Intl.NumberFormat('zh-Hant-TW', {
-  style: 'percent',
-  maximumFractionDigits: 1,
-  signDisplay: 'exceptZero',
-});
 
 const show = (value) => (value == null ? '—' : integer.format(Math.round(value)));
 
