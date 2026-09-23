@@ -14,6 +14,13 @@ const mocks = vi.hoisted(() => ({
   heatmapProps: vi.fn(),
   markersProps: vi.fn(),
   boundaryProps: vi.fn(),
+  mapViewSyncProps: vi.fn(),
+}));
+
+// Track the last useMap/useMapEvents calls for MapViewSync verification
+const leafletMocks = vi.hoisted(() => ({
+  useMap: vi.fn(() => ({ getZoom: () => 7, setZoom: vi.fn() })),
+  useMapEvents: vi.fn(() => null),
 }));
 
 vi.mock('react-leaflet', () => ({
@@ -29,6 +36,8 @@ vi.mock('react-leaflet', () => ({
     mocks.scaleControlProps(props);
     return <div data-testid="scale-control" />;
   },
+  useMap: (...args) => leafletMocks.useMap(...args),
+  useMapEvents: (...args) => leafletMocks.useMapEvents(...args),
 }));
 
 vi.mock('./HeatmapLayer.jsx', () => ({
@@ -62,6 +71,7 @@ const layers = { heatmap: true, markers: true, baseMap: 'osm', countyBoundary: t
 const overlayData = {
   countyBoundary: { type: 'FeatureCollection', features: [] },
 };
+const noop = () => {};
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -70,6 +80,7 @@ const overlayData = {
 describe('SchoolMap', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    leafletMocks.useMap.mockReturnValue({ getZoom: () => 7, setZoom: vi.fn() });
   });
 
   it('passes MAP config to MapContainer', () => {
@@ -245,5 +256,103 @@ describe('SchoolMap', () => {
         data: undefined,
       }),
     );
+  });
+
+  it('passes zoom prop to MapContainer (#348)', () => {
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        zoom={14}
+        onZoomChange={noop}
+      />,
+    );
+
+    expect(mocks.mapContainerProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        zoom: 14,
+      }),
+    );
+  });
+
+  it('defaults to MAP.zoom when zoom prop is undefined (#348)', () => {
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+      />,
+    );
+
+    expect(mocks.mapContainerProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        zoom: MAP.zoom,
+      }),
+    );
+  });
+
+  it('registers useMapEvents for zoomend in MapViewSync (#348)', () => {
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        zoom={10}
+        onZoomChange={noop}
+      />,
+    );
+
+    expect(leafletMocks.useMapEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        zoomend: expect.any(Function),
+      }),
+    );
+  });
+
+  it('calls onZoomChange when zoomend fires with a different zoom (#348)', () => {
+    const onZoomChange = vi.fn();
+    leafletMocks.useMap.mockReturnValue({ getZoom: () => 12, setZoom: vi.fn() });
+
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        zoom={10}
+        onZoomChange={onZoomChange}
+      />,
+    );
+
+    // Simulate zoomend event
+    const zoomendHandler = leafletMocks.useMapEvents.mock.calls[0][0].zoomend;
+    zoomendHandler();
+
+    expect(onZoomChange).toHaveBeenCalledWith(12);
+  });
+
+  it('does not call onZoomChange when zoomend fires with the same zoom (#348)', () => {
+    const onZoomChange = vi.fn();
+    leafletMocks.useMap.mockReturnValue({ getZoom: () => 10, setZoom: vi.fn() });
+
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        zoom={10}
+        onZoomChange={onZoomChange}
+      />,
+    );
+
+    const zoomendHandler = leafletMocks.useMapEvents.mock.calls[0][0].zoomend;
+    zoomendHandler();
+
+    expect(onZoomChange).not.toHaveBeenCalled();
   });
 });
