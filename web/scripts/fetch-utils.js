@@ -139,9 +139,15 @@ export function validateCsvContent(
     );
   }
 
-  // Column-level match: split by comma, trim, strip enclosing quotes.
+  // Use PapaParse for RFC 4180-compliant header extraction and record
+  // counting.  meta.fields correctly handles quoted fields that contain
+  // commas (#337), and physical newline splitting over-counts when quoted
+  // fields contain embedded newlines (#209).
+  const { data, errors, meta } = Papa.parse(body, { header: true, skipEmptyLines: true });
+
+  // Column-level match using PapaParse's parsed header names.
   // Aligned with parseSchools() which uses Array.includes() on parsed keys.
-  const headers = firstLine.split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
+  const headers = (meta.fields ?? []).map((h) => h.trim());
   const missing = requiredHeaders.filter((col) => !headers.includes(col));
   if (missing.length > 0) {
     throw new Error(
@@ -149,11 +155,6 @@ export function validateCsvContent(
         `\n  actual header: ${firstLine.slice(0, 120)}${firstLine.length > 120 ? '\u2026' : ''}`,
     );
   }
-
-  // Use PapaParse for accurate RFC 4180 record counting.
-  // Physical newline splitting over-counts when quoted fields contain
-  // embedded newlines (#209).
-  const { data, errors } = Papa.parse(body, { header: true, skipEmptyLines: true });
 
   if (data.length < 1) {
     throw new Error('CSV contains a header but no data rows');
