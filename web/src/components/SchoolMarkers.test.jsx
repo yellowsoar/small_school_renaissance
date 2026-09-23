@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import SchoolMarkers from './SchoolMarkers.jsx';
-import { MAP } from '../config/index.js';
+import { MAP, UNPROJECTED_MARKER } from '../config/index.js';
 
 /* ------------------------------------------------------------------ */
 /*  Mocks                                                              */
@@ -82,7 +82,7 @@ describe('SchoolMarkers', () => {
     expect(screen.getAllByTestId('marker')).toHaveLength(2);
   });
 
-  it('skips schools where tierFor returns null', () => {
+  it('renders unprojected marker when tierFor returns null (#335)', () => {
     const schools = [makeSchool(), makeSchool({ id: 'school-2', name: '\u53e6\u4e00\u570b\u5c0f' })];
     mocks.useVisibleSchools.mockReturnValue(schools);
     mocks.tierFor
@@ -91,7 +91,24 @@ describe('SchoolMarkers', () => {
 
     render(<SchoolMarkers schools={schools} year={130} visible={true} />);
 
-    expect(screen.getAllByTestId('marker')).toHaveLength(1);
+    // Both schools render: one with tier, one with UNPROJECTED_MARKER
+    expect(screen.getAllByTestId('marker')).toHaveLength(2);
+    expect(mocks.iconFor).toHaveBeenCalledWith(UNPROJECTED_MARKER);
+  });
+
+  it('sets aria-label "\u6b64\u5e74\u5ea6\u7121\u63a8\u4f30\u8cc7\u6599" for partial-gap school (#335)', () => {
+    // School has projections for year 130 but null for year 125
+    const school = makeSchool({
+      unprojected: false,
+      projections: new Map([[130, 20], [125, null]]),
+    });
+    mocks.useVisibleSchools.mockReturnValue([school]);
+    mocks.tierFor.mockReturnValue(null); // year 125 projection is null
+
+    render(<SchoolMarkers schools={[school]} year={125} visible={true} />);
+
+    const marker = screen.getByTestId('marker');
+    expect(marker.getAttribute('aria-label')).toBe('\u6e2c\u8a66\u570b\u5c0f\uff08\u6b64\u5e74\u5ea6\u7121\u63a8\u4f30\u8cc7\u6599\uff09');
   });
 
   it('passes correct title and alt to Marker', () => {

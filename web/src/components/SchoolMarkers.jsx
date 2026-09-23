@@ -82,7 +82,25 @@ export default function SchoolMarkers({ schools, year, visible }) {
       );
     }
 
-    if (!tier) return null;
+    // Schools with projections for some years but null for the selected
+    // year: render with a neutral marker instead of silently hiding (#335).
+    if (!tier) {
+      const ariaLabel = `${school.name}\uff08\u6b64\u5e74\u5ea6\u7121\u63a8\u4f30\u8cc7\u6599\uff09`;
+      return (
+        <AccessibleMarker
+          key={school.id}
+          position={school.position}
+          icon={iconFor(UNPROJECTED_MARKER)}
+          title={school.name}
+          alt={ariaLabel}
+          ariaLabel={ariaLabel}
+        >
+          <Popup minWidth={260} maxWidth={320}>
+            <SchoolPopup school={school} year={year} tier={null} />
+          </Popup>
+        </AccessibleMarker>
+      );
+    }
 
     const ariaLabel = `${school.name}\uff08${tier.label}\uff09`;
 
