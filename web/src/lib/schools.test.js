@@ -939,18 +939,33 @@ describe('filterSchools', () => {
     expect(ids({ search: '不存在的學校' })).toEqual([]);
   });
 
-  it('matches a search term that straddles two fields via concatenation (#281)', () => {
-    expect(ids({ search: '插角國小南投縣' })).toEqual(['c']);
+  it('no longer matches cross-field concatenation without spaces (#281 -> #321)', () => {
+    // Before #321 fix, '插角國小南投縣' matched school c via joined string.
+    // After #321, \0 separator prevents cross-field boundary matching.
+    // Use multi-token search with spaces instead: '插角國小 南投縣'.
+    expect(ids({ search: '插角國小南投縣' })).toEqual([]);
+    expect(ids({ search: '插角國小 南投縣' })).toEqual(['c']);
   });
 
-  // --- Cross-field continuous input (regression tests for #281) ------------
+  // --- Cross-field continuous input (regression tests for #281 -> #321) ----
 
-  it('matches Chinese continuous county+town input without spaces (#281)', () => {
-    expect(ids({ search: '南投縣仁愛鄉' })).toEqual(['c']);
+  it('no longer matches continuous county+town without spaces (#281 -> #321)', () => {
+    // Cross-field continuous input now requires spaces between tokens.
+    expect(ids({ search: '南投縣仁愛鄉' })).toEqual([]);
+    expect(ids({ search: '南投 仁愛' })).toEqual(['c']);
   });
 
-  it('matches cross-field input from URL query parameters (#281)', () => {
-    expect(ids({ search: '新北市三峻區' })).toEqual(['a', 'b']);
+  it('no longer matches cross-field input from URL query parameters (#281 -> #321)', () => {
+    // Cross-field URL query input now requires spaces between tokens.
+    expect(ids({ search: '新北市三峻區' })).toEqual([]);
+    expect(ids({ search: '新北市 三峻區' })).toEqual(['a', 'b']);
+  });
+
+  // --- Cross-field false positive prevention (regression test for #321) ----
+
+  it('does not match tokens that span field boundaries (#321)', () => {
+    // '小新' spans '...國小' + '新北市' — a false positive before the fix.
+    expect(ids({ search: '小新' })).toEqual([]);
   });
 
   // --- Multi-token AND search (regression tests for #90) -------------------
