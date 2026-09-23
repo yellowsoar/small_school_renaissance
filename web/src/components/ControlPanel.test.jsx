@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ControlPanel from './ControlPanel.jsx';
-import { RISK_TIERS, PROJECTION_YEARS, TILE_LAYERS } from '../config/index.js';
+import { RISK_TIERS, PROJECTION_YEARS, TILE_LAYERS, OVERLAY_LAYERS } from '../config/index.js';
 
 /* ------------------------------------------------------------------ */
 /*  Fixtures                                                           */
@@ -14,8 +14,8 @@ const defaultFilters = {
   search: '',
 };
 
-const counties = ['臺北市', '新北市', '桃園市'];
-const layers = { heatmap: true, markers: true, baseMap: 'osm' };
+const counties = ['\u81fa\u5317\u5e02', '\u65b0\u5317\u5e02', '\u6843\u5712\u5e02'];
+const layers = { heatmap: true, markers: true, baseMap: 'osm', countyBoundary: true };
 
 const renderPanel = (overrides = {}) =>
   render(
@@ -54,7 +54,7 @@ describe('ControlPanel', () => {
     const onChange = vi.fn();
     renderPanel({ onChange });
 
-    fireEvent.click(screen.getByText('極高風險'));
+    fireEvent.click(screen.getByText('\u6975\u9ad8\u98a8\u96aa'));
 
     expect(onChange).toHaveBeenCalledTimes(1);
     const patch = onChange.mock.calls[0][0];
@@ -66,41 +66,41 @@ describe('ControlPanel', () => {
       filters: { ...defaultFilters, tiers: new Set(['critical']) },
     });
 
-    const chip = screen.getByText('極高風險');
+    const chip = screen.getByText('\u6975\u9ad8\u98a8\u96aa');
     expect(chip.getAttribute('aria-pressed')).toBe('true');
 
-    const stable = screen.getByText('相對穩定');
+    const stable = screen.getByText('\u76f8\u5c0d\u7a69\u5b9a');
     expect(stable.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('renders county chips', () => {
     renderPanel();
 
-    expect(screen.getByText('臺北市')).toBeTruthy();
-    expect(screen.getByText('新北市')).toBeTruthy();
-    expect(screen.getByText('桃園市')).toBeTruthy();
+    expect(screen.getByText('\u81fa\u5317\u5e02')).toBeTruthy();
+    expect(screen.getByText('\u65b0\u5317\u5e02')).toBeTruthy();
+    expect(screen.getByText('\u6843\u5712\u5e02')).toBeTruthy();
   });
 
   it('calls onChange when a county chip is clicked', () => {
     const onChange = vi.fn();
     renderPanel({ onChange });
 
-    fireEvent.click(screen.getByText('新北市'));
+    fireEvent.click(screen.getByText('\u65b0\u5317\u5e02'));
 
     expect(onChange).toHaveBeenCalledTimes(1);
     const patch = onChange.mock.calls[0][0];
-    expect(patch.counties.has('新北市')).toBe(true);
+    expect(patch.counties.has('\u65b0\u5317\u5e02')).toBe(true);
   });
 
   it('marks an active county chip with aria-pressed', () => {
     renderPanel({
-      filters: { ...defaultFilters, counties: new Set(['桃園市']) },
+      filters: { ...defaultFilters, counties: new Set(['\u6843\u5712\u5e02']) },
     });
 
-    const active = screen.getByText('桃園市');
+    const active = screen.getByText('\u6843\u5712\u5e02');
     expect(active.getAttribute('aria-pressed')).toBe('true');
 
-    const inactive = screen.getByText('臺北市');
+    const inactive = screen.getByText('\u81fa\u5317\u5e02');
     expect(inactive.getAttribute('aria-pressed')).toBe('false');
   });
 
@@ -123,9 +123,9 @@ describe('ControlPanel', () => {
   });
 
   it('shows reset button when search filter is active', () => {
-    renderPanel({ filters: { ...defaultFilters, search: '國小' } });
+    renderPanel({ filters: { ...defaultFilters, search: '\u570b\u5c0f' } });
 
-    expect(screen.getByText('清除篩選')).toBeTruthy();
+    expect(screen.getByText('\u6e05\u9664\u7be9\u9078')).toBeTruthy();
   });
 
   it('shows reset button when tier filter is active', () => {
@@ -133,31 +133,31 @@ describe('ControlPanel', () => {
       filters: { ...defaultFilters, tiers: new Set(['critical']) },
     });
 
-    expect(screen.getByText('清除篩選')).toBeTruthy();
+    expect(screen.getByText('\u6e05\u9664\u7be9\u9078')).toBeTruthy();
   });
 
   it('shows reset button when county filter is active', () => {
     renderPanel({
-      filters: { ...defaultFilters, counties: new Set(['臺北市']) },
+      filters: { ...defaultFilters, counties: new Set(['\u81fa\u5317\u5e02']) },
     });
 
-    expect(screen.getByText('清除篩選')).toBeTruthy();
+    expect(screen.getByText('\u6e05\u9664\u7be9\u9078')).toBeTruthy();
   });
 
   it('hides reset button when no filters are active', () => {
     renderPanel();
 
-    expect(screen.queryByText('清除篩選')).toBeNull();
+    expect(screen.queryByText('\u6e05\u9664\u7be9\u9078')).toBeNull();
   });
 
   it('calls onReset when the reset button is clicked', () => {
     const onReset = vi.fn();
     renderPanel({
-      filters: { ...defaultFilters, search: '國小' },
+      filters: { ...defaultFilters, search: '\u570b\u5c0f' },
       onReset,
     });
 
-    fireEvent.click(screen.getByText('清除篩選'));
+    fireEvent.click(screen.getByText('\u6e05\u9664\u7be9\u9078'));
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 
@@ -165,17 +165,17 @@ describe('ControlPanel', () => {
     const onChange = vi.fn();
     renderPanel({ onChange });
 
-    const input = screen.getByPlaceholderText('例如：插角國小、烏來區');
-    fireEvent.change(input, { target: { value: '插角' } });
+    const input = screen.getByPlaceholderText('\u4f8b\u5982\uff1a\u63d2\u89d2\u570b\u5c0f\u3001\u70cf\u4f86\u5340');
+    fireEvent.change(input, { target: { value: '\u63d2\u89d2' } });
 
-    expect(onChange).toHaveBeenCalledWith({ search: '插角' });
+    expect(onChange).toHaveBeenCalledWith({ search: '\u63d2\u89d2' });
   });
 
   it('renders layer toggles', () => {
     renderPanel();
 
-    expect(screen.getByText('熱區圖')).toBeTruthy();
-    expect(screen.getByText('學校點位')).toBeTruthy();
+    expect(screen.getByText('\u71b1\u5340\u5716')).toBeTruthy();
+    expect(screen.getByText('\u5b78\u6821\u9ede\u4f4d')).toBeTruthy();
   });
 
   it('calls onLayers when a layer checkbox is toggled', () => {
@@ -183,7 +183,7 @@ describe('ControlPanel', () => {
     renderPanel({ onLayers });
 
     const heatmapCheckbox = screen.getByRole('checkbox', {
-      name: '熱區圖',
+      name: '\u71b1\u5340\u5716',
     });
     fireEvent.click(heatmapCheckbox);
 
@@ -218,5 +218,38 @@ describe('ControlPanel', () => {
     fireEvent.click(radio);
 
     expect(onLayers).toHaveBeenCalledWith({ baseMap: 'positron' });
+  });
+
+  it('renders overlay layer checkboxes from config', () => {
+    renderPanel();
+
+    for (const overlay of OVERLAY_LAYERS) {
+      expect(screen.getByText(overlay.label)).toBeTruthy();
+    }
+  });
+
+  it('calls onLayers when an overlay checkbox is toggled', () => {
+    const onLayers = vi.fn();
+    renderPanel({ onLayers });
+
+    const overlayCheckbox = screen.getByRole('checkbox', {
+      name: OVERLAY_LAYERS[0].label,
+    });
+    fireEvent.click(overlayCheckbox);
+
+    expect(onLayers).toHaveBeenCalledWith({
+      [OVERLAY_LAYERS[0].id]: false,
+    });
+  });
+
+  it('reflects overlay layer checked state from layers prop', () => {
+    renderPanel({
+      layers: { ...layers, countyBoundary: false },
+    });
+
+    const overlayCheckbox = screen.getByRole('checkbox', {
+      name: OVERLAY_LAYERS[0].label,
+    });
+    expect(overlayCheckbox.checked).toBe(false);
   });
 });

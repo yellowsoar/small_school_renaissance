@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS, TILE_LAYERS } from '../config/index.js';
+import { MAX_QUERY_LENGTH, OVERLAY_LAYERS, PROJECTION_YEARS, RISK_TIERS, TILE_LAYERS } from '../config/index.js';
 
 const toggle = (set, value) => {
   const next = new Set(set);
@@ -27,7 +27,7 @@ export default function ControlPanel({
     <form className="panel" onSubmit={(event) => event.preventDefault()}>
       <div className="panel__block">
         <label className="panel__label" htmlFor={yearId}>
-          推估學年度
+          \u63a8\u4f30\u5b78\u5e74\u5ea6
           <output className="panel__year">{filters.year}</output>
         </label>
         <input
@@ -46,7 +46,7 @@ export default function ControlPanel({
       </div>
 
       <fieldset className="panel__block">
-        <legend className="panel__label">風險分級</legend>
+        <legend className="panel__label">\u98a8\u96aa\u5206\u7d1a</legend>
         <div className="chips">
           {RISK_TIERS.map((tier) => {
             const active = filters.tiers.has(tier.id);
@@ -69,13 +69,13 @@ export default function ControlPanel({
 
       <div className="panel__block">
         <label className="panel__label" htmlFor={searchId}>
-          搜尋學校 / 鄉鎮
+          \u641c\u5c0b\u5b78\u6821 / \u9109\u93ae
         </label>
         <input
           id={searchId}
           type="search"
           className="panel__input"
-          placeholder="例如：插角國小、烏來區"
+          placeholder="\u4f8b\u5982\uff1a\u63d2\u89d2\u570b\u5c0f\u3001\u70cf\u4f86\u5340"
           maxLength={MAX_QUERY_LENGTH}
           value={filters.search}
           onChange={(event) => onChange({ search: event.target.value })}
@@ -83,7 +83,7 @@ export default function ControlPanel({
       </div>
 
       <fieldset className="panel__block">
-        <legend className="panel__label">縣市</legend>
+        <legend className="panel__label">\u7e23\u5e02</legend>
         <div className="chips chips--scroll">
           {counties.map((county) => {
             const active = filters.counties.has(county);
@@ -105,16 +105,16 @@ export default function ControlPanel({
 
       {hasFilters && (
         <button type="button" className="panel__reset" onClick={onReset}>
-          清除篩選
+          \u6e05\u9664\u7be9\u9078
         </button>
       )}
 
       <fieldset className="panel__block">
-        <legend className="panel__label">圖層</legend>
+        <legend className="panel__label">\u5716\u5c64</legend>
         <div className="switches">
           {[
-            ['heatmap', '熱區圖'],
-            ['markers', '學校點位'],
+            ['heatmap', '\u71b1\u5340\u5716'],
+            ['markers', '\u5b78\u6821\u9ede\u4f4d'],
           ].map(([key, label]) => (
             <label key={key} className="switch">
               <input
@@ -127,7 +127,7 @@ export default function ControlPanel({
           ))}
         </div>
         <fieldset className="panel__basemap">
-          <legend className="panel__sublabel">底圖</legend>
+          <legend className="panel__sublabel">\u5e95\u5716</legend>
           <div className="switches">
             {TILE_LAYERS.map((tile) => (
               <label key={tile.id} className="switch">
@@ -143,6 +143,22 @@ export default function ControlPanel({
             ))}
           </div>
         </fieldset>
+      </fieldset>
+
+      <fieldset className="panel__block">
+        <legend className="panel__label">\u758a\u5716\u5716\u5c64</legend>
+        <div className="switches">
+          {OVERLAY_LAYERS.map((overlay) => (
+            <label key={overlay.id} className="switch">
+              <input
+                type="checkbox"
+                checked={layers[overlay.id] ?? false}
+                onChange={(event) => onLayers({ [overlay.id]: event.target.checked })}
+              />
+              <span>{overlay.label}</span>
+            </label>
+          ))}
+        </div>
       </fieldset>
     </form>
   );

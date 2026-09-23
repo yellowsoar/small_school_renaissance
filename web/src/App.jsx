@@ -1,7 +1,8 @@
 import { useMemo, useReducer, useState } from 'react';
-import { BASE_YEAR, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
+import { BASE_YEAR, COUNTY_BOUNDARY_URL, OVERLAY_LAYERS, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
 import { filterSchools, summarize, tierFor } from './lib/schools.js';
 import { useSchoolData } from './hooks/useSchoolData.js';
+import { useGeoJson } from './hooks/useGeoJson.js';
 import { useUrlFilters } from './hooks/useUrlFilters.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import SchoolMap from './components/SchoolMap.jsx';
@@ -11,15 +12,26 @@ import Legend from './components/Legend.jsx';
 
 const merge = (state, patch) => ({ ...state, ...patch });
 
+/** Build initial overlay state from config: { countyBoundary: true, ... } */
+const initialOverlays = Object.fromEntries(
+  OVERLAY_LAYERS.map((l) => [l.id, l.defaultEnabled]),
+);
+
 export default function App() {
   const { status, schools, counties, error, reload } = useSchoolData();
+  const countyBoundary = useGeoJson(COUNTY_BOUNDARY_URL);
 
   // Stable for the lifetime of a loaded dataset, which is what lets
   // useUrlFilters re-validate the URL's counties exactly once.
   const countySet = useMemo(() => (counties.length ? new Set(counties) : null), [counties]);
 
   const [filters, setFilters, resetFilters] = useUrlFilters(countySet);
-  const [layers, setLayers] = useReducer(merge, { heatmap: true, markers: true, baseMap: 'osm' });
+  const [layers, setLayers] = useReducer(merge, {
+    heatmap: true,
+    markers: true,
+    baseMap: 'osm',
+    ...initialOverlays,
+  });
   const [panelOpen, setPanelOpen] = useState(true);
 
   const filtered = useMemo(() => filterSchools(schools, filters), [schools, filters]);
@@ -49,17 +61,22 @@ export default function App() {
 
   const totals = useMemo(() => summarize(visible, filters.year), [visible, filters.year]);
 
+  const overlayData = useMemo(
+    () => ({ countyBoundary: countyBoundary.data }),
+    [countyBoundary.data],
+  );
+
   return (
     <div className="app" data-panel={panelOpen ? 'open' : 'closed'}>
       <a href="#main-content" className="skip-link">
-        跳到主內容
+        \u8df3\u5230\u4e3b\u5167\u5bb9
       </a>
       <header className="topbar">
         <div className="topbar__brand">
-          <h1>廢校預警</h1>
+          <h1>\u5ee2\u6821\u9810\u8b66</h1>
           <p>
-            以 {BASE_YEAR} 與 {REFERENCE_YEAR} 學年度教育部統計推估 {PROJECTION_YEARS.at(0)}–
-            {PROJECTION_YEARS.at(-1)} 學年度國小學生人數
+            \u4ee5 {BASE_YEAR} \u8207 {REFERENCE_YEAR} \u5b78\u5e74\u5ea6\u6559\u80b2\u90e8\u7d71\u8a08\u63a8\u4f30 {PROJECTION_YEARS.at(0)}\u2013
+            {PROJECTION_YEARS.at(-1)} \u5b78\u5e74\u5ea6\u570b\u5c0f\u5b78\u751f\u4eba\u6578
           </p>
         </div>
         {status === 'ready' && (
@@ -80,39 +97,44 @@ export default function App() {
           aria-controls="sidebar"
           onClick={() => setPanelOpen((open) => !open)}
         >
-          {panelOpen ? '收合側欄' : '展開側欄'}
+          {panelOpen ? '\u6536\u5408\u5074\u6b04' : '\u5c55\u958b\u5074\u6b04'}
         </button>
       </header>
 
       <main id="main-content" className="stage" tabIndex={-1}>
         {status === 'loading' && (
           <p className="state" role="status">
-            載入全台國小資料中…
+            \u8f09\u5165\u5168\u53f0\u570b\u5c0f\u8cc7\u6599\u4e2d\u2026
           </p>
         )}
 
         {status === 'error' && (
           <div className="state state--error" role="alert">
-            <p>{error?.message ?? '資料載入失敗'}</p>
+            <p>{error?.message ?? '\u8cc7\u6599\u8f09\u5165\u5931\u6557'}</p>
             <button type="button" className="pill-button" onClick={reload}>
-              重新載入
+              \u91cd\u65b0\u8f09\u5165
             </button>
           </div>
         )}
 
         {status === 'ready' && (
           <ErrorBoundary>
-            <SchoolMap schools={visible} year={filters.year} layers={layers} />
+            <SchoolMap
+              schools={visible}
+              year={filters.year}
+              layers={layers}
+              overlayData={overlayData}
+            />
 
             {visible.length === 0 && (
               <p className="stage__empty" role="status">
-                目前的篩選條件沒有符合的學校。
+                \u76ee\u524d\u7684\u7be9\u9078\u689d\u4ef6\u6c92\u6709\u7b26\u5408\u7684\u5b78\u6821\u3002
                 <button
                   type="button"
                   className="stage__empty-reset"
                   onClick={resetFilters}
                 >
-                  清除篩選
+                  \u6e05\u9664\u7be9\u9078
                 </button>
               </p>
             )}
@@ -133,7 +155,7 @@ export default function App() {
       </main>
 
       <footer className="credits">
-        資料來源：教育部統計處 ・ 專案：
+        \u8cc7\u6599\u4f86\u6e90\uff1a\u6559\u80b2\u90e8\u7d71\u8a08\u8655 \u30fb \u5c08\u6848\uff1a
         <a
           href="https://github.com/yellowsoar/small_school_renaissance"
           target="_blank"
