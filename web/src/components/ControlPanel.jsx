@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS, TILE_LAYERS } from '../config/index.js';
+import { MAX_QUERY_LENGTH, OVERLAY_LAYERS, PROJECTION_YEARS, RISK_TIERS, TILE_LAYERS } from '../config/index.js';
 
 const toggle = (set, value) => {
   const next = new Set(set);
@@ -143,6 +143,22 @@ export default function ControlPanel({
             ))}
           </div>
         </fieldset>
+      </fieldset>
+
+      <fieldset className="panel__block">
+        <legend className="panel__label">疊圖圖層</legend>
+        <div className="switches">
+          {OVERLAY_LAYERS.map((overlay) => (
+            <label key={overlay.id} className="switch">
+              <input
+                type="checkbox"
+                checked={layers[overlay.id] ?? false}
+                onChange={(event) => onLayers({ [overlay.id]: event.target.checked })}
+              />
+              <span>{overlay.label}</span>
+            </label>
+          ))}
+        </div>
       </fieldset>
     </form>
   );

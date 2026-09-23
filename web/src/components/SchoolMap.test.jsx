@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   scaleControlProps: vi.fn(),
   heatmapProps: vi.fn(),
   markersProps: vi.fn(),
+  boundaryProps: vi.fn(),
 }));
 
 vi.mock('react-leaflet', () => ({
@@ -44,13 +45,23 @@ vi.mock('./SchoolMarkers.jsx', () => ({
   },
 }));
 
+vi.mock('./CountyBoundaryLayer.jsx', () => ({
+  default: (props) => {
+    mocks.boundaryProps(props);
+    return <div data-testid="county-boundary-layer" />;
+  },
+}));
+
 /* ------------------------------------------------------------------ */
 /*  Fixtures                                                           */
 /* ------------------------------------------------------------------ */
 
 const schools = [{ id: '1' }];
 const year = 125;
-const layers = { heatmap: true, markers: true, baseMap: 'osm' };
+const layers = { heatmap: true, markers: true, baseMap: 'osm', countyBoundary: true };
+const overlayData = {
+  countyBoundary: { type: 'FeatureCollection', features: [] },
+};
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -62,7 +73,7 @@ describe('SchoolMap', () => {
   });
 
   it('passes MAP config to MapContainer', () => {
-    render(<SchoolMap schools={schools} year={year} layers={layers} />);
+    render(<SchoolMap schools={schools} year={year} layers={layers} overlayData={overlayData} />);
 
     expect(mocks.mapContainerProps).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -76,19 +87,19 @@ describe('SchoolMap', () => {
   });
 
   it('passes a11y attributes to MapContainer', () => {
-    render(<SchoolMap schools={schools} year={year} layers={layers} />);
+    render(<SchoolMap schools={schools} year={year} layers={layers} overlayData={overlayData} />);
 
     expect(mocks.mapContainerProps).toHaveBeenCalledWith(
       expect.objectContaining({
         role: 'application',
-        'aria-roledescription': '互動地圖',
-        'aria-label': '全台國小廢校風險地圖，可用鍵盤方向鍵平移、加減鍵縮放',
+        'aria-roledescription': '\u4e92\u52d5\u5730\u5716',
+        'aria-label': '\u5168\u53f0\u570b\u5c0f\u5ee2\u6821\u98a8\u96aa\u5730\u5716\uff0c\u53ef\u7528\u9375\u76e4\u65b9\u5411\u9375\u5e73\u79fb\u3001\u52a0\u6e1b\u9375\u7e2e\u653e',
       }),
     );
   });
 
   it('uses the default OSM tile layer', () => {
-    render(<SchoolMap schools={schools} year={year} layers={layers} />);
+    render(<SchoolMap schools={schools} year={year} layers={layers} overlayData={overlayData} />);
 
     const osm = TILE_LAYERS.find((t) => t.id === 'osm');
     expect(mocks.tileLayerProps).toHaveBeenCalledWith(
@@ -106,6 +117,7 @@ describe('SchoolMap', () => {
         schools={schools}
         year={year}
         layers={{ ...layers, baseMap: 'positron' }}
+        overlayData={overlayData}
       />,
     );
 
@@ -124,6 +136,7 @@ describe('SchoolMap', () => {
         schools={schools}
         year={year}
         layers={{ ...layers, baseMap: 'nonexistent' }}
+        overlayData={overlayData}
       />,
     );
 
@@ -135,7 +148,7 @@ describe('SchoolMap', () => {
   });
 
   it('configures ScaleControl with metric units at bottom-left', () => {
-    render(<SchoolMap schools={schools} year={year} layers={layers} />);
+    render(<SchoolMap schools={schools} year={year} layers={layers} overlayData={overlayData} />);
 
     expect(mocks.scaleControlProps).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -146,7 +159,7 @@ describe('SchoolMap', () => {
   });
 
   it('forwards schools, year, and heatmap visibility to HeatmapLayer', () => {
-    render(<SchoolMap schools={schools} year={year} layers={layers} />);
+    render(<SchoolMap schools={schools} year={year} layers={layers} overlayData={overlayData} />);
 
     expect(mocks.heatmapProps).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -162,7 +175,8 @@ describe('SchoolMap', () => {
       <SchoolMap
         schools={schools}
         year={year}
-        layers={{ heatmap: false, markers: false, baseMap: 'osm' }}
+        layers={{ heatmap: false, markers: false, baseMap: 'osm', countyBoundary: true }}
+        overlayData={overlayData}
       />,
     );
 
@@ -171,6 +185,45 @@ describe('SchoolMap', () => {
         schools,
         year,
         visible: false,
+      }),
+    );
+  });
+
+  it('forwards overlay data and visibility to CountyBoundaryLayer', () => {
+    render(<SchoolMap schools={schools} year={year} layers={layers} overlayData={overlayData} />);
+
+    expect(mocks.boundaryProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visible: true,
+        data: overlayData.countyBoundary,
+      }),
+    );
+  });
+
+  it('passes countyBoundary visibility as false when layer is disabled', () => {
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={{ ...layers, countyBoundary: false }}
+        overlayData={overlayData}
+      />,
+    );
+
+    expect(mocks.boundaryProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visible: false,
+      }),
+    );
+  });
+
+  it('handles missing overlayData gracefully', () => {
+    render(<SchoolMap schools={schools} year={year} layers={layers} />);
+
+    expect(mocks.boundaryProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visible: true,
+        data: undefined,
       }),
     );
   });

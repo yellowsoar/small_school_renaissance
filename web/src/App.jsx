@@ -1,7 +1,8 @@
 import { useMemo, useReducer, useState } from 'react';
-import { BASE_YEAR, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
+import { BASE_YEAR, COUNTY_BOUNDARY_URL, OVERLAY_LAYERS, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
 import { filterSchools, summarize, tierFor } from './lib/schools.js';
 import { useSchoolData } from './hooks/useSchoolData.js';
+import { useGeoJson } from './hooks/useGeoJson.js';
 import { useUrlFilters } from './hooks/useUrlFilters.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import SchoolMap from './components/SchoolMap.jsx';
@@ -11,15 +12,26 @@ import Legend from './components/Legend.jsx';
 
 const merge = (state, patch) => ({ ...state, ...patch });
 
+/** Build initial overlay state from config: { countyBoundary: true, ... } */
+const initialOverlays = Object.fromEntries(
+  OVERLAY_LAYERS.map((l) => [l.id, l.defaultEnabled]),
+);
+
 export default function App() {
   const { status, schools, counties, error, reload } = useSchoolData();
+  const countyBoundary = useGeoJson(COUNTY_BOUNDARY_URL);
 
   // Stable for the lifetime of a loaded dataset, which is what lets
   // useUrlFilters re-validate the URL's counties exactly once.
   const countySet = useMemo(() => (counties.length ? new Set(counties) : null), [counties]);
 
   const [filters, setFilters, resetFilters] = useUrlFilters(countySet);
-  const [layers, setLayers] = useReducer(merge, { heatmap: true, markers: true, baseMap: 'osm' });
+  const [layers, setLayers] = useReducer(merge, {
+    heatmap: true,
+    markers: true,
+    baseMap: 'osm',
+    ...initialOverlays,
+  });
   const [panelOpen, setPanelOpen] = useState(true);
 
   const filtered = useMemo(() => filterSchools(schools, filters), [schools, filters]);
@@ -48,6 +60,11 @@ export default function App() {
   );
 
   const totals = useMemo(() => summarize(visible, filters.year), [visible, filters.year]);
+
+  const overlayData = useMemo(
+    () => ({ countyBoundary: countyBoundary.data }),
+    [countyBoundary.data],
+  );
 
   return (
     <div className="app" data-panel={panelOpen ? 'open' : 'closed'}>
@@ -102,7 +119,12 @@ export default function App() {
 
         {status === 'ready' && (
           <ErrorBoundary>
-            <SchoolMap schools={visible} year={filters.year} layers={layers} />
+            <SchoolMap
+              schools={visible}
+              year={filters.year}
+              layers={layers}
+              overlayData={overlayData}
+            />
 
             {visible.length === 0 && (
               <p className="stage__empty" role="status">

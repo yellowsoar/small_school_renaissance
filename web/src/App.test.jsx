@@ -30,6 +30,7 @@ vi.mock('./components/ErrorBoundary.jsx', () => ({
 const mocks = vi.hoisted(() => ({
   useSchoolData: vi.fn(),
   useUrlFilters: vi.fn(),
+  useGeoJson: vi.fn(),
   filterSchools: vi.fn(),
   summarize: vi.fn(),
   tierFor: vi.fn(),
@@ -37,6 +38,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./hooks/useSchoolData.js', () => ({
   useSchoolData: mocks.useSchoolData,
+}));
+
+vi.mock('./hooks/useGeoJson.js', () => ({
+  useGeoJson: mocks.useGeoJson,
 }));
 
 vi.mock('./hooks/useUrlFilters.js', () => ({
@@ -65,6 +70,8 @@ const mockSetFilters = vi.fn();
 const mockResetFilters = vi.fn();
 const mockReload = vi.fn();
 
+const defaultGeoJson = { status: 'ready', data: { type: 'FeatureCollection', features: [] }, error: null };
+
 const setupLoading = () => {
   mocks.useSchoolData.mockReturnValue({
     status: 'loading',
@@ -73,6 +80,7 @@ const setupLoading = () => {
     error: null,
     reload: mockReload,
   });
+  mocks.useGeoJson.mockReturnValue(defaultGeoJson);
   mocks.useUrlFilters.mockReturnValue([defaultFilters, mockSetFilters, mockResetFilters]);
   mocks.filterSchools.mockReturnValue([]);
   mocks.summarize.mockReturnValue({});
@@ -87,6 +95,7 @@ const setupError = (message = '\u8cc7\u6599\u8f09\u5165\u5931\u6557') => {
     error: new Error(message),
     reload: mockReload,
   });
+  mocks.useGeoJson.mockReturnValue(defaultGeoJson);
   mocks.useUrlFilters.mockReturnValue([defaultFilters, mockSetFilters, mockResetFilters]);
   mocks.filterSchools.mockReturnValue([]);
   mocks.summarize.mockReturnValue({});
@@ -101,6 +110,7 @@ const setupReady = ({ visible = [{ id: '1' }] } = {}) => {
     error: null,
     reload: mockReload,
   });
+  mocks.useGeoJson.mockReturnValue(defaultGeoJson);
   mocks.useUrlFilters.mockReturnValue([defaultFilters, mockSetFilters, mockResetFilters]);
   mocks.filterSchools.mockReturnValue(visible);
   mocks.summarize.mockReturnValue({ total: 1 });
@@ -271,5 +281,12 @@ describe('App', () => {
     expect(main).toBeTruthy();
     expect(main.tagName).toBe('MAIN');
     expect(main.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('calls useGeoJson with the county boundary URL', () => {
+    setupLoading();
+    render(<App />);
+
+    expect(mocks.useGeoJson).toHaveBeenCalled();
   });
 });

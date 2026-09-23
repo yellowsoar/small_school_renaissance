@@ -1,9 +1,10 @@
 import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
 import { MAP, TILE_LAYERS } from '../config/index.js';
+import CountyBoundaryLayer from './CountyBoundaryLayer.jsx';
 import HeatmapLayer from './HeatmapLayer.jsx';
 import SchoolMarkers from './SchoolMarkers.jsx';
 
-export default function SchoolMap({ schools, year, layers }) {
+export default function SchoolMap({ schools, year, layers, overlayData }) {
   const activeTile =
     TILE_LAYERS.find((t) => t.id === layers.baseMap) || TILE_LAYERS[0];
 
@@ -24,6 +25,10 @@ export default function SchoolMap({ schools, year, layers }) {
         url={activeTile.url}
         attribution={activeTile.attribution}
         maxZoom={MAP.maxZoom}
+      />
+      <CountyBoundaryLayer
+        visible={layers.countyBoundary}
+        data={overlayData?.countyBoundary}
       />
       <ScaleControl position="bottomleft" imperial={false} />
       <HeatmapLayer schools={schools} year={year} visible={layers.heatmap} />

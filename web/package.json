@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "廢校預警：全台國小學生人數推估地圖",
+  "description": "\u5ee2\u6821\u9810\u8b66\uff1a\u5168\u53f0\u570b\u5c0f\u5b78\u751f\u4eba\u6578\u63a8\u4f30\u5730\u5716",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/yellowsoar/small_school_renaissance.git"
@@ -14,9 +14,9 @@
     "node": ">=20.19"
   },
   "scripts": {
-    "predev": "node scripts/fetch-data.js",
+    "predev": "node scripts/fetch-data.js && node scripts/fetch-boundaries.js",
     "dev": "vite",
-    "prebuild": "node scripts/fetch-data.js",
+    "prebuild": "node scripts/fetch-data.js && node scripts/fetch-boundaries.js",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
