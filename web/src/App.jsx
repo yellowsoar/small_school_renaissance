@@ -84,14 +84,14 @@ export default function App() {
   return (
     <div className="app" data-panel={panelOpen ? 'open' : 'closed'}>
       <a href="#main-content" className="skip-link">
-        \u8df3\u5230\u4e3b\u5167\u5bb9
+        跳到主內容
       </a>
       <header className="topbar">
         <div className="topbar__brand">
-          <h1>\u5ee2\u6821\u9810\u8b66</h1>
+          <h1>廢校預警</h1>
           <p>
-            \u4ee5 {BASE_YEAR} \u8207 {REFERENCE_YEAR} \u5b78\u5e74\u5ea6\u6559\u80b2\u90e8\u7d71\u8a08\u63a8\u4f30 {PROJECTION_YEARS.at(0)}\u2013
-            {PROJECTION_YEARS.at(-1)} \u5b78\u5e74\u5ea6\u570b\u5c0f\u5b78\u751f\u4eba\u6578
+            以 {BASE_YEAR} 與 {REFERENCE_YEAR} 學年度教育部統計推估 {PROJECTION_YEARS.at(0)}–
+            {PROJECTION_YEARS.at(-1)} 學年度國小學生人數
           </p>
         </div>
         {status === 'ready' && (
@@ -112,22 +112,22 @@ export default function App() {
           aria-controls="sidebar"
           onClick={() => setPanelOpen((open) => !open)}
         >
-          {panelOpen ? '\u6536\u5408\u5074\u6b04' : '\u5c55\u958b\u5074\u6b04'}
+          {panelOpen ? '收合側欄' : '展開側欄'}
         </button>
       </header>
 
       <main id="main-content" className="stage" tabIndex={-1}>
         {status === 'loading' && (
           <p className="state" role="status">
-            \u8f09\u5165\u5168\u53f0\u570b\u5c0f\u8cc7\u6599\u4e2d\u2026
+            載入全台國小資料中…
           </p>
         )}
 
         {status === 'error' && (
           <div className="state state--error" role="alert">
-            <p>{error?.message ?? '\u8cc7\u6599\u8f09\u5165\u5931\u6557'}</p>
+            <p>{error?.message ?? '資料載入失敗'}</p>
             <button type="button" className="pill-button" onClick={reload}>
-              \u91cd\u65b0\u8f09\u5165
+              重新載入
             </button>
           </div>
         )}
@@ -145,13 +145,13 @@ export default function App() {
 
             {visible.length === 0 && (
               <p className="stage__empty" role="status">
-                \u76ee\u524d\u7684\u7be9\u9078\u689d\u4ef6\u6c92\u6709\u7b26\u5408\u7684\u5b78\u6821\u3002
+                目前的篩選條件沒有符合的學校。
                 <button
                   type="button"
                   className="stage__empty-reset"
                   onClick={resetFilters}
                 >
-                  \u6e05\u9664\u7be9\u9078
+                  清除篩選
                 </button>
               </p>
             )}
@@ -172,7 +172,7 @@ export default function App() {
       </main>
 
       <footer className="credits">
-        \u8cc7\u6599\u4f86\u6e90\uff1a\u6559\u80b2\u90e8\u7d71\u8a08\u8655 \u30fb \u5c08\u6848\uff1a
+        資料來源：教育部統計處 ・ 專案：
         <a
           href="https://github.com/yellowsoar/small_school_renaissance"
           target="_blank"
