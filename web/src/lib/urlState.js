@@ -5,7 +5,7 @@
  * A map of public data is something people cite: "look at 南投縣 in 130". That
  * only works if the view is addressable, so the filter state lives in the URL.
  */
-import { MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
+import { MAP, MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
 
 const VALID_TIERS = new Set(RISK_TIERS.map((tier) => tier.id));
 const MIN_YEAR = PROJECTION_YEARS.at(0);
@@ -20,6 +20,7 @@ export const defaultFilters = () => ({
   tiers: new Set(),
   search: '',
   excludeClosed: true,
+  zoom: MAP.zoom,
 });
 
 /** Multi-value params are comma separated; empty means "no filter". */
@@ -48,12 +49,16 @@ export const filtersFromSearch = (search) => {
   // deep links and avoid exceeding browser URL length limits (#210).
   const rawQ = params.get('q')?.trim() ?? '';
 
+  // Zoom level from `z` param, validated against MAP bounds (#348).
+  const z = Number.parseInt(params.get('z'), 10);
+
   return {
     year: Number.isInteger(year) && year >= MIN_YEAR && year <= MAX_YEAR ? year : DEFAULT_YEAR,
     counties: new Set(counties),
     tiers: new Set(splitList(params.get('tier')).filter((tier) => VALID_TIERS.has(tier))),
     search: rawQ.slice(0, MAX_QUERY_LENGTH),
     excludeClosed: params.get('closed') !== '1',
+    zoom: Number.isInteger(z) && z >= MAP.minZoom && z <= MAP.maxZoom ? z : MAP.zoom,
   };
 };
 
@@ -93,6 +98,7 @@ export const searchFromFilters = (filters) => {
   const trimmed = filters.search.trim();
   if (trimmed) params.set('q', trimmed.slice(0, MAX_QUERY_LENGTH));
   if (!filters.excludeClosed) params.set('closed', '1');
+  if (filters.zoom != null && filters.zoom !== MAP.zoom) params.set('z', String(filters.zoom));
 
   const query = params.toString();
   return query ? `?${query}` : '';
