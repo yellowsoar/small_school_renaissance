@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useUrlFilters } from './useUrlFilters.js';
+import { MAP } from '../config/index.js';
 
 describe('useUrlFilters', () => {
   beforeEach(() => {
@@ -19,6 +20,7 @@ describe('useUrlFilters', () => {
     expect(filters.counties.size).toBe(0);
     expect(filters.tiers.size).toBe(0);
     expect(filters.search).toBe('');
+    expect(filters.zoom).toBe(MAP.zoom);
   });
 
   it('reads initial state from URL query params', () => {
@@ -174,5 +176,48 @@ describe('useUrlFilters', () => {
 
     // Restore for other tests.
     window.history.replaceState = original;
+  });
+
+  it('syncs zoom to URL when changed (#348)', () => {
+    const { result } = renderHook(() => useUrlFilters());
+
+    act(() => {
+      const [, update] = result.current;
+      update({ zoom: 12 });
+    });
+
+    expect(result.current[0].zoom).toBe(12);
+    expect(window.location.search).toContain('z=12');
+  });
+
+  it('omits z from URL when zoom is at default (#348)', () => {
+    const { result } = renderHook(() => useUrlFilters());
+
+    act(() => {
+      const [, update] = result.current;
+      update({ zoom: MAP.zoom });
+    });
+
+    expect(window.location.search).toBe('');
+  });
+
+  it('reads initial zoom from URL z param (#348)', () => {
+    window.history.replaceState(null, '', '/?z=14');
+
+    const { result } = renderHook(() => useUrlFilters());
+    const [filters] = result.current;
+
+    expect(filters.zoom).toBe(14);
+  });
+
+  it('syncs zoom on popstate navigation (#348)', () => {
+    const { result } = renderHook(() => useUrlFilters());
+
+    window.history.replaceState(null, '', '/?z=15');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(result.current[0].zoom).toBe(15);
   });
 });

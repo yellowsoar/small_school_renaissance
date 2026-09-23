@@ -1,4 +1,4 @@
-import { useMemo, useReducer, useState } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { BASE_YEAR, COUNTY_BOUNDARY_URL, OVERLAY_LAYERS, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
 import { filterSchools, summarize, tierFor } from './lib/schools.js';
 import { useSchoolData } from './hooks/useSchoolData.js';
@@ -34,7 +34,20 @@ export default function App() {
   });
   const [panelOpen, setPanelOpen] = useState(true);
 
-  const filtered = useMemo(() => filterSchools(schools, filters), [schools, filters]);
+  // Exclude zoom from the data-filtering dependency so that zoom changes
+  // (which happen on every scroll/pinch) never trigger filterSchools (#348).
+  const dataFilters = useMemo(
+    () => ({
+      year: filters.year,
+      counties: filters.counties,
+      tiers: filters.tiers,
+      search: filters.search,
+      excludeClosed: filters.excludeClosed,
+    }),
+    [filters.year, filters.counties, filters.tiers, filters.search, filters.excludeClosed],
+  );
+
+  const filtered = useMemo(() => filterSchools(schools, dataFilters), [schools, dataFilters]);
 
   // Count closed-tier schools before the excludeClosed toggle is applied,
   // so the toggle button always shows how many zero-out schools exist.
@@ -65,6 +78,8 @@ export default function App() {
     () => ({ countyBoundary: countyBoundary.data }),
     [countyBoundary.data],
   );
+
+  const handleZoomChange = useCallback((z) => setFilters({ zoom: z }), [setFilters]);
 
   return (
     <div className="app" data-panel={panelOpen ? 'open' : 'closed'}>
@@ -124,6 +139,8 @@ export default function App() {
               year={filters.year}
               layers={layers}
               overlayData={overlayData}
+              zoom={filters.zoom}
+              onZoomChange={handleZoomChange}
             />
 
             {visible.length === 0 && (
