@@ -35,9 +35,11 @@
          canvas, and sparklines are inline SVG polylines. If a future
          feature needs data: URIs for images, add it back with a comment
          explaining the dependency. -->
+    <!-- img-src: cartocdn removed (#346) — CARTO now requires API key
+         registration. Replaced with free HOT and OpenTopoMap tile domains. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://tile.openstreetmap.org https://*.basemaps.cartocdn.com; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.fr https://*.tile.opentopomap.org; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
     />
     <link rel="preconnect" href="https://tile.openstreetmap.org" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -25,6 +25,7 @@ export default function SchoolMap({ schools, year, layers, overlayData }) {
         url={activeTile.url}
         attribution={activeTile.attribution}
         maxZoom={MAP.maxZoom}
+        maxNativeZoom={activeTile.maxNativeZoom}
       />
       <CountyBoundaryLayer
         visible={layers.countyBoundary}

@@ -37,6 +37,7 @@ export const MAP = {
 /**
  * Available base map tile layers. The first entry is the default.
  * Each entry provides a Leaflet-compatible URL template and attribution.
+ * All entries MUST be free, no-API-key, no-registration services (#346).
  */
 export const TILE_LAYERS = [
   {
@@ -47,18 +48,19 @@ export const TILE_LAYERS = [
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   },
   {
-    id: 'positron',
-    label: '\u6dfa\u8272\u5e95\u5716',
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    id: 'hot',
+    label: '\u4eba\u9053\u95dc\u61f7\u7248',
+    url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
     attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, tiles by <a href="https://www.hotosm.org/">HOT</a> hosted by <a href="https://openstreetmap.fr/">OSM France</a>',
   },
   {
-    id: 'dark',
-    label: '\u6df1\u8272\u5e95\u5716',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    id: 'topo',
+    label: '\u5730\u5f62\u5716',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
     attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
+    maxNativeZoom: 17,
   },
 ];
 
