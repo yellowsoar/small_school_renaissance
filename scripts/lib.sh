@@ -439,7 +439,7 @@ run_download_pipeline() {
 					local actual_hash
 					actual_hash=$(compute_checksum "$downloaded_path")
 					record_checksum "$checksum_key" "$actual_hash"
-					((SUCCESS_COUNT++)) || true
+					SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
 				else
 					echo "⚠️  download or validation failed: ${URL_TARGET}" >&2
 					FAILED_DOWNLOADS+=("${YEAR_CURRENT}/${FILE_EXT}")
