@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchWithRetry, validateCsvContent, verifyCsvIntegrity } from './fetch-utils.js';
+import { fetchWithRetry, validateCsvContent, verifyCsvIntegrity, summarizeCsvForReview } from './fetch-utils.js';
 import {
   REQUIRED_HEADERS,
   FIRST_PROJECTION_YEAR,
@@ -620,5 +620,142 @@ describe('verifyCsvIntegrity', () => {
 
     expect(typeof result).toBe('string');
     expect(result).toHaveLength(64);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  TOFU data preview (#317)                                            */
+/* ------------------------------------------------------------------ */
+
+describe('summarizeCsvForReview', () => {
+  // Reuse the same fixture pattern as validateCsvContent tests.
+  const EXTRA_COLUMNS = ['\u9109\u93ae\u5e02\u5340', '\u5730\u5740', '\u96fb\u8a71', '\u7db2\u5740', '\u5730\u5340\u5c6c\u6027', '\u5b78\u751f\u4eba\u6578'];
+  const ALL_COLUMNS = [...REQUIRED_HEADERS, ...EXTRA_COLUMNS];
+  const VALID_HEADER = ALL_COLUMNS.join(',');
+
+  /**
+   * Build a data row with customizable school name, county, and coordinates.
+   */
+  const makeRow = (name = '\u5927\u540c\u570b\u5c0f', county = '\u81fa\u5317\u5e02', lat = '25.05', lon = '121.52') => {
+    return [
+      '013501', name, county,
+      lat, lon,
+      ...Array(LAST_PROJECTION_YEAR - FIRST_PROJECTION_YEAR + 1).fill('280'),
+      '\u4e2d\u5c71\u5340', '\u4e2d\u5c71\u5317\u8def', '02-1234', 'http://example.com', '\u4e00\u822c\u5730\u5340', '300',
+    ].join(',');
+  };
+
+  it('returns correct totalRows, sampleSchools, and coordinateBounds for valid CSV', () => {
+    const rows = [
+      makeRow('\u5927\u540c\u570b\u5c0f', '\u81fa\u5317\u5e02', '25.05', '121.52'),
+      makeRow('\u4e2d\u6b63\u570b\u5c0f', '\u81fa\u5317\u5e02', '25.03', '121.50'),
+      makeRow('\u4ec1\u611b\u570b\u5c0f', '\u81fa\u5317\u5e02', '25.04', '121.55'),
+      makeRow('\u53f0\u5357\u570b\u5c0f', '\u53f0\u5357\u5e02', '22.99', '120.20'),
+      makeRow('\u9ad8\u96c4\u570b\u5c0f', '\u9ad8\u96c4\u5e02', '22.63', '120.30'),
+    ];
+    const csv = [VALID_HEADER, ...rows].join('\n');
+
+    const result = summarizeCsvForReview(csv);
+
+    expect(result).not.toBeNull();
+    expect(result.totalRows).toBe(5);
+    expect(result.sampleSchools).toHaveLength(3);
+    expect(result.sampleSchools[0]).toEqual({ name: '\u5927\u540c\u570b\u5c0f', county: '\u81fa\u5317\u5e02' });
+    expect(result.sampleSchools[1]).toEqual({ name: '\u4e2d\u6b63\u570b\u5c0f', county: '\u81fa\u5317\u5e02' });
+    expect(result.sampleSchools[2]).toEqual({ name: '\u4ec1\u611b\u570b\u5c0f', county: '\u81fa\u5317\u5e02' });
+    expect(result.coordinateBounds).toEqual({
+      latMin: 22.63,
+      latMax: 25.05,
+      lonMin: 120.20,
+      lonMax: 121.55,
+    });
+  });
+
+  it('returns fewer than 3 samples when CSV has fewer rows', () => {
+    const rows = [
+      makeRow('\u552f\u4e00\u570b\u5c0f', '\u82b1\u84ee\u7e23', '23.97', '121.60'),
+    ];
+    const csv = [VALID_HEADER, ...rows].join('\n');
+
+    const result = summarizeCsvForReview(csv);
+
+    expect(result).not.toBeNull();
+    expect(result.totalRows).toBe(1);
+    expect(result.sampleSchools).toHaveLength(1);
+    expect(result.sampleSchools[0]).toEqual({ name: '\u552f\u4e00\u570b\u5c0f', county: '\u82b1\u84ee\u7e23' });
+  });
+
+  it('excludes rows with non-numeric coordinates from bounds', () => {
+    const rows = [
+      makeRow('\u6b63\u5e38\u570b\u5c0f', '\u81fa\u5317\u5e02', '25.05', '121.52'),
+      makeRow('\u7121\u5ea7\u6a19\u570b\u5c0f', '\u81fa\u5317\u5e02', 'N/A', 'N/A'),
+      makeRow('\u7a7a\u5ea7\u6a19\u570b\u5c0f', '\u81fa\u5317\u5e02', '', ''),
+    ];
+    const csv = [VALID_HEADER, ...rows].join('\n');
+
+    const result = summarizeCsvForReview(csv);
+
+    expect(result).not.toBeNull();
+    expect(result.totalRows).toBe(3);
+    // Only one valid coordinate pair
+    expect(result.coordinateBounds).toEqual({
+      latMin: 25.05,
+      latMax: 25.05,
+      lonMin: 121.52,
+      lonMax: 121.52,
+    });
+  });
+
+  it('returns null coordinateBounds when no rows have valid coordinates', () => {
+    const rows = [
+      makeRow('\u7121\u5ea7\u6a19\u570b\u5c0f', '\u81fa\u5317\u5e02', 'bad', 'bad'),
+    ];
+    const csv = [VALID_HEADER, ...rows].join('\n');
+
+    const result = summarizeCsvForReview(csv);
+
+    expect(result).not.toBeNull();
+    expect(result.coordinateBounds).toBeNull();
+  });
+
+  it('returns null for empty string', () => {
+    expect(summarizeCsvForReview('')).toBeNull();
+  });
+
+  it('returns null for null/undefined input', () => {
+    expect(summarizeCsvForReview(null)).toBeNull();
+    expect(summarizeCsvForReview(undefined)).toBeNull();
+  });
+
+  it('returns null for header-only CSV (no data rows)', () => {
+    expect(summarizeCsvForReview(VALID_HEADER)).toBeNull();
+  });
+
+  it('skips rows with empty school name when collecting samples', () => {
+    const rows = [
+      makeRow('', '\u81fa\u5317\u5e02', '25.05', '121.52'),
+      makeRow('  ', '\u81fa\u5317\u5e02', '25.03', '121.50'),
+      makeRow('\u6709\u540d\u570b\u5c0f', '\u81fa\u5317\u5e02', '25.04', '121.55'),
+    ];
+    const csv = [VALID_HEADER, ...rows].join('\n');
+
+    const result = summarizeCsvForReview(csv);
+
+    expect(result).not.toBeNull();
+    expect(result.totalRows).toBe(3);
+    expect(result.sampleSchools).toHaveLength(1);
+    expect(result.sampleSchools[0].name).toBe('\u6709\u540d\u570b\u5c0f');
+  });
+
+  it('handles county being empty gracefully', () => {
+    const rows = [
+      makeRow('\u7121\u7e23\u5e02\u570b\u5c0f', '', '25.05', '121.52'),
+    ];
+    const csv = [VALID_HEADER, ...rows].join('\n');
+
+    const result = summarizeCsvForReview(csv);
+
+    expect(result).not.toBeNull();
+    expect(result.sampleSchools[0]).toEqual({ name: '\u7121\u7e23\u5e02\u570b\u5c0f', county: '' });
   });
 });

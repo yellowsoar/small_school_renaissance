@@ -22,6 +22,9 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  */
 const MIN_DATA_ROWS = 100;
 
+/** Maximum number of sample schools shown in the TOFU data preview. */
+const PREVIEW_SAMPLE_COUNT = 3;
+
 /* ------------------------------------------------------------------ */
 /*  Fetch with retry                                                    */
 /* ------------------------------------------------------------------ */
@@ -182,5 +185,74 @@ export function validateCsvContent(
           ` \u2014 the browser-side parser would reject this dataset`,
       );
     }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  TOFU data preview (#317)                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Generate a structural summary of a CSV body for visual review during
+ * TOFU auto-bootstrap.
+ *
+ * The summary gives developers enough information to spot obvious
+ * anomalies (wrong dataset, corrupted content, unexpected row counts)
+ * without opening the file manually.
+ *
+ * Non-blocking: returns `null` on any parse failure so the caller can
+ * proceed with auto-bootstrap regardless.
+ *
+ * @param {string} body - The raw CSV content (already validated by
+ *   `validateCsvContent` before this function is called)
+ * @returns {{ totalRows: number, sampleSchools: Array<{ name: string, county: string }>, coordinateBounds: { latMin: number, latMax: number, lonMin: number, lonMax: number } | null } | null}
+ */
+export function summarizeCsvForReview(body) {
+  try {
+    const { data } = Papa.parse(body, { header: true, skipEmptyLines: true });
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    const totalRows = data.length;
+
+    // Extract sample schools (first N with a non-empty name).
+    const sampleSchools = [];
+    for (const row of data) {
+      if (sampleSchools.length >= PREVIEW_SAMPLE_COUNT) break;
+      const name = (row['\u5b78\u6821\u540d\u7a31'] ?? '').trim();
+      const county = (row['\u7e23\u5e02\u540d\u7a31'] ?? '').trim();
+      if (name) {
+        sampleSchools.push({ name, county });
+      }
+    }
+
+    // Compute coordinate bounding box from valid numeric values.
+    let latMin = Infinity;
+    let latMax = -Infinity;
+    let lonMin = Infinity;
+    let lonMax = -Infinity;
+    let hasCoords = false;
+
+    for (const row of data) {
+      const lat = parseFloat(row['\u7def\u5ea6']);
+      const lon = parseFloat(row['\u7d93\u5ea6']);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        hasCoords = true;
+        if (lat < latMin) latMin = lat;
+        if (lat > latMax) latMax = lat;
+        if (lon < lonMin) lonMin = lon;
+        if (lon > lonMax) lonMax = lon;
+      }
+    }
+
+    const coordinateBounds = hasCoords
+      ? { latMin, latMax, lonMin, lonMax }
+      : null;
+
+    return { totalRows, sampleSchools, coordinateBounds };
+  } catch {
+    return null;
   }
 }
