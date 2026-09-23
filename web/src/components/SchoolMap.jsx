@@ -17,8 +17,8 @@ export default function SchoolMap({ schools, year, layers, overlayData }) {
       maxZoom={MAP.maxZoom}
       scrollWheelZoom
       role="application"
-      aria-roledescription="\u4e92\u52d5\u5730\u5716"
-      aria-label="\u5168\u53f0\u570b\u5c0f\u5ee2\u6821\u98a8\u96aa\u5730\u5716\uff0c\u53ef\u7528\u9375\u76e4\u65b9\u5411\u9375\u5e73\u79fb\u3001\u52a0\u6e1b\u9375\u7e2e\u653e"
+      aria-roledescription="互動地圖"
+      aria-label="全台國小廢校風險地圖，可用鍵盤方向鍵平移、加減鍵縮放"
     >
       <TileLayer
         key={activeTile.id}
