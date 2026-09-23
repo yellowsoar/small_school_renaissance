@@ -476,9 +476,15 @@ a {
 
 /* ---------- popup ---------- */
 
+/* The hit-area div is HIT_SIZE×HIT_SIZE (24px) but the SVG glyph is
+   GLYPH_SIZE (18px). Flexbox centering keeps the glyph visually
+   centered while the larger div captures click/touch events (#347). */
 .school-marker {
   background: none;
   border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .leaflet-popup-content-wrapper {
