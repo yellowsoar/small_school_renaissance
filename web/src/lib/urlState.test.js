@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
+import { MAP, MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
 import {
   DEFAULT_YEAR,
   defaultFilters,
@@ -23,6 +23,10 @@ describe('defaultFilters', () => {
 
   it('defaults excludeClosed to true', () => {
     expect(defaultFilters().excludeClosed).toBe(true);
+  });
+
+  it('defaults zoom to MAP.zoom', () => {
+    expect(defaultFilters().zoom).toBe(MAP.zoom);
   });
 });
 
@@ -87,6 +91,27 @@ describe('filtersFromSearch', () => {
     const parsed = filtersFromSearch(`?q=${exact}`);
     expect(parsed.search.length).toBe(MAX_QUERY_LENGTH);
     expect(parsed.search).toBe(exact);
+  });
+
+  it('reads z param as zoom level (#348)', () => {
+    const parsed = filtersFromSearch('?z=12');
+    expect(parsed.zoom).toBe(12);
+  });
+
+  it('falls back to MAP.zoom for out-of-range or invalid z param (#348)', () => {
+    for (const query of ['?z=0', '?z=99', '?z=abc', '?z=', `?z=${MAP.minZoom - 1}`, `?z=${MAP.maxZoom + 1}`]) {
+      expect(filtersFromSearch(query).zoom, query).toBe(MAP.zoom);
+    }
+  });
+
+  it('accepts both ends of the zoom range (#348)', () => {
+    expect(filtersFromSearch(`?z=${MAP.minZoom}`).zoom).toBe(MAP.minZoom);
+    expect(filtersFromSearch(`?z=${MAP.maxZoom}`).zoom).toBe(MAP.maxZoom);
+  });
+
+  it('defaults zoom to MAP.zoom when z param is absent (#348)', () => {
+    expect(filtersFromSearch('').zoom).toBe(MAP.zoom);
+    expect(filtersFromSearch('?year=120').zoom).toBe(MAP.zoom);
   });
 });
 
@@ -156,6 +181,16 @@ describe('searchFromFilters', () => {
     const reparsed = filtersFromSearch(query);
     expect(reparsed.search.length).toBe(MAX_QUERY_LENGTH);
   });
+
+  it('omits z when zoom is the default (#348)', () => {
+    expect(searchFromFilters(filters())).toBe('');
+    expect(searchFromFilters(filters({ zoom: MAP.zoom }))).toBe('');
+  });
+
+  it('includes z when zoom differs from default (#348)', () => {
+    const query = searchFromFilters(filters({ zoom: 12 }));
+    expect(query).toContain('z=12');
+  });
 });
 
 describe('round trip', () => {
@@ -194,5 +229,30 @@ describe('round trip', () => {
     const query = searchFromFilters(original);
     expect(query).not.toContain('closed');
     expect(filtersFromSearch(query)).toEqual(original);
+  });
+
+  it('survives zoom level round trip (#348)', () => {
+    const original = filters({ zoom: 14 });
+    const query = searchFromFilters(original);
+    expect(query).toContain('z=14');
+    expect(filtersFromSearch(query)).toEqual(original);
+  });
+
+  it('survives zoom at default round trip (no z param) (#348)', () => {
+    const original = filters({ zoom: MAP.zoom });
+    const query = searchFromFilters(original);
+    expect(query).not.toContain('z=');
+    expect(filtersFromSearch(query)).toEqual(original);
+  });
+
+  it('survives full filters including zoom (#348)', () => {
+    const original = filters({
+      year: 118,
+      counties: new Set(['南投縣']),
+      tiers: new Set(['critical']),
+      search: '國小',
+      zoom: 15,
+    });
+    expect(filtersFromSearch(searchFromFilters(original))).toEqual(original);
   });
 });
