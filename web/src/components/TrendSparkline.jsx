@@ -1,12 +1,11 @@
 import { sparkline, toPolyline } from '../lib/sparkline.js';
+import { integer } from '../lib/formatters.js';
 
 // Rendered at its intrinsic size and allowed to scale uniformly. Stretching
 // the viewBox instead (preserveAspectRatio="none") would squash the highlight
 // dot into an ellipse.
 const WIDTH = 228;
 const HEIGHT = 36;
-
-const integer = new Intl.NumberFormat('zh-Hant-TW');
 
 /**
  * The whole 114–130 curve for one school, so the popup shows a trajectory
