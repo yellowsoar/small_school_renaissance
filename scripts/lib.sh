@@ -6,6 +6,13 @@
 # Used by integrity verification functions (#314).
 CHECKSUM_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/data-checksums.json"
 
+# Required CSV header columns for shell pipeline validation (#320).
+# These are the 5 base headers from csv-schema.js that should be present
+# in all MOE datasets.  Projection headers (推估NNN年人數) are added by
+# the upstream g0v dataset and are NOT checked here — the shell pipeline
+# only converts raw MOE downloads.
+SHELL_REQUIRED_HEADERS=("學校代碼" "學校名稱" "縣市名稱" "緯度" "經度")
+
 # Require Python 3 for CSV processing (RFC 4180 parsing, SHA-256
 # integrity verification, JSON manifest operations).
 if ! command -v python3 >/dev/null 2>&1; then
@@ -88,6 +95,53 @@ print(removed)
 	fi
 }
 
+# Validate that a CSV file's header row contains all required columns.
+# Uses Python3 csv.reader for RFC 4180 compliant header parsing,
+# consistent with remove_rows_mismatch_header() (#320).
+# Returns 0 if all required columns are present, 1 otherwise.
+# Logs each missing column to stderr.
+# Usage: validate_csv_header <csv-file> <required_col_1> [required_col_2] ...
+validate_csv_header() {
+	local file="$1"
+	shift
+	local -a required=("$@")
+
+	local missing
+	missing=$(python3 -c '
+import csv, sys
+
+file_path = sys.argv[1]
+required = sys.argv[2:]
+
+try:
+    with open(file_path, newline="") as f:
+        reader = csv.reader(f)
+        try:
+            header = next(reader)
+        except StopIteration:
+            # Empty file: all columns are missing
+            for col in required:
+                print(col)
+            sys.exit(0)
+    header_set = set(h.strip() for h in header)
+    for col in required:
+        if col not in header_set:
+            print(col)
+except OSError as e:
+    print(f"ERROR: {e}", file=sys.stderr)
+    for col in required:
+        print(col)
+' "$file" "${required[@]}")
+
+	if [ -n "$missing" ]; then
+		echo "❌ CSV header validation failed for ${file}:" >&2
+		while IFS= read -r col; do
+			echo "   missing column: ${col}" >&2
+		done <<< "$missing"
+		return 1
+	fi
+}
+
 # Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
 # Tries all available formats in priority order; stops at the first
 # successful conversion.  Previously stopped at the first failure (#261).
@@ -144,6 +198,12 @@ with open(sys.argv[1], newline="") as f:
 ' "$csv_path")
 				if [ "$record_count" -lt 1 ]; then
 					echo "⚠️ Converted CSV from ${ext} is empty or has no data rows: ${csv_path}, trying next format..." >&2
+					rm -f "$csv_path"
+					continue
+				fi
+				# Validate header columns against expected schema (#320)
+				if ! validate_csv_header "$csv_path" "${SHELL_REQUIRED_HEADERS[@]}"; then
+					echo "⚠️ Converted CSV from ${ext} has invalid headers: ${csv_path}, trying next format..." >&2
 					rm -f "$csv_path"
 					continue
 				fi

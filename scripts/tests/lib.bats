@@ -26,7 +26,7 @@ teardown() {
   rm -rf "$TEST_TMPDIR"
 }
 
-# ── sed_inplace ──────────────────────────────────────────────────────────────────────────────────
+# ── sed_inplace ────────────────────────────────────────────────────────────────────────────────────
 
 @test "sed_inplace: successful substitution" {
   echo "hello world" > "$TEST_TMPDIR/f.txt"
@@ -281,7 +281,7 @@ for arg in "$@"; do
 done
 base=$(basename "$src")
 base="${base%.*}.csv"
-printf "name,age,city\nAlice,30,Taipei\n" > "${outdir}/${base}"
+printf "學校代碼,學校名稱,縣市名稱,緯度,經度\nA001,大同國小,臺北市,25.05,121.51\n" > "${outdir}/${base}"
 MOCK
   chmod +x "$TEST_TMPDIR/bin/soffice"
   export PATH="$TEST_TMPDIR/bin:$PATH"
@@ -293,7 +293,7 @@ MOCK
   [ -f "$NAME_DIR/valid.csv" ]
 }
 
-# ── validate_not_html (#163) ───────────────────────────────────────────
+# ── validate_not_html (#163) ───────────────────────────────────────────────
 
 @test "validate_not_html: detects HTML file and deletes it (#163)" {
   echo '<!DOCTYPE html><html><head><title>Maintenance</title></head><body>Under maintenance</body></html>' > "$TEST_TMPDIR/test.ods"
@@ -324,7 +324,7 @@ MOCK
   [ "$status" -eq 0 ]
 }
 
-# ── atomic_download (#195) ─────────────────────────────────────────────
+# ── atomic_download (#195) ─────────────────────────────────────────────────
 
 @test "atomic_download: successful download atomically renames to final path (#195)" {
   # Mock download_file to write valid CSV content to the temp path
@@ -376,7 +376,7 @@ MOCK
   [ "$leftover" -eq 0 ]
 }
 
-# ── check_file (#241) ──────────────────────────────────────────────────
+# ── check_file (#241) ──────────────────────────────────────────────────────
 
 @test "check_file: silent on HTTP server error exit code 8 (#241)" {
   # Mock wget to exit 8 (server error / 404)
@@ -439,7 +439,7 @@ MOCK
   [[ "$output" == *"download(s) failed"* ]]
 }
 
-# ── compute_checksum (#314) ───────────────────────────────────────────
+# ── compute_checksum (#314) ───────────────────────────────────────────────
 
 @test "compute_checksum: returns correct SHA-256 for known content (#314)" {
   echo -n "hello world" > "$TEST_TMPDIR/known.txt"
@@ -458,7 +458,7 @@ MOCK
   [ "$hash_a" != "$hash_b" ]
 }
 
-# ── validate_checksum (#314) ──────────────────────────────────────────
+# ── validate_checksum (#314) ──────────────────────────────────────────────
 
 @test "validate_checksum: passes when hash matches (#314)" {
   echo -n "hello world" > "$TEST_TMPDIR/match.txt"
@@ -482,7 +482,7 @@ MOCK
   [ -f "$TEST_TMPDIR/skip.txt" ]
 }
 
-# ── lookup_checksum (#314) ────────────────────────────────────────────
+# ── lookup_checksum (#314) ────────────────────────────────────────────────
 
 @test "lookup_checksum: returns hash for existing key (#314)" {
   echo '{"data/file.csv": "abc123"}' > "$CHECKSUM_FILE"
@@ -512,7 +512,7 @@ MOCK
   [ "$output" = "" ]
 }
 
-# ── record_checksum (#314) ────────────────────────────────────────────
+# ── record_checksum (#314) ────────────────────────────────────────────────
 
 @test "record_checksum: inserts new key into empty manifest (#314)" {
   echo '{}' > "$CHECKSUM_FILE"
@@ -536,7 +536,7 @@ MOCK
   [ "$output" = "abc123" ]
 }
 
-# ── atomic_download with checksum (#314) ────────────────────────────
+# ── atomic_download with checksum (#314) ──────────────────────────────────
 
 @test "atomic_download: passes when checksum matches (#314)" {
   download_file() { echo -n "hello world" > "$2"; }
@@ -572,4 +572,128 @@ MOCK
   run atomic_download "http://example.com/test.csv" "$final_path" ""
   [ "$status" -eq 0 ]
   [ -f "$final_path" ]
+}
+
+# ── validate_csv_header (#320) ────────────────────────────────────────────
+
+@test "validate_csv_header: passes when all required headers present (#320)" {
+  cat > "$TEST_TMPDIR/valid.csv" <<'CSV'
+學校代碼,學校名稱,縣市名稱,緯度,經度,其他欄位
+A001,大同國小,臺北市,25.05,121.51,extra
+CSV
+  run validate_csv_header "$TEST_TMPDIR/valid.csv" "學校代碼" "學校名稱" "縣市名稱" "緯度" "經度"
+  [ "$status" -eq 0 ]
+}
+
+@test "validate_csv_header: fails when one required header missing (#320)" {
+  cat > "$TEST_TMPDIR/missing1.csv" <<'CSV'
+學校代碼,學校名稱,緯度,經度
+A001,大同國小,25.05,121.51
+CSV
+  run validate_csv_header "$TEST_TMPDIR/missing1.csv" "學校代碼" "學校名稱" "縣市名稱" "緯度" "經度"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"missing column: 縣市名稱"* ]]
+}
+
+@test "validate_csv_header: fails and logs all missing headers (#320)" {
+  cat > "$TEST_TMPDIR/missing_multi.csv" <<'CSV'
+col_a,col_b,col_c
+1,2,3
+CSV
+  run validate_csv_header "$TEST_TMPDIR/missing_multi.csv" "學校代碼" "學校名稱" "縣市名稱"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"missing column: 學校代碼"* ]]
+  [[ "$output" == *"missing column: 學校名稱"* ]]
+  [[ "$output" == *"missing column: 縣市名稱"* ]]
+}
+
+@test "validate_csv_header: passes with extra columns beyond required (#320)" {
+  cat > "$TEST_TMPDIR/extra.csv" <<'CSV'
+學校代碼,學校名稱,縣市名稱,緯度,經度,地區屬性,電話
+A001,大同國小,臺北市,25.05,121.51,一般,02-1234
+CSV
+  run validate_csv_header "$TEST_TMPDIR/extra.csv" "學校代碼" "縣市名稱"
+  [ "$status" -eq 0 ]
+}
+
+@test "validate_csv_header: fails on empty file (#320)" {
+  touch "$TEST_TMPDIR/empty.csv"
+  run validate_csv_header "$TEST_TMPDIR/empty.csv" "學校代碼" "學校名稱"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"missing column: 學校代碼"* ]]
+  [[ "$output" == *"missing column: 學校名稱"* ]]
+}
+
+@test "validate_csv_header: handles quoted CSV headers RFC 4180 (#320)" {
+  printf '"\u5b78\u6821\u4ee3\u78bc","\u5b78\u6821\u540d\u7a31","\u7e23\u5e02\u540d\u7a31","\u7def\u5ea6","\u7d93\u5ea6"\nA001,\u5927\u540c\u570b\u5c0f,\u81fa\u5317\u5e02,25.05,121.51\n' > "$TEST_TMPDIR/quoted.csv"
+  run validate_csv_header "$TEST_TMPDIR/quoted.csv" "學校代碼" "學校名稱" "縣市名稱" "緯度" "經度"
+  [ "$status" -eq 0 ]
+}
+
+@test "validate_csv_header: uses SHELL_REQUIRED_HEADERS constant (#320)" {
+  cat > "$TEST_TMPDIR/real.csv" <<'CSV'
+學校代碼,學校名稱,縣市名稱,鄉鎮市區,地址,電話,網址,地區屬性,緯度,經度,學生人數
+A001,大同國小,臺北市,大同區,某地址,02-1234,http://example.com,一般,25.05,121.51,500
+CSV
+  run validate_csv_header "$TEST_TMPDIR/real.csv" "${SHELL_REQUIRED_HEADERS[@]}"
+  [ "$status" -eq 0 ]
+}
+
+# ── convert_to_csv_if_needed: header validation integration (#320) ────
+
+@test "convert_to_csv_if_needed: returns 2 when converted CSV has wrong headers (#320)" {
+  mkdir -p "$TEST_TMPDIR/bin"
+  cat > "$TEST_TMPDIR/bin/soffice" <<'MOCK'
+#!/usr/bin/env bash
+prev=""
+outdir=""
+src=""
+for arg in "$@"; do
+  if [ "$prev" = "--outdir" ]; then
+    outdir="$arg"
+  fi
+  prev="$arg"
+  src="$arg"
+done
+base=$(basename "$src")
+base="${base%.*}.csv"
+printf "wrong_col_a,wrong_col_b,wrong_col_c\n1,2,3\n" > "${outdir}/${base}"
+MOCK
+  chmod +x "$TEST_TMPDIR/bin/soffice"
+  export PATH="$TEST_TMPDIR/bin:$PATH"
+
+  echo "dummy" > "$NAME_DIR/badheader.ods"
+
+  run convert_to_csv_if_needed "badheader"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"invalid headers"* ]]
+  [ ! -f "$NAME_DIR/badheader.csv" ]
+}
+
+@test "convert_to_csv_if_needed: passes when converted CSV has valid headers (#320)" {
+  mkdir -p "$TEST_TMPDIR/bin"
+  cat > "$TEST_TMPDIR/bin/soffice" <<'MOCK'
+#!/usr/bin/env bash
+prev=""
+outdir=""
+src=""
+for arg in "$@"; do
+  if [ "$prev" = "--outdir" ]; then
+    outdir="$arg"
+  fi
+  prev="$arg"
+  src="$arg"
+done
+base=$(basename "$src")
+base="${base%.*}.csv"
+printf "學校代碼,學校名稱,縣市名稱,緯度,經度\nA001,大同國小,臺北市,25.05,121.51\n" > "${outdir}/${base}"
+MOCK
+  chmod +x "$TEST_TMPDIR/bin/soffice"
+  export PATH="$TEST_TMPDIR/bin:$PATH"
+
+  echo "dummy" > "$NAME_DIR/goodheader.ods"
+
+  run convert_to_csv_if_needed "goodheader"
+  [ "$status" -eq 0 ]
+  [ -f "$NAME_DIR/goodheader.csv" ]
 }
