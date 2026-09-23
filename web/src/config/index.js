@@ -172,4 +172,4 @@ export const HEATMAP_OPTIONS = {
  * are not read as a forecast of actual school closures.
  */
 export const METHODOLOGY =
-  '推估值取自上游資料集，以 113 與 107 學年度的學生人數變化趨勢外推，未計入遷徙、新生兒數與學區調整。僅供風險排序參考，非廢校預測。';
+  `推估值取自上游資料集，以 ${BASE_YEAR} 與 ${REFERENCE_YEAR} 學年度的學生人數變化趨勢外推，未計入遷徙、新生兒數與學區調整。僅供風險排序參考，非廢校預測。`;
