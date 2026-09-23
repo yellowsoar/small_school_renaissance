@@ -491,6 +491,20 @@ describe('validateCsvContent', () => {
   });
 
   /* -------------------------------------------------------------- */
+  /*  RFC 4180 comma-in-header regression test (#337)                  */
+  /* -------------------------------------------------------------- */
+
+  it('accepts RFC 4180 header with embedded comma in quoted field (#337)', () => {
+    // "alpha,beta" is ONE column name containing a comma.
+    // A naive split(',') would break this into ["alpha", "beta", "gamma"]
+    // but PapaParse correctly parses it as ["alpha,beta", "gamma"].
+    const header = '"alpha,beta",gamma';
+    const rows = Array(100).fill('"ab",c');
+    const csv = [header, ...rows].join('\n');
+    expect(() => validateCsvContent(csv, ['alpha,beta', 'gamma'])).not.toThrow();
+  });
+
+  /* -------------------------------------------------------------- */
   /*  Incomplete projection columns regression test (#194)             */
   /* -------------------------------------------------------------- */
 
