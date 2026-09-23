@@ -514,7 +514,7 @@ describe('backoff behavior', () => {
 
     // Only the per-request timeout timer should be scheduled, not a backoff sleep.
     const backoffCalls = setTimeoutSpy.mock.calls.filter(
-      ([, ms]) => ms !== 15_000,
+      ([, ms]) => ms !== 30_000,
     );
     expect(backoffCalls).toHaveLength(0);
   });
@@ -568,10 +568,10 @@ describe('backoff behavior', () => {
     await vi.runAllTimersAsync();
     await assertion;
 
-    // Extract backoff sleep durations (exclude the 15 000 ms request timeouts).
+    // Extract backoff sleep durations (exclude the 30 000 ms request timeouts).
     const backoffDelays = setTimeoutSpy.mock.calls
       .map(([, ms]) => ms)
-      .filter((ms) => ms !== 15_000);
+      .filter((ms) => ms !== 30_000);
 
     // Two retries -> two backoff sleeps.
     expect(backoffDelays).toHaveLength(2);
@@ -597,7 +597,7 @@ describe('backoff behavior', () => {
 
     const backoffDelays = setTimeoutSpy.mock.calls
       .map(([, ms]) => ms)
-      .filter((ms) => ms !== 15_000);
+      .filter((ms) => ms !== 30_000);
 
     // Last delays should be capped at 10 000.
     expect(backoffDelays[3]).toBe(8000); // 1000 * 2^3 = 8000 (under cap)
@@ -622,7 +622,7 @@ describe('backoff behavior', () => {
     // Only 1 backoff sleep (between attempt 0 and 1), not after the final failure.
     const backoffDelays = setTimeoutSpy.mock.calls
       .map(([, ms]) => ms)
-      .filter((ms) => ms !== 15_000);
+      .filter((ms) => ms !== 30_000);
     expect(backoffDelays).toHaveLength(1);
   });
 
@@ -666,7 +666,7 @@ describe('backoff behavior', () => {
 
     const backoffDelays = setTimeoutSpy.mock.calls
       .map(([, ms]) => ms)
-      .filter((ms) => ms !== 15_000);
+      .filter((ms) => ms !== 30_000);
     expect(backoffDelays).toHaveLength(0);
   });
 
