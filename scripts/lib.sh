@@ -372,6 +372,9 @@ download_file() {
 
 # Atomic download: download to temp file, validate, then rename.
 # Chains MIME-type check (#195) and optional SHA-256 verification (#314).
+# Guard mv -f inside its own if to prevent silent success when rename
+# fails (disk full, permissions, cross-FS); cleans up temp file on
+# failure and reports the real error (#344).
 # Usage: atomic_download <url> <final_path> [expected_hash]
 atomic_download() {
 	local url="$1" final="$2" expected_hash="${3:-}"
@@ -381,8 +384,14 @@ atomic_download() {
 	if download_file "$url" "$tmp" \
 		&& validate_not_html "$tmp" \
 		&& validate_checksum "$tmp" "$expected_hash"; then
-		mv -f "$tmp" "$final"
-		return 0
+		if mv -f "$tmp" "$final"; then
+			return 0
+		else
+			local rc=$?
+			echo "❌ rename failed: ${tmp} -> ${final} (exit ${rc})" >&2
+			rm -f "$tmp"
+			return "$rc"
+		fi
 	else
 		local rc=$?
 		rm -f "$tmp"
