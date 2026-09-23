@@ -187,4 +187,9 @@ describe('config', () => {
     expect(typeof METHODOLOGY).toBe('string');
     expect(METHODOLOGY.length).toBeGreaterThan(0);
   });
+
+  it('METHODOLOGY references BASE_YEAR and REFERENCE_YEAR', () => {
+    expect(METHODOLOGY).toContain(String(BASE_YEAR));
+    expect(METHODOLOGY).toContain(String(REFERENCE_YEAR));
+  });
 });
