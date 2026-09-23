@@ -17,7 +17,7 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promis
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchWithRetry, validateCsvContent, verifyCsvIntegrity } from './fetch-utils.js';
+import { fetchWithRetry, validateCsvContent, verifyCsvIntegrity, summarizeCsvForReview } from './fetch-utils.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -118,12 +118,54 @@ try {
 /* ------------------------------------------------------------------ */
 
 /**
+ * Print a structural summary of the auto-trusted CSV content (#317).
+ *
+ * Gives developers visual confirmation of what was just auto-trusted,
+ * so they can spot obvious anomalies (wrong dataset, unexpected row
+ * counts, out-of-range coordinates) without opening the file.
+ *
+ * Non-blocking: if summarization fails, auto-bootstrap proceeds
+ * normally with just the hash.
+ *
+ * @param {string} csvBody - The raw CSV content
+ */
+const printDataPreview = (csvBody) => {
+  const summary = summarizeCsvForReview(csvBody);
+  if (!summary) return;
+
+  const { totalRows, sampleSchools, coordinateBounds } = summary;
+
+  const parts = [`Rows: ${totalRows.toLocaleString()}`];
+  if (coordinateBounds) {
+    const { latMin, latMax, lonMin, lonMax } = coordinateBounds;
+    parts.push(
+      `Coords: lat ${latMin.toFixed(2)}\u2013${latMax.toFixed(2)}, ` +
+        `lon ${lonMin.toFixed(2)}\u2013${lonMax.toFixed(2)}`,
+    );
+  }
+
+  console.log(`\ud83d\udccb Auto-trusted data preview:`);
+  console.log(`   ${parts.join(' | ')}`);
+  for (let i = 0; i < sampleSchools.length; i++) {
+    const { name, county } = sampleSchools[i];
+    const suffix = county ? ` (${county})` : '';
+    console.log(`   [${i + 1}] ${name}${suffix}`);
+  }
+  console.log(
+    '   \u2500\u2500\u2500 Verify this looks correct. If suspicious, delete data-integrity.json and investigate.',
+  );
+};
+
+/**
  * Auto-bootstrap the integrity hash for local development (#229).
  *
  * When integrity metadata is unavailable (empty hash, missing file, or
  * corrupt JSON), CI always fails closed.  Outside CI the developer
  * experience takes priority: compute the hash from the just-validated
  * CSV and persist it so subsequent runs verify normally.
+ *
+ * Prints a structural data preview so the developer can visually verify
+ * what was auto-trusted (#317).
  *
  * @param {string} reason - human-readable explanation for the warning
  */
@@ -132,6 +174,7 @@ const autoBootstrap = async (reason) => {
     `\u26a0\ufe0f  ${reason} \u2014 auto-bootstrapping for local development.\n` +
     '   Commit a verified hash with --update-integrity for production use.',
   );
+  printDataPreview(body);
   const hash = verifyCsvIntegrity(body);
   await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
   console.log(`\u2705 data-integrity.json bootstrapped (sha256: ${hash})`);
