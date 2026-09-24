@@ -85,6 +85,32 @@ describe('useGeoJson', () => {
     expect(result.current.error).toBeInstanceOf(Error);
   });
 
+  it('transitions to error state on valid JSON but invalid GeoJSON (#356)', async () => {
+    mocks.fetchWithTimeout.mockResolvedValue(
+      JSON.stringify({ type: 'Topology', objects: {} }),
+    );
+
+    const { result } = renderHook(() => useGeoJson('/test.geojson'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.data).toBeNull();
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.error.message).toContain('FeatureCollection');
+  });
+
+  it('rejects JSON array (missing FeatureCollection wrapper) (#356)', async () => {
+    mocks.fetchWithTimeout.mockResolvedValue(
+      JSON.stringify([{ type: 'Feature' }]),
+    );
+
+    const { result } = renderHook(() => useGeoJson('/test.geojson'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.data).toBeNull();
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.error.message).toContain('FeatureCollection');
+  });
+
   it('does not update state after unmount', async () => {
     let resolvePromise;
     mocks.fetchWithTimeout.mockReturnValue(
