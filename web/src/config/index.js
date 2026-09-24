@@ -13,13 +13,13 @@ export const DATA_URL = `${import.meta.env.BASE_URL}data/113-107.csv`;
  *  deep links and avoiding browser URL length limits (#210). */
 export const MAX_QUERY_LENGTH = 200;
 
-/** Base (observed) school year in the dataset, in \u6c11\u570b years. */
+/** Base (observed) school year in the dataset, in 民國 years. */
 export const BASE_YEAR = 113;
 
 /** Reference year the dataset compares against for the trend delta. */
 export const REFERENCE_YEAR = 107;
 
-/** Projection columns run \u63a8\u4f30114\u5e74\u4eba\u6578 \u2026 \u63a8\u4f30130\u5e74\u4eba\u6578. */
+/** Projection columns run 推估114年人數 … 推估130年人數. */
 export const PROJECTION_YEARS = Array.from(
   { length: LAST_PROJECTION_YEAR - FIRST_PROJECTION_YEAR + 1 },
   (_, i) => FIRST_PROJECTION_YEAR + i,
@@ -49,14 +49,14 @@ export const TILE_LAYERS = [
   },
   {
     id: 'hot',
-    label: '\u4eba\u9053\u95dc\u61f7\u7248',
+    label: '人道關懷版',
     url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, tiles by <a href="https://www.hotosm.org/">HOT</a> hosted by <a href="https://openstreetmap.fr/">OSM France</a>',
   },
   {
     id: 'topo',
-    label: '\u5730\u5f62\u5716',
+    label: '地形圖',
     url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
     attribution:
       'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
@@ -66,7 +66,7 @@ export const TILE_LAYERS = [
 
 /**
  * Loose bounding box covering Taiwan proper and all outlying islands
- * (Kinmen \u2248 118.3\u00b0E, Matsu \u2248 120.0\u00b0E, Orchid Island \u2248 121.6\u00b0E).
+ * (Kinmen ≈ 118.3°E, Matsu ≈ 120.0°E, Orchid Island ≈ 121.6°E).
  * Coordinates outside this box are treated as data errors and filtered
  * out in toSchool().
  */
@@ -84,43 +84,43 @@ export const TW_BOUNDS = {
 export const RISK_TIERS = [
   {
     id: 'closed',
-    label: '\u63a8\u4f30\u6b78\u96f6',
+    label: '推估歸零',
     shape: 'star7',
     color: '#111111',
     max: 0,
-    describe: () => '\u4eba\u6578 = 0',
+    describe: () => '人數 = 0',
   },
   {
     id: 'critical',
-    label: '\u6975\u9ad8\u98a8\u96aa',
+    label: '極高風險',
     shape: 'star5',
     color: '#d7263d',
     max: 30,
-    describe: () => '0 < \u4eba\u6578 \u2264 30',
+    describe: () => '0 < 人數 ≤ 30',
   },
   {
     id: 'high',
-    label: '\u9ad8\u98a8\u96aa',
+    label: '高風險',
     shape: 'triangle',
     color: '#f07300',
     max: 50,
-    describe: () => '30 < \u4eba\u6578 \u2264 50',
+    describe: () => '30 < 人數 ≤ 50',
   },
   {
     id: 'watch',
-    label: '\u9700\u95dc\u6ce8',
+    label: '需關注',
     shape: 'square',
     color: '#e5b700',
     max: 100,
-    describe: () => '50 < \u4eba\u6578 \u2264 100',
+    describe: () => '50 < 人數 ≤ 100',
   },
   {
     id: 'stable',
-    label: '\u76f8\u5c0d\u7a69\u5b9a',
+    label: '相對穩定',
     shape: 'circle',
     color: '#2f9e44',
     max: Infinity,
-    describe: () => '\u4eba\u6578 > 100',
+    describe: () => '人數 > 100',
   },
 ];
 
@@ -130,10 +130,10 @@ export const RISK_TIERS = [
  */
 export const UNPROJECTED_MARKER = {
   id: 'unprojected',
-  label: '\u7121\u63a8\u4f30\u8cc7\u6599',
+  label: '無推估資料',
   shape: 'circle',
   color: '#999',
-  describe: () => '\u7f3a\u5c11\u63a8\u4f30\u8cc7\u6599',
+  describe: () => '缺少推估資料',
 };
 
 /**
@@ -146,8 +146,8 @@ export const requireTier = (id) => {
   const tier = RISK_TIERS.find((t) => t.id === id);
   if (!tier) {
     throw new Error(
-      `RISK_TIERS \u8a2d\u5b9a\u932f\u8aa4\uff1a\u627e\u4e0d\u5230 id="${id}" \u7684\u5206\u7d1a\u3002` +
-        `\u53ef\u7528\u7684 id\uff1a${RISK_TIERS.map((t) => t.id).join('\u3001')}`,
+      `RISK_TIERS 設定錯誤：找不到 id="${id}" 的分級。` +
+        `可用的 id：${RISK_TIERS.map((t) => t.id).join('、')}`,
     );
   }
   return tier;
@@ -174,7 +174,7 @@ export const HEATMAP_OPTIONS = {
  * are not read as a forecast of actual school closures.
  */
 export const METHODOLOGY =
-  `\u63a8\u4f30\u503c\u53d6\u81ea\u4e0a\u6e38\u8cc7\u6599\u96c6\uff0c\u4ee5 ${BASE_YEAR} \u8207 ${REFERENCE_YEAR} \u5b78\u5e74\u5ea6\u7684\u5b78\u751f\u4eba\u6578\u8b8a\u5316\u8da8\u52e2\u5916\u63a8\uff0c\u672a\u8a08\u5165\u9077\u5f99\u3001\u65b0\u751f\u5152\u6578\u8207\u5b78\u5340\u8abf\u6574\u3002\u50c5\u4f9b\u98a8\u96aa\u6392\u5e8f\u53c3\u8003\uff0c\u975e\u5ee2\u6821\u9810\u6e2c\u3002`;
+  `推估值取自上游資料集，以 ${BASE_YEAR} 與 ${REFERENCE_YEAR} 學年度的學生人數變化趨勢外推，未計入遷徙、新生兒數與學區調整。僅供風險排序參考，非廢校預測。`;
 
 /** URL for the county boundary GeoJSON (served as a static asset). */
 export const COUNTY_BOUNDARY_URL = `${import.meta.env.BASE_URL}data/county-boundaries.geojson`;
@@ -184,5 +184,5 @@ export const COUNTY_BOUNDARY_URL = `${import.meta.env.BASE_URL}data/county-bound
  * `defaultEnabled` controls whether the layer is visible on first load.
  */
 export const OVERLAY_LAYERS = [
-  { id: 'countyBoundary', label: '\u7e23\u5e02\u754c\u7dda', defaultEnabled: true },
+  { id: 'countyBoundary', label: '縣市界線', defaultEnabled: false },
 ];
