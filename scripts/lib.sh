@@ -163,7 +163,28 @@ convert_to_csv_if_needed() {
 	local base="$1"
 	local csv_path="./${NAME_DIR:?NAME_DIR not set}/${base}.csv"
 
-	[ -f "$csv_path" ] && return 0
+	if [ -f "$csv_path" ]; then
+		# Direct-download CSV: validate header and row integrity (#363)
+		# Matches the validation applied to converted CSVs below.
+		echo "⚙️ Validating direct-download CSV: ${csv_path}"
+		remove_rows_mismatch_header "$csv_path" || return 2
+		validate_csv_header "$csv_path" "${SHELL_REQUIRED_HEADERS[@]}" || return 2
+		local record_count
+		record_count=$(python3 -c '
+import csv, sys
+with open(sys.argv[1], newline="") as f:
+    reader = csv.reader(f)
+    try: next(reader)
+    except StopIteration: print(0); sys.exit(0)
+    print(sum(1 for _ in reader))
+' "$csv_path")
+		if [ "$record_count" -lt 1 ]; then
+			echo "⚠️ Direct-download CSV is empty or has no data rows: ${csv_path}" >&2
+			return 2
+		fi
+		echo "✅ Direct-download CSV validated: ${csv_path} (${record_count} data row(s))"
+		return 0
+	fi
 
 	local tried=0
 	local ext src
