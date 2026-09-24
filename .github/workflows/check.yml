@@ -58,7 +58,7 @@ jobs:
         run: |
           HASH=$(jq -r '.sha256 // empty' data-integrity.json 2>/dev/null || echo '')
           if [ -z "$HASH" ]; then
-            echo "::error::data-integrity.json sha256 is empty — CI cannot verify CSV integrity."
+            echo "::error::data-integrity.json sha256 is empty \u2014 CI cannot verify CSV integrity."
             echo "::error::Run: gh workflow run update-integrity.yml -f mode=update"
             exit 1
           fi
@@ -77,6 +77,15 @@ jobs:
           DATA_PATH: ${{ vars.DATA_PATH || 'docs/113-107.csv' }}
           DATA_SOURCE_URL: ${{ vars.DATA_SOURCE_URL || '' }}
 
+      # Download county boundary GeoJSON and verify its SHA-256 hash
+      # against the value in boundary-integrity.json (#355).
+      # Auto-bootstraps when the hash is empty (boundary data is
+      # auxiliary); strict verification once a hash is committed.
+      - name: Download and verify boundary integrity
+        run: node scripts/fetch-boundaries.js --force
+        env:
+          BOUNDARY_SOURCE_URL: ${{ vars.BOUNDARY_SOURCE_URL || '' }}
+
       - run: npm run build
         env:
           # Override in repo Settings > Secrets and variables > Variables
@@ -87,6 +96,7 @@ jobs:
           DATA_PATH: ${{ vars.DATA_PATH || 'docs/113-107.csv' }}
           DATA_SOURCE_URL: ${{ vars.DATA_SOURCE_URL || '' }}
           BASE_PATH: ${{ vars.BASE_PATH || '/small_school_renaissance/' }}
+          BOUNDARY_SOURCE_URL: ${{ vars.BOUNDARY_SOURCE_URL || '' }}
 
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
         if: ${{ inputs.with-pages-upload }}

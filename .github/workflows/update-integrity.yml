@@ -13,7 +13,7 @@ on:
           - check
         default: update
   schedule:
-    # Every Monday at 04:00 UTC — detect upstream data changes.
+    # Every Monday at 04:00 UTC \u2014 detect upstream data changes.
     - cron: '0 4 * * 1'
 
 permissions:
@@ -26,6 +26,9 @@ jobs:
       changed: ${{ steps.drift.outputs.changed }}
       old-hash: ${{ steps.old.outputs.hash }}
       new-hash: ${{ steps.new.outputs.hash }}
+      boundary-changed: ${{ steps.boundary-drift.outputs.changed }}
+      boundary-old-hash: ${{ steps.boundary-old.outputs.hash }}
+      boundary-new-hash: ${{ steps.boundary-new.outputs.hash }}
     defaults:
       run:
         working-directory: web
@@ -35,6 +38,7 @@ jobs:
       DATA_BRANCH: ${{ vars.DATA_BRANCH || 'gh-pages' }}
       DATA_PATH: ${{ vars.DATA_PATH || 'docs/113-107.csv' }}
       DATA_SOURCE_URL: ${{ vars.DATA_SOURCE_URL || '' }}
+      BOUNDARY_SOURCE_URL: ${{ vars.BOUNDARY_SOURCE_URL || '' }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -74,18 +78,53 @@ jobs:
             echo "Hash changed: $OLD_HASH -> $NEW_HASH"
           fi
 
+      # --- Boundary integrity (#355) ---
+
+      - name: Capture current committed boundary hash
+        id: boundary-old
+        run: |
+          HASH=$(jq -r '.sha256 // empty' boundary-integrity.json 2>/dev/null || echo '')
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Download boundary and compute hash
+        run: node scripts/fetch-boundaries.js --force --update-integrity
+        env:
+          BOUNDARY_SOURCE_URL: ${{ vars.BOUNDARY_SOURCE_URL || '' }}
+
+      - name: Capture new boundary hash
+        id: boundary-new
+        run: |
+          HASH=$(jq -r '.sha256' boundary-integrity.json)
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Detect boundary drift
+        id: boundary-drift
+        env:
+          OLD_HASH: ${{ steps.boundary-old.outputs.hash }}
+          NEW_HASH: ${{ steps.boundary-new.outputs.hash }}
+        run: |
+          if [ "$OLD_HASH" = "$NEW_HASH" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Boundary hash unchanged: $NEW_HASH"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Boundary hash changed: $OLD_HASH -> $NEW_HASH"
+          fi
+
       - name: Upload integrity artifact
-        if: steps.drift.outputs.changed == 'true'
+        if: steps.drift.outputs.changed == 'true' || steps.boundary-drift.outputs.changed == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: data-integrity
-          path: web/data-integrity.json
+          path: |
+            web/data-integrity.json
+            web/boundary-integrity.json
           retention-days: 1
 
   commit:
     needs: detect
     if: >-
-      needs.detect.outputs.changed == 'true' &&
+      (needs.detect.outputs.changed == 'true' || needs.detect.outputs.boundary-changed == 'true') &&
       github.event_name == 'workflow_dispatch' &&
       inputs.mode == 'update'
     runs-on: ubuntu-latest
@@ -104,23 +143,31 @@ jobs:
         env:
           OLD_HASH: ${{ needs.detect.outputs.old-hash }}
           NEW_HASH: ${{ needs.detect.outputs.new-hash }}
+          BOUNDARY_OLD: ${{ needs.detect.outputs.boundary-old-hash }}
+          BOUNDARY_NEW: ${{ needs.detect.outputs.boundary-new-hash }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add web/data-integrity.json
-          git commit -m "chore: update CSV integrity hash
+          git add web/data-integrity.json web/boundary-integrity.json
+          BODY="chore: update integrity hashes"
+          [ "$OLD_HASH" != "$NEW_HASH" ] && BODY="$BODY
 
-          Old: ${OLD_HASH}
-          New: ${NEW_HASH}"
+          CSV Old: ${OLD_HASH}
+          CSV New: ${NEW_HASH}"
+          [ "$BOUNDARY_OLD" != "$BOUNDARY_NEW" ] && BODY="$BODY
+
+          Boundary Old: ${BOUNDARY_OLD}
+          Boundary New: ${BOUNDARY_NEW}"
+          git commit -m "$BODY"
           git push
 
       - name: Report update result
-        run: echo "::notice::data-integrity.json updated and committed."
+        run: echo "::notice::Integrity hashes updated and committed."
 
   alert:
     needs: detect
     if: >-
-      needs.detect.outputs.changed == 'true' &&
+      (needs.detect.outputs.changed == 'true' || needs.detect.outputs.boundary-changed == 'true') &&
       (github.event_name == 'schedule' ||
        (github.event_name == 'workflow_dispatch' && inputs.mode == 'check'))
     runs-on: ubuntu-latest
@@ -142,15 +189,15 @@ jobs:
           # so that signed URLs or credential-bearing URLs are never
           # published verbatim in public GitHub issues (#299).
           REDACTED=$(python3 -c "
-import sys, urllib.parse
-try:
-    u = urllib.parse.urlparse(sys.argv[1])
-    host = u.hostname or ''
-    port = f':{u.port}' if u.port else ''
-    print(f'{u.scheme}://{host}{port}{u.path}')
-except Exception:
-    print('(source URL redacted)')
-" "$RAW_URL")
+          import sys, urllib.parse
+          try:
+              u = urllib.parse.urlparse(sys.argv[1])
+              host = u.hostname or ''
+              port = f':{u.port}' if u.port else ''
+              print(f'{u.scheme}://{host}{port}{u.path}')
+          except Exception:
+              print('(source URL redacted)')
+          " "$RAW_URL")
           echo "url=$REDACTED" >> "$GITHUB_OUTPUT"
 
       - name: Open issue on upstream drift
@@ -159,28 +206,46 @@ except Exception:
           GH_REPO: ${{ github.repository }}
           OLD_HASH: ${{ needs.detect.outputs.old-hash }}
           NEW_HASH: ${{ needs.detect.outputs.new-hash }}
+          BOUNDARY_OLD: ${{ needs.detect.outputs.boundary-old-hash }}
+          BOUNDARY_NEW: ${{ needs.detect.outputs.boundary-new-hash }}
           DATA_SRC: ${{ steps.redact.outputs.url }}
+          CSV_CHANGED: ${{ needs.detect.outputs.changed }}
+          BOUNDARY_CHANGED: ${{ needs.detect.outputs.boundary-changed }}
         run: |
           # Avoid duplicate issues: check for an existing open issue.
-          EXISTING=$(gh issue list --state open --search 'upstream CSV integrity hash changed' --json number --jq '.[0].number' 2>/dev/null || echo '')
+          EXISTING=$(gh issue list --state open --search 'upstream integrity hash changed' --json number --jq '.[0].number' 2>/dev/null || echo '')
           if [ -n "$EXISTING" ]; then
             echo "::notice::Open issue #$EXISTING already exists, skipping."
             exit 0
           fi
 
-          gh issue create \
-            --title '⚠️ Upstream CSV integrity hash changed' \
-            --body "The scheduled integrity check detected that the upstream CSV hash has changed.
+          BODY="The scheduled integrity check detected upstream hash changes.
 
+          "
+          if [ "$CSV_CHANGED" = "true" ]; then
+            BODY="${BODY}### CSV
           **Old hash:** \`${OLD_HASH}\`
           **New hash:** \`${NEW_HASH}\`
           **Source:** \`${DATA_SRC}\`
 
-          ### Action required
+          "
+          fi
+          if [ "$BOUNDARY_CHANGED" = "true" ]; then
+            BODY="${BODY}### Boundary GeoJSON
+          **Old hash:** \`${BOUNDARY_OLD}\`
+          **New hash:** \`${BOUNDARY_NEW}\`
 
-          1. Review the upstream CSV for correctness.
+          "
+          fi
+          BODY="${BODY}### Action required
+
+          1. Review the upstream data for correctness.
           2. If the change is legitimate, run the **Update CSV Integrity Hash** workflow with mode \`update\` to commit the new hash.
           3. If the change is suspicious, investigate before updating.
 
           ---
           _Auto-generated by the \`update-integrity.yml\` workflow._"
+
+          gh issue create \
+            --title '\u26a0\ufe0f Upstream integrity hash changed' \
+            --body "$BODY"
