@@ -190,32 +190,31 @@ describe('ControlPanel', () => {
     expect(onLayers).toHaveBeenCalledTimes(1);
   });
 
-  it('renders all base map radio options from config', () => {
+  it('renders all base map options in the select menu (#371)', () => {
     renderPanel();
 
-    for (const tile of TILE_LAYERS) {
-      expect(screen.getByText(tile.label)).toBeTruthy();
+    const select = screen.getByRole('combobox', { name: /\u5e95\u5716/ });
+    const options = select.querySelectorAll('option');
+    expect(options).toHaveLength(TILE_LAYERS.length);
+    for (let i = 0; i < TILE_LAYERS.length; i++) {
+      expect(options[i].textContent).toBe(TILE_LAYERS[i].label);
+      expect(options[i].value).toBe(TILE_LAYERS[i].id);
     }
   });
 
-  it('checks the active base map radio button', () => {
+  it('selects the active base map in the select menu (#371)', () => {
     renderPanel();
 
-    const radios = screen.getAllByRole('radio');
-    const osmRadio = radios.find((r) => r.value === 'osm');
-    expect(osmRadio.checked).toBe(true);
-
-    const hotRadio = radios.find((r) => r.value === 'hot');
-    expect(hotRadio.checked).toBe(false);
+    const select = screen.getByRole('combobox', { name: /\u5e95\u5716/ });
+    expect(select.value).toBe('osm');
   });
 
-  it('calls onLayers with the selected base map id', () => {
+  it('calls onLayers with the selected base map id (#371)', () => {
     const onLayers = vi.fn();
     renderPanel({ onLayers });
 
-    const hotLabel = screen.getByText(TILE_LAYERS.find((t) => t.id === 'hot').label);
-    const radio = hotLabel.closest('label').querySelector('input[type="radio"]');
-    fireEvent.click(radio);
+    const select = screen.getByRole('combobox', { name: /\u5e95\u5716/ });
+    fireEvent.change(select, { target: { value: 'hot' } });
 
     expect(onLayers).toHaveBeenCalledWith({ baseMap: 'hot' });
   });
