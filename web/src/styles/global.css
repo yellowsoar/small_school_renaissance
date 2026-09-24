@@ -255,6 +255,31 @@ a {
   outline-offset: 2px;
 }
 
+/* ---------- boundary notice (#365) ---------- */
+
+.boundary-notice {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  z-index: 550;
+  margin: 0;
+  padding: 10px 18px;
+  transform: translateX(-50%);
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+}
+
+.boundary-notice p {
+  margin: 0;
+}
+
 /* ---------- sidebar ---------- */
 
 .sidebar {
