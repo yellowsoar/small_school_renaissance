@@ -34,17 +34,19 @@ export default function App() {
   });
   const [panelOpen, setPanelOpen] = useState(true);
 
-  // Exclude zoom from the data-filtering dependency so that zoom changes
-  // (which happen on every scroll/pinch) never trigger filterSchools (#348).
+  // Exclude zoom and excludeClosed from the data-filtering dependency so
+  // that zoom changes (which happen on every scroll/pinch) and
+  // excludeClosed toggles never trigger filterSchools (#348, #364).
+  // excludeClosed is not consumed by filterSchools(); its filtering is
+  // handled by the downstream `visible` memo.
   const dataFilters = useMemo(
     () => ({
       year: filters.year,
       counties: filters.counties,
       tiers: filters.tiers,
       search: filters.search,
-      excludeClosed: filters.excludeClosed,
     }),
-    [filters.year, filters.counties, filters.tiers, filters.search, filters.excludeClosed],
+    [filters.year, filters.counties, filters.tiers, filters.search],
   );
 
   const filtered = useMemo(() => filterSchools(schools, dataFilters), [schools, dataFilters]);
