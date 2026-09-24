@@ -17,6 +17,7 @@ export default function ControlPanel({
 }) {
   const yearId = useId();
   const searchId = useId();
+  const baseMapId = useId();
 
   // Note: the chips below each have their own `active`. This one is about the
   // panel as a whole, so it gets a distinct name rather than being shadowed.
@@ -126,23 +127,23 @@ export default function ControlPanel({
             </label>
           ))}
         </div>
-        <fieldset className="panel__basemap">
-          <legend className="panel__sublabel">底圖</legend>
-          <div className="switches">
+        <div className="panel__basemap">
+          <label className="panel__sublabel" htmlFor={baseMapId}>
+            底圖
+          </label>
+          <select
+            id={baseMapId}
+            className="panel__select"
+            value={layers.baseMap}
+            onChange={(event) => onLayers({ baseMap: event.target.value })}
+          >
             {TILE_LAYERS.map((tile) => (
-              <label key={tile.id} className="switch">
-                <input
-                  type="radio"
-                  name="baseMap"
-                  value={tile.id}
-                  checked={layers.baseMap === tile.id}
-                  onChange={() => onLayers({ baseMap: tile.id })}
-                />
-                <span>{tile.label}</span>
-              </label>
+              <option key={tile.id} value={tile.id}>
+                {tile.label}
+              </option>
             ))}
-          </div>
-        </fieldset>
+          </select>
+        </div>
       </fieldset>
 
       <fieldset className="panel__block">
