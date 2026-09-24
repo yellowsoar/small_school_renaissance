@@ -19,8 +19,12 @@ const mocks = vi.hoisted(() => ({
 
 // Track the last useMap/useMapEvents calls for MapViewSync verification
 const leafletMocks = vi.hoisted(() => ({
-  useMap: vi.fn(() => ({ getZoom: () => 7, setZoom: vi.fn() })),
+  useMap: vi.fn(() => ({ getZoom: () => 7, setZoom: vi.fn(), fitBounds: vi.fn() })),
   useMapEvents: vi.fn(() => null),
+}));
+
+const leafletCoreMocks = vi.hoisted(() => ({
+  latLngBounds: vi.fn(() => 'mock-bounds'),
 }));
 
 vi.mock('react-leaflet', () => ({
@@ -38,6 +42,10 @@ vi.mock('react-leaflet', () => ({
   },
   useMap: (...args) => leafletMocks.useMap(...args),
   useMapEvents: (...args) => leafletMocks.useMapEvents(...args),
+}));
+
+vi.mock('leaflet', () => ({
+  latLngBounds: (...args) => leafletCoreMocks.latLngBounds(...args),
 }));
 
 vi.mock('./HeatmapLayer.jsx', () => ({
@@ -80,7 +88,7 @@ const noop = () => {};
 describe('SchoolMap', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    leafletMocks.useMap.mockReturnValue({ getZoom: () => 7, setZoom: vi.fn() });
+    leafletMocks.useMap.mockReturnValue({ getZoom: () => 7, setZoom: vi.fn(), fitBounds: vi.fn() });
   });
 
   it('passes MAP config to MapContainer', () => {
@@ -315,7 +323,7 @@ describe('SchoolMap', () => {
 
   it('calls onZoomChange when zoomend fires with a different zoom (#348)', () => {
     const onZoomChange = vi.fn();
-    leafletMocks.useMap.mockReturnValue({ getZoom: () => 12, setZoom: vi.fn() });
+    leafletMocks.useMap.mockReturnValue({ getZoom: () => 12, setZoom: vi.fn(), fitBounds: vi.fn() });
 
     render(
       <SchoolMap
@@ -337,7 +345,7 @@ describe('SchoolMap', () => {
 
   it('does not call onZoomChange when zoomend fires with the same zoom (#348)', () => {
     const onZoomChange = vi.fn();
-    leafletMocks.useMap.mockReturnValue({ getZoom: () => 10, setZoom: vi.fn() });
+    leafletMocks.useMap.mockReturnValue({ getZoom: () => 10, setZoom: vi.fn(), fitBounds: vi.fn() });
 
     render(
       <SchoolMap
@@ -354,5 +362,157 @@ describe('SchoolMap', () => {
     zoomendHandler();
 
     expect(onZoomChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('FitBoundsOnSearch (#373)', () => {
+  let fitBoundsFn;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fitBoundsFn = vi.fn();
+    leafletMocks.useMap.mockReturnValue({
+      getZoom: () => 7,
+      setZoom: vi.fn(),
+      fitBounds: fitBoundsFn,
+    });
+    leafletCoreMocks.latLngBounds.mockReturnValue('mock-bounds');
+  });
+
+  it('does not fitBounds when search is empty (#373)', () => {
+    vi.useFakeTimers();
+    render(
+      <SchoolMap
+        schools={schools}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        search=""
+      />,
+    );
+    vi.advanceTimersByTime(1000);
+    expect(fitBoundsFn).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('calls map.fitBounds 500ms after search changes (#373)', () => {
+    vi.useFakeTimers();
+    const schoolsWithPos = [
+      { id: '1', position: [23.0, 120.0] },
+      { id: '2', position: [24.0, 121.0] },
+    ];
+    const { rerender } = render(
+      <SchoolMap
+        schools={schoolsWithPos}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        search=""
+      />,
+    );
+
+    rerender(
+      <SchoolMap
+        schools={schoolsWithPos}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        search="\u53f0\u5317"
+      />,
+    );
+
+    expect(fitBoundsFn).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(500);
+    expect(fitBoundsFn).toHaveBeenCalledOnce();
+    expect(fitBoundsFn).toHaveBeenCalledWith('mock-bounds', {
+      maxZoom: 15,
+      padding: [50, 50],
+    });
+    vi.useRealTimers();
+  });
+
+  it('debounces rapid search changes, only calling fitBounds once (#373)', () => {
+    vi.useFakeTimers();
+    const schoolsWithPos = [{ id: '1', position: [23.0, 120.0] }];
+    const { rerender } = render(
+      <SchoolMap
+        schools={schoolsWithPos}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        search=""
+      />,
+    );
+
+    rerender(
+      <SchoolMap schools={schoolsWithPos} year={year} layers={layers} overlayData={overlayData} search="\u53f0" />,
+    );
+    vi.advanceTimersByTime(200);
+
+    rerender(
+      <SchoolMap schools={schoolsWithPos} year={year} layers={layers} overlayData={overlayData} search="\u53f0\u5317" />,
+    );
+    vi.advanceTimersByTime(200);
+
+    rerender(
+      <SchoolMap schools={schoolsWithPos} year={year} layers={layers} overlayData={overlayData} search="\u53f0\u5317\u5e02" />,
+    );
+    vi.advanceTimersByTime(500);
+
+    expect(fitBoundsFn).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it('does not fitBounds when schools array is empty (#373)', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(
+      <SchoolMap
+        schools={[]}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        search=""
+      />,
+    );
+
+    rerender(
+      <SchoolMap schools={[]} year={year} layers={layers} overlayData={overlayData} search="\u53f0\u5317" />,
+    );
+
+    vi.advanceTimersByTime(500);
+    expect(fitBoundsFn).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('passes maxZoom and padding options to fitBounds (#373)', () => {
+    vi.useFakeTimers();
+    const schoolsWithPos = [{ id: '1', position: [23.5, 120.5] }];
+    const { rerender } = render(
+      <SchoolMap
+        schools={schoolsWithPos}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        search=""
+      />,
+    );
+
+    rerender(
+      <SchoolMap
+        schools={schoolsWithPos}
+        year={year}
+        layers={layers}
+        overlayData={overlayData}
+        search="test"
+      />,
+    );
+
+    vi.advanceTimersByTime(500);
+    expect(leafletCoreMocks.latLngBounds).toHaveBeenCalledWith([[23.5, 120.5]]);
+    expect(fitBoundsFn).toHaveBeenCalledWith('mock-bounds', {
+      maxZoom: 15,
+      padding: [50, 50],
+    });
+    vi.useRealTimers();
   });
 });

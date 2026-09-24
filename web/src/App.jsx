@@ -143,6 +143,7 @@ export default function App() {
               overlayData={overlayData}
               zoom={filters.zoom}
               onZoomChange={handleZoomChange}
+              search={filters.search}
             />
 
             {countyBoundary.status === 'error' && (
