@@ -38,7 +38,7 @@ jobs:
           npm ci
 
       - name: Audit dependencies for known vulnerabilities
-        run: npm audit --audit-level=high --omit=dev
+        run: npm audit --audit-level=moderate --omit=dev
 
       - run: npm run lint
 
