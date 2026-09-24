@@ -70,7 +70,7 @@ export async function fetchWithRetry(
 }
 
 /* ------------------------------------------------------------------ */
-/*  CSV integrity verification (#222)                                   */
+/*  Content integrity verification (#222, #366)                         */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -80,24 +80,34 @@ export async function fetchWithRetry(
  * Pure function: all I/O (reading data-integrity.json, writing files)
  * is the caller's responsibility.
  *
- * @param {string} body - The raw CSV content to hash
+ * @param {string} body - The content to hash
  * @param {string} [expectedHash] - Expected SHA-256 hex digest. When
  *   non-empty the function throws if the computed hash does not match.
  *   Empty string or undefined skips the check (unconfigured state).
  * @returns {string} The computed SHA-256 hex digest
  * @throws {Error} When expectedHash is non-empty and does not match
  */
-export function verifyCsvIntegrity(body, expectedHash) {
+export function verifyIntegrity(body, expectedHash) {
   const actual = createHash('sha256').update(body, 'utf-8').digest('hex');
 
   if (expectedHash && actual !== expectedHash) {
     throw new Error(
-      `CSV integrity check failed: expected sha256 ${expectedHash}, got ${actual}`,
+      `integrity check failed: expected sha256 ${expectedHash}, got ${actual}`,
     );
   }
 
   return actual;
 }
+
+/**
+ * Backward-compatible alias for `verifyIntegrity`.
+ *
+ * Retained so that external forks importing by the original name
+ * continue to work.  Safe to remove in a future major version.
+ *
+ * @deprecated Use {@link verifyIntegrity} instead.
+ */
+export { verifyIntegrity as verifyCsvIntegrity };
 
 /**
  * Validate that a downloaded string looks like the expected CSV dataset.
