@@ -145,6 +145,19 @@ export default function App() {
               onZoomChange={handleZoomChange}
             />
 
+            {countyBoundary.status === 'error' && (
+              <div className="boundary-notice" role="status">
+                <p>縣市界線載入失敗</p>
+                <button
+                  type="button"
+                  className="pill-button"
+                  onClick={countyBoundary.reload}
+                >
+                  重試
+                </button>
+              </div>
+            )}
+
             {visible.length === 0 && (
               <p className="stage__empty" role="status">
                 目前的篩選條件沒有符合的學校。

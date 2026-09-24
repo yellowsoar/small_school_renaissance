@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { useGeoJson } from './useGeoJson.js';
 
 /* ------------------------------------------------------------------ */
@@ -122,10 +122,48 @@ describe('useGeoJson', () => {
     const { result, unmount } = renderHook(() => useGeoJson('/test.geojson'));
     unmount();
 
-    // Resolve after unmount \u2014 should not throw or update state
+    // Resolve after unmount — should not throw or update state
     resolvePromise(JSON.stringify(MOCK_GEOJSON));
 
     // State should remain at loading (the initial state before unmount)
     expect(result.current.status).toBe('loading');
+  });
+
+  /* ---------------------------------------------------------------- */
+  /*  reload (#365)                                                    */
+  /* ---------------------------------------------------------------- */
+
+  it('exposes reload callback', () => {
+    mocks.fetchWithTimeout.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useGeoJson('/test.geojson'));
+    expect(typeof result.current.reload).toBe('function');
+  });
+
+  it('reload resets error state and retries fetch (#365)', async () => {
+    mocks.fetchWithTimeout
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValueOnce(JSON.stringify(MOCK_GEOJSON));
+
+    const { result } = renderHook(() => useGeoJson('/test.geojson'));
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    act(() => result.current.reload());
+    expect(result.current.status).toBe('loading');
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.data).toEqual(MOCK_GEOJSON);
+    expect(mocks.fetchWithTimeout).toHaveBeenCalledTimes(2);
+  });
+
+  it('reload resets ready state back to loading (#365)', async () => {
+    mocks.fetchWithTimeout.mockResolvedValueOnce(JSON.stringify(MOCK_GEOJSON));
+
+    const { result } = renderHook(() => useGeoJson('/test.geojson'));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    mocks.fetchWithTimeout.mockReturnValue(new Promise(() => {}));
+    act(() => result.current.reload());
+    expect(result.current.status).toBe('loading');
+    expect(result.current.data).toBeNull();
   });
 });

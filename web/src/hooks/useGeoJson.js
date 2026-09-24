@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 
 /** Maximum GeoJSON file size accepted by the hook (5 MB). */
@@ -8,13 +8,20 @@ const initialState = { status: 'loading', data: null, error: null };
 
 /**
  * Fetches and parses a GeoJSON file.  Loads once and caches in component
- * state.  Aborts cleanly on unmount via AbortController.
+ * state.  Aborts cleanly on unmount via AbortController.  Exposes `reload`
+ * so a failed load is recoverable without a full refresh (#365).
  *
  * @param {string} url  URL to the GeoJSON file (typically a static asset)
- * @returns {{ status: 'loading'|'ready'|'error', data: object|null, error: Error|null }}
+ * @returns {{ status: 'loading'|'ready'|'error', data: object|null, error: Error|null, reload: () => void }}
  */
 export function useGeoJson(url) {
   const [state, setState] = useState(initialState);
+  const [attempt, setAttempt] = useState(0);
+
+  const reload = useCallback(() => {
+    setState(initialState);
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -49,7 +56,7 @@ export function useGeoJson(url) {
     })();
 
     return () => controller.abort();
-  }, [url]);
+  }, [url, attempt]);
 
-  return state;
+  return { ...state, reload };
 }
