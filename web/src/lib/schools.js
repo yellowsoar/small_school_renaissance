@@ -69,11 +69,18 @@ const toSchool = (row) => {
     PROJECTION_YEARS.map((year) => [year, num(row[`推估${year}年人數`])]),
   );
 
+  const name = text(row['學校名稱']) ?? '未命名學校';
+  const county = text(row['縣市名稱']) ?? '未知縣市';
+  const town = text(row['鄉鎮市區']) ?? '—';
+
   return {
     id: text(row['學校代碼']) ?? `${lat},${lng}`,
-    name: text(row['學校名稱']) ?? '未命名學校',
-    county: text(row['縣市名稱']) ?? '未知縣市',
-    town: text(row['鄉鎮市區']) ?? '—',
+    name,
+    county,
+    town,
+    _searchName: name.toLowerCase(),
+    _searchCounty: county.toLowerCase(),
+    _searchTown: town.toLowerCase(),
     address: text(row['地址']),
     phone: text(row['電話']),
     website: text(row['網址']),
@@ -238,9 +245,7 @@ export const filterSchools = (schools, { year, counties, tiers, search }) => {
     }
 
     if (tokens.length > 0) {
-      const fields = [school.name, school.county, school.town].map((f) =>
-        f.toLowerCase(),
-      );
+      const fields = [school._searchName, school._searchCounty, school._searchTown];
       // Use \0 (null character) as separator to prevent cross-field
       // boundary false positives (#321). Multi-token search with
       // spaces (#90) provides cross-field matching capability.
