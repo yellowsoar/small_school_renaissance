@@ -64,28 +64,13 @@ export default function SchoolMarkers({ schools, year, visible }) {
   return onScreen.map((school) => {
     const tier = tierFor(school.projections.get(year));
 
-    if (school.unprojected) {
-      const ariaLabel = `${school.name}\uff08${UNPROJECTED_MARKER.label}\uff09`;
-      return (
-        <AccessibleMarker
-          key={school.id}
-          position={school.position}
-          icon={iconFor(UNPROJECTED_MARKER)}
-          title={school.name}
-          alt={ariaLabel}
-          ariaLabel={ariaLabel}
-        >
-          <Popup minWidth={260} maxWidth={320}>
-            <SchoolPopup school={school} year={year} tier={null} />
-          </Popup>
-        </AccessibleMarker>
-      );
-    }
-
-    // Schools with projections for some years but null for the selected
-    // year: render with a neutral marker instead of silently hiding (#335).
-    if (!tier) {
-      const ariaLabel = `${school.name}\uff08\u6b64\u5e74\u5ea6\u7121\u63a8\u4f30\u8cc7\u6599\uff09`;
+    // Unprojected schools and schools with no tier for the selected year
+    // both render with the neutral marker; only the aria-label differs (#357).
+    if (school.unprojected || !tier) {
+      const label = school.unprojected
+        ? UNPROJECTED_MARKER.label
+        : '\u6b64\u5e74\u5ea6\u7121\u63a8\u4f30\u8cc7\u6599';
+      const ariaLabel = `${school.name}\uff08${label}\uff09`;
       return (
         <AccessibleMarker
           key={school.id}
