@@ -317,6 +317,7 @@ validate_not_html() {
 
 # Check if a remote URL exists (HTTP HEAD request).
 # Limits redirects to 3 hops to avoid following login/WAF redirects (#163).
+# Enforces HTTPS-only to prevent HTTP downgrade attacks (#362).
 # Requires WGET_TIMEOUT to be set by the caller (as an array).
 #
 # Distinguishes HTTP server errors (exit 8) from network-level failures
@@ -330,6 +331,7 @@ check_file() {
 	local stderr_output
 	stderr_output=$(wget \
 		--spider \
+		--https-only \
 		--max-redirect=3 \
 		"${WGET_TIMEOUT[@]}" \
 		"${url}" \
@@ -346,6 +348,7 @@ check_file() {
 
 # Download a file from a remote URL.
 # Limits redirects to 3 hops to avoid following login/WAF redirects (#163).
+# Enforces HTTPS-only to prevent HTTP downgrade attacks (#362).
 # Requires WGET_TIMEOUT to be set by the caller (as an array).
 # Usage: download_file <url> [output_path]
 #   With 1 arg:  wget -N -P "./${NAME_DIR}" (timestamp-checked, directory mode)
@@ -356,6 +359,7 @@ download_file() {
 		wget \
 			-O "${2}" \
 			--quiet \
+			--https-only \
 			--max-redirect=3 \
 			"${WGET_TIMEOUT[@]}" \
 			"${url}"
@@ -364,6 +368,7 @@ download_file() {
 			-N \
 			-P "./${NAME_DIR}" \
 			--quiet \
+			--https-only \
 			--max-redirect=3 \
 			"${WGET_TIMEOUT[@]}" \
 			"${url}"

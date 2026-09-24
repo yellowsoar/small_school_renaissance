@@ -625,7 +625,7 @@ CSV
 }
 
 @test "validate_csv_header: handles quoted CSV headers RFC 4180 (#320)" {
-  printf '"\u5b78\u6821\u4ee3\u78bc","\u5b78\u6821\u540d\u7a31","\u7e23\u5e02\u540d\u7a31","\u7def\u5ea6","\u7d93\u5ea6"\nA001,\u5927\u540c\u570b\u5c0f,\u81fa\u5317\u5e02,25.05,121.51\n' > "$TEST_TMPDIR/quoted.csv"
+  printf '"學校代碼","學校名稱","縣市名稱","緯度","經度"\nA001,大同國小,臺北市,25.05,121.51\n' > "$TEST_TMPDIR/quoted.csv"
   run validate_csv_header "$TEST_TMPDIR/quoted.csv" "學校代碼" "學校名稱" "縣市名稱" "緯度" "經度"
   [ "$status" -eq 0 ]
 }
@@ -696,4 +696,42 @@ MOCK
   run convert_to_csv_if_needed "goodheader"
   [ "$status" -eq 0 ]
   [ -f "$NAME_DIR/goodheader.csv" ]
+}
+
+# ── wget --https-only (#362) ──────────────────────────────────────────────────
+
+@test "download_file: passes --https-only to wget in 2-arg mode (#362)" {
+  wget() {
+    for arg in "$@"; do
+      [ "$arg" = "--https-only" ] && return 0
+    done
+    echo "missing --https-only" >&2; return 1
+  }
+  export -f wget
+  run download_file "https://example.com/test.csv" "$TEST_TMPDIR/out.csv"
+  [ "$status" -eq 0 ]
+}
+
+@test "download_file: passes --https-only to wget in 1-arg mode (#362)" {
+  wget() {
+    for arg in "$@"; do
+      [ "$arg" = "--https-only" ] && return 0
+    done
+    echo "missing --https-only" >&2; return 1
+  }
+  export -f wget
+  run download_file "https://example.com/test.csv"
+  [ "$status" -eq 0 ]
+}
+
+@test "check_file: passes --https-only to wget (#362)" {
+  wget() {
+    for arg in "$@"; do
+      [ "$arg" = "--https-only" ] && return 0
+    done
+    echo "missing --https-only" >&2; return 1
+  }
+  export -f wget
+  run check_file "https://example.com/test.csv"
+  [ "$status" -eq 0 ]
 }
