@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchWithRetry, validateCsvContent, verifyCsvIntegrity, summarizeCsvForReview } from './fetch-utils.js';
+import { fetchWithRetry, validateCsvContent, verifyIntegrity, verifyCsvIntegrity, summarizeCsvForReview } from './fetch-utils.js';
 import {
   REQUIRED_HEADERS,
   FIRST_PROJECTION_YEAR,
@@ -598,17 +598,17 @@ describe('validateCsvContent', () => {
 });
 
 /* ------------------------------------------------------------------ */
-/*  CSV integrity verification (#222)                                   */
+/*  Content integrity verification (#222, #366)                         */
 /* ------------------------------------------------------------------ */
 
-describe('verifyCsvIntegrity', () => {
+describe('verifyIntegrity', () => {
   it('returns computed hash when it matches expectedHash', () => {
     const body = 'col1,col2\na,b\n';
     // Use the function itself with no expected hash to obtain the digest,
     // then verify the matching path returns the same value.
-    const expected = verifyCsvIntegrity(body);
+    const expected = verifyIntegrity(body);
 
-    const result = verifyCsvIntegrity(body, expected);
+    const result = verifyIntegrity(body, expected);
     expect(result).toBe(expected);
   });
 
@@ -616,13 +616,13 @@ describe('verifyCsvIntegrity', () => {
     const body = 'col1,col2\na,b\n';
     const wrongHash = 'deadbeef'.repeat(8); // 64-char hex, guaranteed mismatch
 
-    expect(() => verifyCsvIntegrity(body, wrongHash)).toThrow('integrity check failed');
-    expect(() => verifyCsvIntegrity(body, wrongHash)).toThrow(wrongHash);
+    expect(() => verifyIntegrity(body, wrongHash)).toThrow('integrity check failed');
+    expect(() => verifyIntegrity(body, wrongHash)).toThrow(wrongHash);
   });
 
   it('returns computed hash without throwing when expectedHash is empty string', () => {
     const body = 'some,csv,data\n1,2,3\n';
-    const result = verifyCsvIntegrity(body, '');
+    const result = verifyIntegrity(body, '');
 
     expect(typeof result).toBe('string');
     expect(result).toHaveLength(64); // SHA-256 hex = 64 chars
@@ -630,10 +630,14 @@ describe('verifyCsvIntegrity', () => {
 
   it('returns computed hash without throwing when expectedHash is undefined', () => {
     const body = 'some,csv,data\n1,2,3\n';
-    const result = verifyCsvIntegrity(body, undefined);
+    const result = verifyIntegrity(body, undefined);
 
     expect(typeof result).toBe('string');
     expect(result).toHaveLength(64);
+  });
+
+  it('exports verifyCsvIntegrity as backward-compatible alias (#366)', () => {
+    expect(verifyCsvIntegrity).toBe(verifyIntegrity);
   });
 });
 

@@ -12,7 +12,7 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promis
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchWithRetry, verifyCsvIntegrity } from './fetch-utils.js';
+import { fetchWithRetry, verifyIntegrity } from './fetch-utils.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -121,14 +121,14 @@ const autoBootstrap = async (reason) => {
     `\u26a0\ufe0f  ${reason} \u2014 auto-bootstrapping.\n` +
     '   Commit a verified hash with --update-integrity for production use.',
   );
-  const hash = verifyCsvIntegrity(body);
+  const hash = verifyIntegrity(body);
   await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
   console.log(`\u2705 boundary-integrity.json bootstrapped (sha256: ${hash})`);
 };
 
 if (updateIntegrity) {
   // Compute and persist the hash for the just-validated GeoJSON.
-  const hash = verifyCsvIntegrity(body);
+  const hash = verifyIntegrity(body);
   await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
   console.log(`\u2705 boundary-integrity.json updated (sha256: ${hash})`);
 } else if (!skipIntegrity) {
@@ -147,7 +147,7 @@ if (updateIntegrity) {
       needsBootstrap = true;
       bootstrapReason = 'boundary-integrity.json sha256 is empty';
     } else {
-      verifyCsvIntegrity(body, expectedHash);
+      verifyIntegrity(body, expectedHash);
       console.log('\u2705 boundary integrity verified (sha256 match)');
     }
   } catch (err) {

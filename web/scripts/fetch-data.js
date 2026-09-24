@@ -17,7 +17,7 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promis
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchWithRetry, validateCsvContent, verifyCsvIntegrity, summarizeCsvForReview } from './fetch-utils.js';
+import { fetchWithRetry, validateCsvContent, verifyIntegrity, summarizeCsvForReview } from './fetch-utils.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -175,14 +175,14 @@ const autoBootstrap = async (reason) => {
     '   Commit a verified hash with --update-integrity for production use.',
   );
   printDataPreview(body);
-  const hash = verifyCsvIntegrity(body);
+  const hash = verifyIntegrity(body);
   await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
   console.log(`\u2705 data-integrity.json bootstrapped (sha256: ${hash})`);
 };
 
 if (updateIntegrity) {
   // Compute and persist the hash for the just-validated CSV.
-  const hash = verifyCsvIntegrity(body);
+  const hash = verifyIntegrity(body);
   await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
   console.log(`\u2705 data-integrity.json updated (sha256: ${hash})`);
 } else if (!skipIntegrity) {
@@ -207,7 +207,7 @@ if (updateIntegrity) {
       needsBootstrap = true;
       bootstrapReason = 'data-integrity.json sha256 is empty';
     } else {
-      verifyCsvIntegrity(body, expectedHash);
+      verifyIntegrity(body, expectedHash);
       console.log('\u2705 CSV integrity verified (sha256 match)');
     }
   } catch (err) {
