@@ -184,10 +184,11 @@ CSV
 
 # ── convert_to_csv_if_needed ───────────────────────────────────────────
 
-@test "convert_to_csv_if_needed: returns 0 when CSV already exists" {
-  echo "name,age" > "$NAME_DIR/existing.csv"
+@test "convert_to_csv_if_needed: returns 0 when valid CSV already exists (#363)" {
+  printf '學校代碼,學校名稱,縣市名稱,緯度,經度\nA001,大同國小,臺北市,25.05,121.51\n' > "$NAME_DIR/existing.csv"
   run convert_to_csv_if_needed "existing"
   [ "$status" -eq 0 ]
+  [[ "$output" == *"Direct-download CSV validated"* ]]
 }
 
 @test "convert_to_csv_if_needed: returns 1 when no source file found" {
@@ -199,6 +200,39 @@ CSV
   unset NAME_DIR
   run convert_to_csv_if_needed "test"
   [ "$status" -ne 0 ]
+}
+
+# ── convert_to_csv_if_needed: direct-download CSV validation (#363) ────
+
+@test "convert_to_csv_if_needed: returns 2 when direct-download CSV has wrong headers (#363)" {
+  printf 'wrong_a,wrong_b,wrong_c\n1,2,3\n' > "$NAME_DIR/badheader.csv"
+  run convert_to_csv_if_needed "badheader"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"CSV header validation failed"* ]]
+}
+
+@test "convert_to_csv_if_needed: returns 2 when direct-download CSV has no data rows (#363)" {
+  printf '學校代碼,學校名稱,縣市名稱,緯度,經度\n' > "$NAME_DIR/headeronly.csv"
+  run convert_to_csv_if_needed "headeronly"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"empty or has no data rows"* ]]
+}
+
+@test "convert_to_csv_if_needed: validates and cleans mismatched rows in direct-download CSV (#363)" {
+  cat > "$NAME_DIR/mismatched.csv" <<'CSV'
+學校代碼,學校名稱,縣市名稱,緯度,經度
+A001,大同國小,臺北市,25.05,121.51
+bad,row
+A002,中正國小,高雄市,22.63,120.30
+CSV
+  run convert_to_csv_if_needed "mismatched"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Removed 1 row(s)"* ]]
+  [[ "$output" == *"Direct-download CSV validated"* ]]
+  # Bad row should be removed, valid rows remain
+  ! grep -q "bad,row" "$NAME_DIR/mismatched.csv"
+  grep -q "A001" "$NAME_DIR/mismatched.csv"
+  grep -q "A002" "$NAME_DIR/mismatched.csv"
 }
 
 # ── convert_to_csv_if_needed: empty CSV validation (#141) ────
