@@ -8,8 +8,7 @@
  *
  * Usage: node scripts/fetch-boundaries.js [--force] [--update-integrity] [--skip-integrity] [--trust-first]
  */
-import { resolve } from 'node:path';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fetchWithRetry } from './fetch-utils.js';
