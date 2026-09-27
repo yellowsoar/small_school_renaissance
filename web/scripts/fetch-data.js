@@ -11,9 +11,10 @@
  * Configuration lives in .env — see .env.example. Real environment variables
  * always take precedence over the file.
  *
- * Usage: node scripts/fetch-data.js [--force] [--update-integrity] [--skip-integrity]
+ * Usage: node scripts/fetch-data.js [--force] [--update-integrity] [--skip-integrity] [--trust-first]
  */
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -49,6 +50,7 @@ const integrityPath = resolve(root, 'data-integrity.json');
 const force = process.argv.includes('--force');
 const updateIntegrity = process.argv.includes('--update-integrity');
 const skipIntegrity = process.argv.includes('--skip-integrity');
+const trustFirst = process.argv.includes('--trust-first');
 
 /**
  * Return a redacted URL safe for build logs: origin + pathname only.
@@ -73,6 +75,29 @@ const exists = async (path) => {
   } catch {
     return false;
   }
+};
+
+/**
+ * Prompt for explicit opt-in before auto-trusting downloaded data (#383).
+ *
+ * Returns true immediately when:
+ * - --trust-first flag is set (explicit automation opt-in)
+ * - stdout is not a TTY (non-interactive: Docker, piped scripts, etc.)
+ *
+ * In interactive TTY mode, asks the developer to confirm [y/N] after
+ * reviewing the data preview printed by autoBootstrap().
+ *
+ * @returns {Promise<boolean>} true if the developer approves auto-trust
+ */
+const confirmTrust = async () => {
+  if (trustFirst || !process.stdout.isTTY) return true;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) =>
+    rl.question('Auto-trust this download? [y/N] ', (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase() === 'y');
+    }),
+  );
 };
 
 if (!force && !updateIntegrity && (await exists(target))) {
@@ -157,12 +182,16 @@ const printDataPreview = (csvBody) => {
 };
 
 /**
- * Auto-bootstrap the integrity hash for local development (#229).
+ * Auto-bootstrap the integrity hash for local development (#229, #383).
  *
  * When integrity metadata is unavailable (empty hash, missing file, or
  * corrupt JSON), CI always fails closed.  Outside CI the developer
- * experience takes priority: compute the hash from the just-validated
- * CSV and persist it so subsequent runs verify normally.
+ * experience takes priority: show a data preview and ask for explicit
+ * confirmation before persisting the hash.
+ *
+ * In TTY mode the developer must answer [y/N].  In non-TTY mode
+ * (Docker, piped scripts) or with --trust-first, confirmation is
+ * implicit to preserve backward compatibility.
  *
  * Prints a structural data preview so the developer can visually verify
  * what was auto-trusted (#317).
@@ -175,6 +204,14 @@ const autoBootstrap = async (reason) => {
     '   Commit a verified hash with --update-integrity for production use.',
   );
   printDataPreview(body);
+  const trusted = await confirmTrust();
+  if (!trusted) {
+    console.error(
+      '\u274c Aborted. Use --update-integrity after manual verification, ' +
+      'or --trust-first to bypass the prompt.',
+    );
+    process.exit(1);
+  }
   const hash = verifyIntegrity(body);
   await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
   console.log(`\u2705 data-integrity.json bootstrapped (sha256: ${hash})`);
