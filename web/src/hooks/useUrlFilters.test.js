@@ -178,6 +178,28 @@ describe('useUrlFilters', () => {
     window.history.replaceState = original;
   });
 
+  it('logs a warning when replaceState throws (#382)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const original = window.history.replaceState;
+    window.history.replaceState = vi.fn(() => {
+      throw new DOMException('SecurityError');
+    });
+
+    const { result } = renderHook(() => useUrlFilters());
+    act(() => {
+      const [, update] = result.current;
+      update({ year: 118 });
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[useUrlFilters] replaceState failed:',
+      'SecurityError',
+    );
+
+    window.history.replaceState = original;
+    warnSpy.mockRestore();
+  });
+
   it('syncs zoom to URL when changed (#348)', () => {
     const { result } = renderHook(() => useUrlFilters());
 

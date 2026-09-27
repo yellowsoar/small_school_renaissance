@@ -49,8 +49,9 @@ export function useUrlFilters(knownCounties = null) {
       // so the map remains functional even if the URL cannot be updated (#210).
       try {
         window.history.replaceState(null, '', next);
-      } catch {
+      } catch (err) {
         // URL too long or SecurityError — filter state is still usable in memory.
+        console.warn('[useUrlFilters] replaceState failed:', err.message);
       }
     }
   }, [filters]);
