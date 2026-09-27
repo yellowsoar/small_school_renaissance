@@ -40,7 +40,8 @@ def remove_mismatched_rows():
     infile, outfile = sys.argv[2], sys.argv[3]
     removed = 0
 
-    with open(infile, newline="") as f_in, open(outfile, "w", newline="") as f_out:
+    with open(infile, newline="", encoding="utf-8") as f_in, \
+         open(outfile, "w", newline="", encoding="utf-8") as f_out:
         reader = csv.reader(f_in)
         writer = csv.writer(f_out, lineterminator="\n")
         try:
@@ -65,7 +66,7 @@ def validate_csv_header():
     required = sys.argv[3:]
 
     try:
-        with open(file_path, newline="") as f:
+        with open(file_path, newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
             try:
                 header = next(reader)
@@ -85,7 +86,7 @@ def validate_csv_header():
 
 def count_csv_records():
     """Print the number of data rows (excluding header) in a CSV."""
-    with open(sys.argv[2], newline="") as f:
+    with open(sys.argv[2], newline="", encoding="utf-8") as f:
         reader = csv.reader(f)
         try:
             next(reader)
@@ -107,7 +108,7 @@ def compute_checksum():
 def lookup_checksum():
     """Print the hash for a key from a JSON manifest, or empty string."""
     try:
-        with open(sys.argv[2]) as f:
+        with open(sys.argv[2], encoding="utf-8") as f:
             data = json.load(f)
         print(data.get(sys.argv[3], ""))
     except (json.JSONDecodeError, OSError):
@@ -120,12 +121,12 @@ def record_checksum():
     data = {}
     if os.path.isfile(path):
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError):
             data = {}
     data[key] = val
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, sort_keys=True)
         f.write("\n")
 
