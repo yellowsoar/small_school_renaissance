@@ -77,22 +77,34 @@ jobs:
           DATA_PATH: ${{ vars.DATA_PATH || 'docs/113-107.csv' }}
           DATA_SOURCE_URL: ${{ vars.DATA_SOURCE_URL || '' }}
 
-      # Boundary integrity bootstrap + verification (#381).
-      # fetch-boundaries.js now fails closed in CI when the hash is
-      # missing or empty.  If boundary-integrity.json has not been
-      # populated yet, bootstrap it for this run (with a warning),
-      # then verify.  Once a verified hash is committed via
-      # update-integrity.yml, the bootstrap is skipped and
-      # verification is strict: mismatches always fail.
-      - name: Download and verify boundary integrity
+      # Guard: check the committed boundary integrity hash (#394).
+      # Two-tier strategy eliminates the tautological verification
+      # (auto-bootstrap computed a hash then verified against itself,
+      # always passing).  When a hash IS committed, verification is
+      # strict (fail-closed on mismatch).  When the hash has not yet
+      # been populated, CI warns and downloads with --skip-integrity
+      # for GeoJSON structural validation only — no self-verify loop.
+      # To populate the hash, run update-integrity.yml (mode=update).
+      - name: Verify boundary integrity hash exists
+        id: boundary-guard
         run: |
           HASH=$(jq -r '.sha256 // empty' boundary-integrity.json 2>/dev/null || echo '')
           if [ -z "$HASH" ]; then
-            echo "::warning::boundary-integrity.json sha256 is empty \u2014 bootstrapping for this CI run."
+            echo "::warning::boundary-integrity.json sha256 is empty \u2014 boundary download will skip hash verification."
             echo "::warning::Run: gh workflow run update-integrity.yml -f mode=update"
-            node scripts/fetch-boundaries.js --force --update-integrity
+            echo "skip_integrity=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Committed hash present ($HASH), proceeding to strict verification."
+            echo "skip_integrity=false" >> "$GITHUB_OUTPUT"
           fi
-          node scripts/fetch-boundaries.js --force
+
+      - name: Download and verify boundary integrity
+        run: |
+          EXTRA_FLAGS=""
+          if [ "${{ steps.boundary-guard.outputs.skip_integrity }}" = "true" ]; then
+            EXTRA_FLAGS="--skip-integrity"
+          fi
+          node scripts/fetch-boundaries.js --force $EXTRA_FLAGS
         env:
           BOUNDARY_SOURCE_URL: ${{ vars.BOUNDARY_SOURCE_URL || '' }}
 
