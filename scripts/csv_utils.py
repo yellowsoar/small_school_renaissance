@@ -33,6 +33,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 
 
 def _require_args(count, usage):
@@ -139,9 +140,17 @@ def record_checksum():
         except (json.JSONDecodeError, OSError):
             data = {}
     data[key] = val
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, sort_keys=True)
-        f.write("\n")
+
+    dir_name = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+            f.write("\n")
+        os.replace(tmp, path)  # atomic on POSIX
+    except BaseException:
+        os.unlink(tmp)
+        raise
 
 
 COMMANDS = {
