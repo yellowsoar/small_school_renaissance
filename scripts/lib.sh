@@ -2,9 +2,11 @@
 # Shared helper functions for data-pipeline shell scripts.
 # Source this file after setting NAME_DIR.
 
-# Path to the checksums manifest (alongside lib.sh).
-# Used by integrity verification functions (#314).
-CHECKSUM_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/data-checksums.json"
+# Path to the script directory, checksums manifest, and Python utilities.
+# SCRIPT_DIR is the canonical base for csv_utils.py calls (#384) and
+# the checksums manifest used by integrity verification functions (#314).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHECKSUM_FILE="${SCRIPT_DIR}/data-checksums.json"
 
 # Required CSV header columns for shell pipeline validation (#320).
 # These are the 5 base headers from csv-schema.js that should be present
@@ -60,30 +62,7 @@ remove_rows_mismatch_header() {
 
 	echo "⚙️ Removing rows that its column mismatches the header..."
 	local removed
-	removed=$(python3 -c '
-import csv, sys
-
-infile, outfile = sys.argv[1], sys.argv[2]
-removed = 0
-
-with open(infile, newline="") as f_in, open(outfile, "w", newline="") as f_out:
-    reader = csv.reader(f_in)
-    writer = csv.writer(f_out, lineterminator="\n")
-    try:
-        header = next(reader)
-    except StopIteration:
-        print(0)
-        sys.exit(0)
-    header_fields = len(header)
-    writer.writerow(header)
-    for row in reader:
-        if len(row) == header_fields:
-            writer.writerow(row)
-        else:
-            removed += 1
-
-print(removed)
-' "$file" "$tmpfile") \
+	removed=$(python3 "$SCRIPT_DIR/csv_utils.py" remove-mismatched-rows "$file" "$tmpfile") \
 		&& mv -f "$tmpfile" "${file}"
 	local rc=$?
 	if [ "$rc" -ne 0 ]; then
@@ -110,31 +89,7 @@ validate_csv_header() {
 	local -a required=("$@")
 
 	local missing
-	missing=$(python3 -c '
-import csv, sys
-
-file_path = sys.argv[1]
-required = sys.argv[2:]
-
-try:
-    with open(file_path, newline="") as f:
-        reader = csv.reader(f)
-        try:
-            header = next(reader)
-        except StopIteration:
-            # Empty file: all columns are missing
-            for col in required:
-                print(col)
-            sys.exit(0)
-    header_set = set(h.strip() for h in header)
-    for col in required:
-        if col not in header_set:
-            print(col)
-except OSError as e:
-    print(f"ERROR: {e}", file=sys.stderr)
-    for col in required:
-        print(col)
-' "$file" "${required[@]}")
+	missing=$(python3 "$SCRIPT_DIR/csv_utils.py" validate-csv-header "$file" "${required[@]}")
 
 	if [ -n "$missing" ]; then
 		echo "❌ CSV header validation failed for ${file}:" >&2
@@ -170,14 +125,7 @@ convert_to_csv_if_needed() {
 		remove_rows_mismatch_header "$csv_path" || return 2
 		validate_csv_header "$csv_path" "${SHELL_REQUIRED_HEADERS[@]}" || return 2
 		local record_count
-		record_count=$(python3 -c '
-import csv, sys
-with open(sys.argv[1], newline="") as f:
-    reader = csv.reader(f)
-    try: next(reader)
-    except StopIteration: print(0); sys.exit(0)
-    print(sum(1 for _ in reader))
-' "$csv_path")
+		record_count=$(python3 "$SCRIPT_DIR/csv_utils.py" count-csv-records "$csv_path")
 		if [ "$record_count" -lt 1 ]; then
 			echo "⚠️ Direct-download CSV is empty or has no data rows: ${csv_path}" >&2
 			return 2
@@ -209,17 +157,10 @@ with open(sys.argv[1], newline="") as f:
 				echo "✅ File converted to ${csv_path}"
 				rm -rf "$soffice_sandbox"
 				# Verify converted CSV has data rows (not just header) (#141, #262)
-				# Uses Python csv.reader for RFC 4180 logical record count,
+				# Uses csv_utils.py for RFC 4180 logical record count,
 				# consistent with remove_rows_mismatch_header.
 				local record_count
-				record_count=$(python3 -c '
-import csv, sys
-with open(sys.argv[1], newline="") as f:
-    reader = csv.reader(f)
-    try: next(reader)  # skip header
-    except StopIteration: print(0); sys.exit(0)
-    print(sum(1 for _ in reader))
-' "$csv_path")
+				record_count=$(python3 "$SCRIPT_DIR/csv_utils.py" count-csv-records "$csv_path")
 				if [ "$record_count" -lt 1 ]; then
 					echo "⚠️ Converted CSV from ${ext} is empty or has no data rows: ${csv_path}, trying next format..." >&2
 					rm -f "$csv_path"
@@ -245,23 +186,17 @@ with open(sys.argv[1], newline="") as f:
 }
 
 # --- Integrity verification (#314) -------------------------------------------
-# SHA-256 checksum functions for downloaded files.  Uses Python3 hashlib
-# for cross-platform compatibility (sha256sum is GNU-only; macOS ships
-# shasum).  Python3 is already a runtime dependency of this library.
+# SHA-256 checksum functions for downloaded files.  Uses csv_utils.py
+# (Python3 hashlib) for cross-platform compatibility (sha256sum is
+# GNU-only; macOS ships shasum).  Python3 is already a runtime
+# dependency of this library.
 
 # Compute SHA-256 hash of a file.
 # Usage: compute_checksum <file>
 # Prints: hex digest to stdout
 compute_checksum() {
 	local file="$1"
-	python3 -c '
-import hashlib, sys
-h = hashlib.sha256()
-with open(sys.argv[1], "rb") as f:
-    for chunk in iter(lambda: f.read(65536), b""):
-        h.update(chunk)
-print(h.hexdigest())
-' "$file"
+	python3 "$SCRIPT_DIR/csv_utils.py" compute-checksum "$file"
 }
 
 # Validate a file against an expected SHA-256 hash.
@@ -286,15 +221,7 @@ validate_checksum() {
 lookup_checksum() {
 	local key="$1"
 	[ -f "$CHECKSUM_FILE" ] || { echo ""; return 0; }
-	python3 -c '
-import json, sys
-try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-    print(data.get(sys.argv[2], ""))
-except (json.JSONDecodeError, OSError):
-    print("")
-' "$CHECKSUM_FILE" "$key"
+	python3 "$SCRIPT_DIR/csv_utils.py" lookup-checksum "$CHECKSUM_FILE" "$key"
 }
 
 # Record (upsert) a checksum in the manifest.
@@ -302,21 +229,7 @@ except (json.JSONDecodeError, OSError):
 # Usage: record_checksum <key> <hash>
 record_checksum() {
 	local key="$1" hash="$2"
-	python3 -c '
-import json, sys, os
-path, key, val = sys.argv[1], sys.argv[2], sys.argv[3]
-data = {}
-if os.path.isfile(path):
-    try:
-        with open(path) as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        data = {}
-data[key] = val
-with open(path, "w") as f:
-    json.dump(data, f, indent=2, sort_keys=True)
-    f.write("\n")
-' "$CHECKSUM_FILE" "$key" "$hash"
+	python3 "$SCRIPT_DIR/csv_utils.py" record-checksum "$CHECKSUM_FILE" "$key" "$hash"
 }
 
 # Validate that a downloaded file is not HTML (e.g. a redirected

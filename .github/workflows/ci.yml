@@ -32,6 +32,9 @@ jobs:
       - name: ShellCheck
         run: shellcheck --severity=warning scripts/dump_schools_*.sh
 
+      - name: Lint Python scripts
+        run: pip install ruff && ruff check scripts/
+
       - name: Run Shell tests
         run: bats scripts/tests/
 
