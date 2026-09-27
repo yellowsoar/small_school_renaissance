@@ -246,12 +246,8 @@ export const filterSchools = (schools, { year, counties, tiers, search }) => {
 
     if (tokens.length > 0) {
       const fields = [school._searchName, school._searchCounty, school._searchTown];
-      // Use \0 (null character) as separator to prevent cross-field
-      // boundary false positives (#321). Multi-token search with
-      // spaces (#90) provides cross-field matching capability.
-      const joined = fields.join('\0');
       const allMatch = tokens.every((token) =>
-        fields.some((field) => field.includes(token)) || joined.includes(token),
+        fields.some((field) => field.includes(token)),
       );
       if (!allMatch) return false;
     }
