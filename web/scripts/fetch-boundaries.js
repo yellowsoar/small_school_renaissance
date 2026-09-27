@@ -107,18 +107,18 @@ try {
 /* ------------------------------------------------------------------ */
 
 /**
- * Auto-bootstrap the boundary integrity hash.
+ * Auto-bootstrap the boundary integrity hash for local development (#381).
  *
- * Unlike the CSV integrity flow, boundary data is auxiliary so
- * auto-bootstrap fires in ALL environments (no CI guard).  Once a
- * verified hash is committed via update-integrity.yml, verification
- * becomes strict: mismatches always fail-closed.
+ * Like the CSV integrity flow, boundary data auto-bootstrap fires
+ * only outside CI for developer convenience.  Once a verified hash is
+ * committed via update-integrity.yml, verification becomes strict:
+ * mismatches always fail-closed.
  *
  * @param {string} reason - human-readable explanation for the warning
  */
 const autoBootstrap = async (reason) => {
   console.warn(
-    `\u26a0\ufe0f  ${reason} \u2014 auto-bootstrapping.\n` +
+    `\u26a0\ufe0f  ${reason} \u2014 auto-bootstrapping for local development.\n` +
     '   Commit a verified hash with --update-integrity for production use.',
   );
   const hash = verifyIntegrity(body);
@@ -132,10 +132,10 @@ if (updateIntegrity) {
   await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
   console.log(`\u2705 boundary-integrity.json updated (sha256: ${hash})`);
 } else if (!skipIntegrity) {
-  // Verify against the stored hash.
-  // Missing, empty, or unreadable integrity metadata auto-bootstraps
-  // in all environments (boundary data is auxiliary, not core).
-  // Hash mismatch always fails closed.
+  // Verify against the stored hash — fail-closed by default (#381).
+  // Missing, empty, or unreadable integrity metadata aborts the build
+  // in CI; outside CI it auto-bootstraps for developer convenience.
+  // Use --skip-integrity to opt out during local development.
   let needsBootstrap = false;
   let bootstrapReason = '';
 
@@ -144,6 +144,12 @@ if (updateIntegrity) {
     const { sha256: expectedHash } = JSON.parse(raw);
 
     if (!expectedHash) {
+      if (process.env.CI) {
+        console.error(
+          '\u274c boundary-integrity.json sha256 is empty. Run with --update-integrity after verifying the upstream data, or use --skip-integrity for local development.',
+        );
+        process.exit(1);
+      }
       needsBootstrap = true;
       bootstrapReason = 'boundary-integrity.json sha256 is empty';
     } else {
@@ -152,6 +158,12 @@ if (updateIntegrity) {
     }
   } catch (err) {
     if (err.code === 'ENOENT') {
+      if (process.env.CI) {
+        console.error(
+          '\u274c boundary-integrity.json not found. Run with --update-integrity to create it, or use --skip-integrity for local development.',
+        );
+        process.exit(1);
+      }
       needsBootstrap = true;
       bootstrapReason = 'boundary-integrity.json not found';
     } else if (err.message.includes('integrity check failed')) {
@@ -160,6 +172,10 @@ if (updateIntegrity) {
       process.exit(1);
     } else {
       // Malformed JSON, unexpected read error, etc.
+      if (process.env.CI) {
+        console.error(`\u274c could not read boundary-integrity.json: ${err.message}. Use --skip-integrity to bypass.`);
+        process.exit(1);
+      }
       needsBootstrap = true;
       bootstrapReason = `could not read boundary-integrity.json (${err.message})`;
     }
