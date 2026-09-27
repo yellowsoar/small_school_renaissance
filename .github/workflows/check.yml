@@ -77,12 +77,22 @@ jobs:
           DATA_PATH: ${{ vars.DATA_PATH || 'docs/113-107.csv' }}
           DATA_SOURCE_URL: ${{ vars.DATA_SOURCE_URL || '' }}
 
-      # Download county boundary GeoJSON and verify its SHA-256 hash
-      # against the value in boundary-integrity.json (#355).
-      # Auto-bootstraps when the hash is empty (boundary data is
-      # auxiliary); strict verification once a hash is committed.
+      # Boundary integrity bootstrap + verification (#381).
+      # fetch-boundaries.js now fails closed in CI when the hash is
+      # missing or empty.  If boundary-integrity.json has not been
+      # populated yet, bootstrap it for this run (with a warning),
+      # then verify.  Once a verified hash is committed via
+      # update-integrity.yml, the bootstrap is skipped and
+      # verification is strict: mismatches always fail.
       - name: Download and verify boundary integrity
-        run: node scripts/fetch-boundaries.js --force
+        run: |
+          HASH=$(jq -r '.sha256 // empty' boundary-integrity.json 2>/dev/null || echo '')
+          if [ -z "$HASH" ]; then
+            echo "::warning::boundary-integrity.json sha256 is empty \u2014 bootstrapping for this CI run."
+            echo "::warning::Run: gh workflow run update-integrity.yml -f mode=update"
+            node scripts/fetch-boundaries.js --force --update-integrity
+          fi
+          node scripts/fetch-boundaries.js --force
         env:
           BOUNDARY_SOURCE_URL: ${{ vars.BOUNDARY_SOURCE_URL || '' }}
 
