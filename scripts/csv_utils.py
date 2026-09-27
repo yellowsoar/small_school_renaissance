@@ -35,8 +35,16 @@ import os
 import sys
 
 
+def _require_args(count, usage):
+    """Exit with usage message if positional args after command are fewer than *count*."""
+    if len(sys.argv) < count + 2:  # +2 for script name + command
+        print(f"Usage: csv_utils.py {usage}", file=sys.stderr)
+        sys.exit(2)
+
+
 def remove_mismatched_rows():
     """Remove rows whose column count does not match the header row."""
+    _require_args(2, "remove-mismatched-rows <infile> <outfile>")
     infile, outfile = sys.argv[2], sys.argv[3]
     removed = 0
 
@@ -62,6 +70,7 @@ def remove_mismatched_rows():
 
 def validate_csv_header():
     """Check that a CSV header contains all required columns."""
+    _require_args(1, "validate-csv-header <csvfile> <col1> [col2 ...]")
     file_path = sys.argv[2]
     required = sys.argv[3:]
 
@@ -86,6 +95,7 @@ def validate_csv_header():
 
 def count_csv_records():
     """Print the number of data rows (excluding header) in a CSV."""
+    _require_args(1, "count-csv-records <csvfile>")
     with open(sys.argv[2], newline="", encoding="utf-8") as f:
         reader = csv.reader(f)
         try:
@@ -98,6 +108,7 @@ def count_csv_records():
 
 def compute_checksum():
     """Print the SHA-256 hex digest of a file."""
+    _require_args(1, "compute-checksum <file>")
     h = hashlib.sha256()
     with open(sys.argv[2], "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
@@ -107,6 +118,7 @@ def compute_checksum():
 
 def lookup_checksum():
     """Print the hash for a key from a JSON manifest, or empty string."""
+    _require_args(2, "lookup-checksum <manifest> <key>")
     try:
         with open(sys.argv[2], encoding="utf-8") as f:
             data = json.load(f)
@@ -117,6 +129,7 @@ def lookup_checksum():
 
 def record_checksum():
     """Upsert a key-hash pair into a JSON manifest (created if missing)."""
+    _require_args(3, "record-checksum <manifest> <key> <hash>")
     path, key, val = sys.argv[2], sys.argv[3], sys.argv[4]
     data = {}
     if os.path.isfile(path):
