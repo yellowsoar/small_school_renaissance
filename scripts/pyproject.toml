@@ -4,7 +4,10 @@ version = "0.0.1"
 description = ""
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
+dependencies = []
+
+[project.optional-dependencies]
+analysis = [
   "numpy>=2.2.4",
   "pandas>=2.2.3",
 ]
