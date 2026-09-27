@@ -6,9 +6,10 @@
  * Source: ronnywang/twgeojson simplified GeoJSON (CC0 license, ~362KB).
  * Configurable via BOUNDARY_SOURCE_URL environment variable.
  *
- * Usage: node scripts/fetch-boundaries.js [--force] [--update-integrity] [--skip-integrity]
+ * Usage: node scripts/fetch-boundaries.js [--force] [--update-integrity] [--skip-integrity] [--trust-first]
  */
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,6 +35,7 @@ const integrityPath = resolve(root, 'boundary-integrity.json');
 const force = process.argv.includes('--force');
 const updateIntegrity = process.argv.includes('--update-integrity');
 const skipIntegrity = process.argv.includes('--skip-integrity');
+const trustFirst = process.argv.includes('--trust-first');
 
 /**
  * Return a redacted URL safe for build logs.
@@ -55,6 +57,29 @@ const exists = async (path) => {
   } catch {
     return false;
   }
+};
+
+/**
+ * Prompt for explicit opt-in before auto-trusting downloaded data (#383).
+ *
+ * Returns true immediately when:
+ * - --trust-first flag is set (explicit automation opt-in)
+ * - stdout is not a TTY (non-interactive: Docker, piped scripts, etc.)
+ *
+ * In interactive TTY mode, asks the developer to confirm [y/N] after
+ * reviewing the data preview printed by autoBootstrap().
+ *
+ * @returns {Promise<boolean>} true if the developer approves auto-trust
+ */
+const confirmTrust = async () => {
+  if (trustFirst || !process.stdout.isTTY) return true;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) =>
+    rl.question('Auto-trust this download? [y/N] ', (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase() === 'y');
+    }),
+  );
 };
 
 if (!force && !updateIntegrity && (await exists(target))) {
@@ -107,11 +132,13 @@ try {
 /* ------------------------------------------------------------------ */
 
 /**
- * Auto-bootstrap the boundary integrity hash for local development (#381).
+ * Auto-bootstrap the boundary integrity hash for local development (#381, #383).
  *
  * Like the CSV integrity flow, boundary data auto-bootstrap fires
- * only outside CI for developer convenience.  Once a verified hash is
- * committed via update-integrity.yml, verification becomes strict:
+ * only outside CI for developer convenience.  In TTY mode the developer
+ * must confirm [y/N]; in non-TTY mode or with --trust-first, confirmation
+ * is implicit to preserve backward compatibility.  Once a verified hash
+ * is committed via update-integrity.yml, verification becomes strict:
  * mismatches always fail-closed.
  *
  * @param {string} reason - human-readable explanation for the warning
@@ -121,6 +148,14 @@ const autoBootstrap = async (reason) => {
     `\u26a0\ufe0f  ${reason} \u2014 auto-bootstrapping for local development.\n` +
     '   Commit a verified hash with --update-integrity for production use.',
   );
+  const trusted = await confirmTrust();
+  if (!trusted) {
+    console.error(
+      '\u274c Aborted. Use --update-integrity after manual verification, ' +
+      'or --trust-first to bypass the prompt.',
+    );
+    process.exit(1);
+  }
   const hash = verifyIntegrity(body);
   await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
   console.log(`\u2705 boundary-integrity.json bootstrapped (sha256: ${hash})`);
