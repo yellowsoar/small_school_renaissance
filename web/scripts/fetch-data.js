@@ -8,17 +8,17 @@
  * Once docs/113-107.csv lands on this fork, drop DATA_OWNER/DATA_BRANCH or set
  * them to yellowsoar / gh-pages.
  *
- * Configuration lives in .env — see .env.example. Real environment variables
+ * Configuration lives in .env \u2014 see .env.example. Real environment variables
  * always take precedence over the file.
  *
  * Usage: node scripts/fetch-data.js [--force] [--update-integrity] [--skip-integrity] [--trust-first]
  */
-import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { createInterface } from 'node:readline';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchWithRetry, validateCsvContent, verifyIntegrity, summarizeCsvForReview } from './fetch-utils.js';
+import { fetchWithRetry, validateCsvContent, summarizeCsvForReview } from './fetch-utils.js';
+import { redactUrl, fileExists, atomicWriteFile, runIntegrityFlow } from './integrity-utils.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -52,55 +52,7 @@ const updateIntegrity = process.argv.includes('--update-integrity');
 const skipIntegrity = process.argv.includes('--skip-integrity');
 const trustFirst = process.argv.includes('--trust-first');
 
-/**
- * Return a redacted URL safe for build logs: origin + pathname only.
- * Strips query strings, fragments, and userinfo that may contain tokens
- * or signed-URL credentials.
- *
- * @param {string} url
- * @returns {string}
- */
-const redactUrl = (url) => {
-  try {
-    const u = new URL(url);
-    return `${u.origin}${u.pathname}`;
-  } catch {
-    return '(invalid URL)';
-  }
-};
-
-const exists = async (path) => {
-  try {
-    return (await stat(path)).size > 0;
-  } catch {
-    return false;
-  }
-};
-
-/**
- * Prompt for explicit opt-in before auto-trusting downloaded data (#383).
- *
- * Returns true immediately when:
- * - --trust-first flag is set (explicit automation opt-in)
- * - stdout is not a TTY (non-interactive: Docker, piped scripts, etc.)
- *
- * In interactive TTY mode, asks the developer to confirm [y/N] after
- * reviewing the data preview printed by autoBootstrap().
- *
- * @returns {Promise<boolean>} true if the developer approves auto-trust
- */
-const confirmTrust = async () => {
-  if (trustFirst || !process.stdout.isTTY) return true;
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) =>
-    rl.question('Auto-trust this download? [y/N] ', (answer) => {
-      rl.close();
-      resolve(answer.trim().toLowerCase() === 'y');
-    }),
-  );
-};
-
-if (!force && !updateIntegrity && (await exists(target))) {
+if (!force && !updateIntegrity && (await fileExists(target))) {
   console.log('\u2705 dataset already present, skipping download (use --force to refresh)');
   process.exit(0);
 }
@@ -181,118 +133,15 @@ const printDataPreview = (csvBody) => {
   );
 };
 
-/**
- * Auto-bootstrap the integrity hash for local development (#229, #383).
- *
- * When integrity metadata is unavailable (empty hash, missing file, or
- * corrupt JSON), CI always fails closed.  Outside CI the developer
- * experience takes priority: show a data preview and ask for explicit
- * confirmation before persisting the hash.
- *
- * In TTY mode the developer must answer [y/N].  In non-TTY mode
- * (Docker, piped scripts) or with --trust-first, confirmation is
- * implicit to preserve backward compatibility.
- *
- * Prints a structural data preview so the developer can visually verify
- * what was auto-trusted (#317).
- *
- * @param {string} reason - human-readable explanation for the warning
- */
-const autoBootstrap = async (reason) => {
-  console.warn(
-    `\u26a0\ufe0f  ${reason} \u2014 auto-bootstrapping for local development.\n` +
-    '   Commit a verified hash with --update-integrity for production use.',
-  );
-  printDataPreview(body);
-  const trusted = await confirmTrust();
-  if (!trusted) {
-    console.error(
-      '\u274c Aborted. Use --update-integrity after manual verification, ' +
-      'or --trust-first to bypass the prompt.',
-    );
-    process.exit(1);
-  }
-  const hash = verifyIntegrity(body);
-  await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
-  console.log(`\u2705 data-integrity.json bootstrapped (sha256: ${hash})`);
-};
+await runIntegrityFlow({
+  body,
+  integrityPath,
+  label: 'data',
+  updateIntegrity,
+  skipIntegrity,
+  trustFirst,
+  previewFn: printDataPreview,
+});
 
-if (updateIntegrity) {
-  // Compute and persist the hash for the just-validated CSV.
-  const hash = verifyIntegrity(body);
-  await writeFile(integrityPath, JSON.stringify({ sha256: hash }, null, 2) + '\n', 'utf-8');
-  console.log(`\u2705 data-integrity.json updated (sha256: ${hash})`);
-} else if (!skipIntegrity) {
-  // Verify against the stored hash — fail-closed by default (#227).
-  // Missing, empty, or unreadable integrity metadata aborts the build
-  // in CI; outside CI it auto-bootstraps for developer convenience (#229).
-  // Use --skip-integrity to opt out during local development.
-  let needsBootstrap = false;
-  let bootstrapReason = '';
-
-  try {
-    const raw = await readFile(integrityPath, 'utf-8');
-    const { sha256: expectedHash } = JSON.parse(raw);
-
-    if (!expectedHash) {
-      if (process.env.CI) {
-        console.error(
-          '\u274c data-integrity.json sha256 is empty. Run with --update-integrity after verifying the upstream data, or use --skip-integrity for local development.',
-        );
-        process.exit(1);
-      }
-      needsBootstrap = true;
-      bootstrapReason = 'data-integrity.json sha256 is empty';
-    } else {
-      verifyIntegrity(body, expectedHash);
-      console.log('\u2705 CSV integrity verified (sha256 match)');
-    }
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      if (process.env.CI) {
-        console.error(
-          '\u274c data-integrity.json not found. Run with --update-integrity to create it, or use --skip-integrity for local development.',
-        );
-        process.exit(1);
-      }
-      needsBootstrap = true;
-      bootstrapReason = 'data-integrity.json not found';
-    } else if (err.message.includes('integrity check failed')) {
-      // Real integrity mismatch: always fail-closed, all environments.
-      console.error(`\u274c ${err.message}`);
-      process.exit(1);
-    } else {
-      // Malformed JSON, unexpected read error, etc.
-      if (process.env.CI) {
-        console.error(`\u274c could not read data-integrity.json: ${err.message}. Use --skip-integrity to bypass.`);
-        process.exit(1);
-      }
-      needsBootstrap = true;
-      bootstrapReason = `could not read data-integrity.json (${err.message})`;
-    }
-  }
-
-  if (needsBootstrap) {
-    await autoBootstrap(bootstrapReason);
-  }
-}
-
-// Write to a temporary file first, then atomically rename to the target.
-// rename() on the same filesystem is a POSIX atomic operation, so the target
-// is always either the complete old file or the complete new file — never a
-// partial write that would fool the exists() check on the next run.
-const tmpTarget = `${target}.tmp`;
-await mkdir(dirname(target), { recursive: true });
-try {
-  await writeFile(tmpTarget, body, 'utf-8');
-  await rename(tmpTarget, target);
-} catch (err) {
-  // Clean up partial temp file so it does not confuse the next run.
-  try {
-    await unlink(tmpTarget);
-  } catch {
-    /* ENOENT is expected if writeFile() itself failed */
-  }
-  throw err;
-}
+await atomicWriteFile(target, body);
 console.log(`\u2705 saved to ${target}`);
