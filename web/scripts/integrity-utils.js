@@ -20,6 +20,25 @@ import { dirname } from 'node:path';
 import { verifyIntegrity } from './fetch-utils.js';
 
 /**
+ * Custom error class for integrity verification failures.
+ *
+ * Thrown instead of calling process.exit() so that:
+ * - Vitest can catch and assert on error paths without being killed
+ * - Consumer scripts can compose multiple integrity checks
+ * - The shared module does not control the process lifecycle
+ *
+ * @property {number} exitCode - process exit code for the consumer
+ *   script to forward (default: 1)
+ */
+export class IntegrityError extends Error {
+  constructor(message, { exitCode = 1 } = {}) {
+    super(message);
+    this.name = 'IntegrityError';
+    this.exitCode = exitCode;
+  }
+}
+
+/**
  * Return a redacted URL safe for build logs: origin + pathname only.
  * Strips query strings, fragments, and userinfo that may contain tokens
  * or signed-URL credentials.
@@ -149,7 +168,10 @@ export async function runIntegrityFlow({
         '\u274c Aborted. Use --update-integrity after manual verification, ' +
           'or --trust-first to bypass the prompt.',
       );
-      process.exit(1);
+      throw new IntegrityError(
+        'Aborted. Use --update-integrity after manual verification, ' +
+          'or --trust-first to bypass the prompt.',
+      );
     }
     const hash = verifyIntegrity(body);
     await atomicWriteFile(
@@ -186,7 +208,9 @@ export async function runIntegrityFlow({
         console.error(
           `\u274c ${label}-integrity.json sha256 is empty. Run with --update-integrity after verifying the upstream data, or use --skip-integrity for local development.`,
         );
-        process.exit(1);
+        throw new IntegrityError(
+          `${label}-integrity.json sha256 is empty. Run with --update-integrity after verifying the upstream data, or use --skip-integrity for local development.`,
+        );
       }
       needsBootstrap = true;
       bootstrapReason = `${label}-integrity.json sha256 is empty`;
@@ -195,26 +219,33 @@ export async function runIntegrityFlow({
       console.log(`\u2705 ${label} integrity verified (sha256 match)`);
     }
   } catch (err) {
+    // Re-throw IntegrityError from the block above without wrapping.
+    if (err instanceof IntegrityError) throw err;
+
     if (err.code === 'ENOENT') {
       if (process.env.CI) {
         console.error(
           `\u274c ${label}-integrity.json not found. Run with --update-integrity to create it, or use --skip-integrity for local development.`,
         );
-        process.exit(1);
+        throw new IntegrityError(
+          `${label}-integrity.json not found. Run with --update-integrity to create it, or use --skip-integrity for local development.`,
+        );
       }
       needsBootstrap = true;
       bootstrapReason = `${label}-integrity.json not found`;
     } else if (err.message.includes('integrity check failed')) {
       // Real integrity mismatch: always fail-closed, all environments.
       console.error(`\u274c ${err.message}`);
-      process.exit(1);
+      throw new IntegrityError(err.message);
     } else {
       // Malformed JSON, unexpected read error, etc.
       if (process.env.CI) {
         console.error(
           `\u274c could not read ${label}-integrity.json: ${err.message}. Use --skip-integrity to bypass.`,
         );
-        process.exit(1);
+        throw new IntegrityError(
+          `could not read ${label}-integrity.json: ${err.message}. Use --skip-integrity to bypass.`,
+        );
       }
       needsBootstrap = true;
       bootstrapReason = `could not read ${label}-integrity.json (${err.message})`;

@@ -12,7 +12,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fetchWithRetry } from './fetch-utils.js';
-import { redactUrl, fileExists, atomicWriteFile, runIntegrityFlow } from './integrity-utils.js';
+import { redactUrl, fileExists, atomicWriteFile, runIntegrityFlow, IntegrityError } from './integrity-utils.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -85,14 +85,21 @@ try {
 /*  Integrity verification (#355)                                       */
 /* ------------------------------------------------------------------ */
 
-await runIntegrityFlow({
-  body,
-  integrityPath,
-  label: 'boundary',
-  updateIntegrity,
-  skipIntegrity,
-  trustFirst,
-});
+try {
+  await runIntegrityFlow({
+    body,
+    integrityPath,
+    label: 'boundary',
+    updateIntegrity,
+    skipIntegrity,
+    trustFirst,
+  });
+} catch (err) {
+  if (err instanceof IntegrityError) {
+    process.exit(err.exitCode);
+  }
+  throw err;
+}
 
 await atomicWriteFile(target, body);
 console.log(`\u2705 saved to ${target}`);
