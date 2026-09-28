@@ -26,12 +26,14 @@ jobs:
           github-token: ${{ github.token }}
         continue-on-error: true
 
-      - name: Generate and push badge
+      - name: Generate badge
+        id: gen
         if: steps.download.outcome == 'success'
         run: |
           PCT=$(cat coverage-pct.txt 2>/dev/null || echo '')
           if [ -z "$PCT" ]; then
             echo "::warning::Coverage percentage not available; skipping badge update"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -41,10 +43,6 @@ jobs:
           elif [ "$PCT" -ge 70 ]; then COLOR="yellowgreen"
           elif [ "$PCT" -ge 60 ]; then COLOR="yellow"
           else COLOR="red"; fi
-
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           # Switch to badges branch (create orphan if needed)
           if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
@@ -59,15 +57,17 @@ jobs:
           printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$PCT" "$COLOR" > coverage.json
 
           git add coverage.json
-          git diff --cached --quiet && echo "Badge unchanged" && exit 0
-          git commit -m "chore: update coverage badge (${PCT}%)"
-          MAX_RETRIES=3
-          for i in $(seq 1 $MAX_RETRIES); do
-            git push origin badges && break
-            if [ "$i" -eq "$MAX_RETRIES" ]; then
-              echo "::error::Push failed after $MAX_RETRIES attempts."
-              exit 1
-            fi
-            echo "::warning::Push attempt $i/$MAX_RETRIES failed, rebasing..."
-            git pull --rebase origin badges
-          done
+          if git diff --cached --quiet; then
+            echo "Badge unchanged"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "msg=chore: update coverage badge (${PCT}%)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push badge
+        if: steps.gen.outputs.changed == 'true'
+        uses: ./.github/actions/git-commit-push
+        with:
+          commit-message: ${{ steps.gen.outputs.msg }}
+          push-ref: origin badges
