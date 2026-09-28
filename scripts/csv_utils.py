@@ -156,7 +156,19 @@ def lookup_checksum():
         with open(sys.argv[2], encoding="utf-8-sig") as f:
             data = json.load(f)
         print(data.get(sys.argv[3], ""))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError as e:
+        print(
+            f"WARNING: {sys.argv[2]} contains invalid JSON ({e}), "
+            "returning empty checksum",
+            file=sys.stderr,
+        )
+        print("")
+    except OSError as e:
+        print(
+            f"WARNING: cannot read {sys.argv[2]} ({e}), "
+            "returning empty checksum",
+            file=sys.stderr,
+        )
         print("")
 
 
@@ -170,7 +182,29 @@ def record_checksum():
             # utf-8-sig on read: tolerate BOM (#414).
             with open(path, encoding="utf-8-sig") as f:
                 data = json.load(f)
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError as e:
+            print(
+                f"WARNING: {path} contains invalid JSON ({e}), "
+                "resetting checksum manifest",
+                file=sys.stderr,
+            )
+            # Preserve corrupt file for post-mortem investigation.
+            corrupt_bak = f"{path}.corrupt"
+            try:
+                os.replace(path, corrupt_bak)
+                print(
+                    f"  Corrupt file backed up to {corrupt_bak}",
+                    file=sys.stderr,
+                )
+            except OSError:
+                pass  # best-effort backup
+            data = {}
+        except OSError as e:
+            print(
+                f"WARNING: cannot read {path} ({e}), "
+                "starting with empty checksum manifest",
+                file=sys.stderr,
+            )
             data = {}
     data[key] = val
 
