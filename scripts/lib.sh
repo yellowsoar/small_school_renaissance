@@ -80,6 +80,8 @@ remove_rows_mismatch_header() {
 # Validate that a CSV file's header row contains all required columns.
 # Uses Python3 csv.reader for RFC 4180 compliant header parsing,
 # consistent with remove_rows_mismatch_header() (#320).
+# Distinguishes file-read errors (csv_utils.py exit 3) from missing
+# columns (non-empty stdout with exit 0) (#405).
 # Returns 0 if all required columns are present, 1 otherwise.
 # Logs each missing column to stderr.
 # Usage: validate_csv_header <csv-file> <required_col_1> [required_col_2] ...
@@ -88,8 +90,18 @@ validate_csv_header() {
 	shift
 	local -a required=("$@")
 
-	local missing
-	missing=$(python3 "$SCRIPT_DIR/csv_utils.py" validate-csv-header "$file" "${required[@]}")
+	local missing rc=0
+	missing=$(python3 "$SCRIPT_DIR/csv_utils.py" validate-csv-header "$file" "${required[@]}") || rc=$?
+
+	# Exit 3 = file cannot be read (OSError); report as file error,
+	# not as missing columns (#405).
+	if [ "$rc" -eq 3 ]; then
+		echo "❌ Cannot read CSV file: ${file}" >&2
+		return 1
+	elif [ "$rc" -ne 0 ]; then
+		echo "❌ CSV header validation error for ${file} (exit code: ${rc})" >&2
+		return 1
+	fi
 
 	if [ -n "$missing" ]; then
 		echo "❌ CSV header validation failed for ${file}:" >&2

@@ -14,6 +14,7 @@ Commands:
   validate-csv-header <csvfile> <col1> [col2 ...]
       Check that a CSV header contains all required columns.
       Prints each missing column name to stdout (one per line).
+      Exit codes: 0 = success, 2 = argument error, 3 = file read error.
 
   count-csv-records <csvfile>
       Print the number of data rows (excluding header) in a CSV.
@@ -70,7 +71,13 @@ def remove_mismatched_rows():
 
 
 def validate_csv_header():
-    """Check that a CSV header contains all required columns."""
+    """Check that a CSV header contains all required columns.
+
+    Exit codes:
+      0 - all columns present (empty stdout) or missing columns listed on stdout
+      2 - argument count error (_require_args)
+      3 - file cannot be read (OSError)
+    """
     _require_args(1, "validate-csv-header <csvfile> <col1> [col2 ...]")
     file_path = sys.argv[2]
     required = sys.argv[3:]
@@ -89,9 +96,8 @@ def validate_csv_header():
             if col not in header_set:
                 print(col)
     except OSError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        for col in required:
-            print(col)
+        print(f"ERROR: cannot read {file_path}: {e}", file=sys.stderr)
+        sys.exit(3)
 
 
 def count_csv_records():
