@@ -61,4 +61,13 @@ jobs:
           git add coverage.json
           git diff --cached --quiet && echo "Badge unchanged" && exit 0
           git commit -m "chore: update coverage badge (${PCT}%)"
-          git push origin badges
+          MAX_RETRIES=3
+          for i in $(seq 1 $MAX_RETRIES); do
+            git push origin badges && break
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+              echo "::error::Push failed after $MAX_RETRIES attempts."
+              exit 1
+            fi
+            echo "::warning::Push attempt $i/$MAX_RETRIES failed, rebasing..."
+            git pull --rebase origin badges
+          done
