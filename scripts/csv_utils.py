@@ -50,7 +50,9 @@ def remove_mismatched_rows():
     infile, outfile = sys.argv[2], sys.argv[3]
     removed = 0
 
-    with open(infile, newline="", encoding="utf-8") as f_in, \
+    # Read with utf-8-sig to auto-strip BOM from MOE CSV exports (#414).
+    # Write with utf-8 to avoid prepending a BOM to the output.
+    with open(infile, newline="", encoding="utf-8-sig") as f_in, \
          open(outfile, "w", newline="", encoding="utf-8") as f_out:
         reader = csv.reader(f_in)
         writer = csv.writer(f_out, lineterminator="\n")
@@ -83,7 +85,8 @@ def validate_csv_header():
     required = sys.argv[3:]
 
     try:
-        with open(file_path, newline="", encoding="utf-8") as f:
+        # utf-8-sig: auto-strip BOM so the first header field matches (#414).
+        with open(file_path, newline="", encoding="utf-8-sig") as f:
             reader = csv.reader(f)
             try:
                 header = next(reader)
@@ -103,7 +106,8 @@ def validate_csv_header():
 def count_csv_records():
     """Print the number of data rows (excluding header) in a CSV."""
     _require_args(1, "count-csv-records <csvfile>")
-    with open(sys.argv[2], newline="", encoding="utf-8") as f:
+    # utf-8-sig: tolerate BOM in MOE CSV exports (#414).
+    with open(sys.argv[2], newline="", encoding="utf-8-sig") as f:
         reader = csv.reader(f)
         try:
             next(reader)
@@ -127,7 +131,9 @@ def lookup_checksum():
     """Print the hash for a key from a JSON manifest, or empty string."""
     _require_args(2, "lookup-checksum <manifest> <key>")
     try:
-        with open(sys.argv[2], encoding="utf-8") as f:
+        # utf-8-sig: tolerate BOM if the manifest was edited with a
+        # BOM-inserting tool (#414).
+        with open(sys.argv[2], encoding="utf-8-sig") as f:
             data = json.load(f)
         print(data.get(sys.argv[3], ""))
     except (json.JSONDecodeError, OSError):
@@ -141,7 +147,8 @@ def record_checksum():
     data = {}
     if os.path.isfile(path):
         try:
-            with open(path, encoding="utf-8") as f:
+            # utf-8-sig on read: tolerate BOM (#414).
+            with open(path, encoding="utf-8-sig") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError):
             data = {}
@@ -150,6 +157,7 @@ def record_checksum():
     dir_name = os.path.dirname(path) or "."
     fd, tmp = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
     try:
+        # utf-8 on write: do not prepend BOM (RFC 8259 recommendation).
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, sort_keys=True)
             f.write("\n")
