@@ -19,7 +19,14 @@ export default defineConfig(({ command, mode }) => {
       {
         name: 'inject-google-fonts-url',
         transformIndexHtml(html) {
-          let result = html.replaceAll('__GOOGLE_FONTS_URL__', GOOGLE_FONTS_URL);
+          const FONT_PLACEHOLDER = '__GOOGLE_FONTS_URL__';
+          if (!html.includes(FONT_PLACEHOLDER)) {
+            throw new Error(
+              `index.html 中找不到 ${FONT_PLACEHOLDER} 佔位符，` +
+              '請確認 index.html 的 <link> 標籤使用此佔位符',
+            );
+          }
+          let result = html.replaceAll(FONT_PLACEHOLDER, GOOGLE_FONTS_URL);
 
           // Vite dev server injects <style> elements for CSS HMR (Hot Module
           // Replacement). The production CSP blocks inline <style> elements
