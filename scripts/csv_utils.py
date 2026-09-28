@@ -52,8 +52,18 @@ def remove_mismatched_rows():
 
     # Read with utf-8-sig to auto-strip BOM from MOE CSV exports (#414).
     # Write with utf-8 to avoid prepending a BOM to the output.
-    with open(infile, newline="", encoding="utf-8-sig") as f_in, \
-         open(outfile, "w", newline="", encoding="utf-8") as f_out:
+    try:
+        f_in = open(infile, newline="", encoding="utf-8-sig")
+    except OSError as e:
+        print(f"ERROR: cannot read {infile}: {e}", file=sys.stderr)
+        sys.exit(3)
+    try:
+        f_out = open(outfile, "w", newline="", encoding="utf-8")
+    except OSError as e:
+        f_in.close()
+        print(f"ERROR: cannot write {outfile}: {e}", file=sys.stderr)
+        sys.exit(3)
+    with f_in, f_out:
         reader = csv.reader(f_in)
         writer = csv.writer(f_out, lineterminator="\n")
         try:
@@ -107,7 +117,12 @@ def count_csv_records():
     """Print the number of data rows (excluding header) in a CSV."""
     _require_args(1, "count-csv-records <csvfile>")
     # utf-8-sig: tolerate BOM in MOE CSV exports (#414).
-    with open(sys.argv[2], newline="", encoding="utf-8-sig") as f:
+    try:
+        f = open(sys.argv[2], newline="", encoding="utf-8-sig")
+    except OSError as e:
+        print(f"ERROR: cannot read {sys.argv[2]}: {e}", file=sys.stderr)
+        sys.exit(3)
+    with f:
         reader = csv.reader(f)
         try:
             next(reader)
@@ -120,8 +135,13 @@ def count_csv_records():
 def compute_checksum():
     """Print the SHA-256 hex digest of a file."""
     _require_args(1, "compute-checksum <file>")
+    try:
+        f = open(sys.argv[2], "rb")
+    except OSError as e:
+        print(f"ERROR: cannot read {sys.argv[2]}: {e}", file=sys.stderr)
+        sys.exit(3)
     h = hashlib.sha256()
-    with open(sys.argv[2], "rb") as f:
+    with f:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     print(h.hexdigest())
