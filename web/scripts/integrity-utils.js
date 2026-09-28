@@ -13,7 +13,7 @@
  *   with optional TTY confirmation (#383), --update-integrity,
  *   --skip-integrity, and --trust-first flag handling
  */
-import { mkdir, readFile, rename, stat, unlink } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { dirname } from 'node:path';
 
@@ -83,7 +83,6 @@ export async function atomicWriteFile(target, content) {
   const tmpTarget = `${target}.tmp`;
   await mkdir(dirname(target), { recursive: true });
   try {
-    const { writeFile } = await import('node:fs/promises');
     await writeFile(tmpTarget, content, 'utf-8');
     await rename(tmpTarget, target);
   } catch (err) {
@@ -125,8 +124,6 @@ export async function runIntegrityFlow({
   trustFirst,
   previewFn,
 }) {
-  const { writeFile } = await import('node:fs/promises');
-
   /**
    * Prompt for explicit opt-in before auto-trusting downloaded data (#383).
    *
