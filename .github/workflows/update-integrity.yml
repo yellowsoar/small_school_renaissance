@@ -139,15 +139,14 @@ jobs:
           name: data-integrity
           path: web
 
-      - name: Commit updated hash
+      - name: Stage and prepare commit message
+        id: prep
         env:
           OLD_HASH: ${{ needs.detect.outputs.old-hash }}
           NEW_HASH: ${{ needs.detect.outputs.new-hash }}
           BOUNDARY_OLD: ${{ needs.detect.outputs.boundary-old-hash }}
           BOUNDARY_NEW: ${{ needs.detect.outputs.boundary-new-hash }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add web/data-integrity.json web/boundary-integrity.json
           BODY="chore: update integrity hashes"
           [ "$OLD_HASH" != "$NEW_HASH" ] && BODY="$BODY
@@ -158,17 +157,16 @@ jobs:
 
           Boundary Old: ${BOUNDARY_OLD}
           Boundary New: ${BOUNDARY_NEW}"
-          git commit -m "$BODY"
-          MAX_RETRIES=3
-          for i in $(seq 1 $MAX_RETRIES); do
-            git push && break
-            if [ "$i" -eq "$MAX_RETRIES" ]; then
-              echo "::error::Push failed after $MAX_RETRIES attempts."
-              exit 1
-            fi
-            echo "::warning::Push attempt $i/$MAX_RETRIES failed, rebasing..."
-            git pull --rebase
-          done
+          {
+            echo "msg<<COMMIT_MSG_EOF"
+            echo "$BODY"
+            echo "COMMIT_MSG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        uses: ./.github/actions/git-commit-push
+        with:
+          commit-message: ${{ steps.prep.outputs.msg }}
 
       - name: Report update result
         run: echo "::notice::Integrity hashes updated and committed."

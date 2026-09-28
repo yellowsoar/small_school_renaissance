@@ -1,0 +1,46 @@
+name: Git Commit and Push
+description: >
+  Configure git bot identity, commit staged changes, and push with
+  retry/rebase logic.  Designed for bot-authored commits in CI.
+
+inputs:
+  commit-message:
+    description: Commit message (supports multi-line)
+    required: true
+  push-ref:
+    description: >
+      Push refspec, e.g. "origin badges".  Defaults to a plain
+      "git push" (pushes the current branch to its upstream).
+    required: false
+    default: ''
+  max-retries:
+    description: Maximum push attempts before failing
+    required: false
+    default: '3'
+
+runs:
+  using: composite
+  steps:
+    - name: Commit and push
+      shell: bash
+      env:
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        PUSH_REF: ${{ inputs.push-ref }}
+        MAX_RETRIES: ${{ inputs.max-retries }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        git commit -m "$COMMIT_MESSAGE"
+
+        for i in $(seq 1 "$MAX_RETRIES"); do
+          # shellcheck disable=SC2086
+          git push $PUSH_REF && break
+          if [ "$i" -eq "$MAX_RETRIES" ]; then
+            echo "::error::Push failed after $MAX_RETRIES attempts."
+            exit 1
+          fi
+          echo "::warning::Push attempt $i/$MAX_RETRIES failed, rebasing..."
+          # shellcheck disable=SC2086
+          git pull --rebase $PUSH_REF
+        done
