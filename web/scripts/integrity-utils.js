@@ -13,6 +13,7 @@
  *   with optional TTY confirmation (#383), --update-integrity,
  *   --skip-integrity, and --trust-first flag handling
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { dirname } from 'node:path';
@@ -80,7 +81,7 @@ export async function fileExists(path) {
  * @param {string} content - file content to write
  */
 export async function atomicWriteFile(target, content) {
-  const tmpTarget = `${target}.tmp`;
+  const tmpTarget = `${target}.${randomUUID()}.tmp`;
   await mkdir(dirname(target), { recursive: true });
   try {
     await writeFile(tmpTarget, content, 'utf-8');
