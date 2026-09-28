@@ -433,12 +433,12 @@ run_download_pipeline() {
 
 	if [ "$SUCCESS_COUNT" -eq 0 ] && [ "${#FAILED_DOWNLOADS[@]}" -eq 0 ]; then
 		echo "❌ No files were downloaded at all — upstream may be unreachable" >&2
-		exit 1
+		return 1
 	fi
 
 	if [ "${#FAILED_DOWNLOADS[@]}" -gt 0 ]; then
 		echo "⚠️  ${#FAILED_DOWNLOADS[@]} download(s) failed:" >&2
 		printf '  - %s\n' "${FAILED_DOWNLOADS[@]}" >&2
-		exit 1
+		return 1
 	fi
 }
