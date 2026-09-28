@@ -26,7 +26,7 @@ teardown() {
   rm -rf "$TEST_TMPDIR"
 }
 
-# ── sed_inplace ────────────────────────────────────────────────────────────────────────────────────
+# ── sed_inplace ─────────────────────────────────────────────────────────────────────────────────────────
 
 @test "sed_inplace: successful substitution" {
   echo "hello world" > "$TEST_TMPDIR/f.txt"
@@ -66,7 +66,7 @@ teardown() {
   [ "$mode" = "644" ]
 }
 
-# ── remove_rows_mismatch_header ────────────────────────────────────────
+# ── remove_rows_mismatch_header ─────────────────────────────────────────
 
 @test "remove_rows_mismatch_header: keeps all rows when columns match" {
   cat > "$TEST_TMPDIR/good.csv" <<'CSV'
@@ -541,9 +541,19 @@ MOCK
 
 @test "lookup_checksum: returns empty on corrupt manifest (#314)" {
   echo "not json" > "$CHECKSUM_FILE"
+  # Capture stdout only; stderr WARNING is verified in a separate test (#425).
+  local result
+  result=$(lookup_checksum "data/file.csv" 2>/dev/null)
+  [ $? -eq 0 ]
+  [ "$result" = "" ]
+}
+
+@test "lookup_checksum: warns on corrupt manifest (#425)" {
+  echo "not json" > "$CHECKSUM_FILE"
   run lookup_checksum "data/file.csv"
   [ "$status" -eq 0 ]
-  [ "$output" = "" ]
+  # bats 'run' combines stdout+stderr; verify WARNING is emitted.
+  [[ "$output" == *"WARNING:"*"invalid JSON"* ]]
 }
 
 # ── record_checksum (#314) ────────────────────────────────────────────────
@@ -570,7 +580,26 @@ MOCK
   [ "$output" = "abc123" ]
 }
 
-# ── atomic_download with checksum (#314) ──────────────────────────────────
+@test "record_checksum: warns and recovers on corrupt manifest (#425)" {
+  echo "not json" > "$CHECKSUM_FILE"
+  record_checksum "data/file.csv" "abc123" 2>/dev/null
+  # Corrupt file should be backed up
+  [ -f "${CHECKSUM_FILE}.corrupt" ]
+  [ "$(cat "${CHECKSUM_FILE}.corrupt")" = "not json" ]
+  # New key should be recorded successfully
+  run python3 -c "import json; d=json.load(open('$CHECKSUM_FILE')); print(d['data/file.csv'])"
+  [ "$output" = "abc123" ]
+}
+
+@test "record_checksum: emits warning on corrupt manifest (#425)" {
+  echo "not json" > "$CHECKSUM_FILE"
+  run record_checksum "data/file.csv" "abc123"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WARNING:"*"invalid JSON"* ]]
+  [[ "$output" == *"backed up"* ]]
+}
+
+# ── atomic_download with checksum (#314) ────────────────────────────────────
 
 @test "atomic_download: passes when checksum matches (#314)" {
   download_file() { echo -n "hello world" > "$2"; }
@@ -608,7 +637,7 @@ MOCK
   [ -f "$final_path" ]
 }
 
-# ── validate_csv_header (#320) ────────────────────────────────────────────
+# ── validate_csv_header (#320) ──────────────────────────────────────────────
 
 @test "validate_csv_header: passes when all required headers present (#320)" {
   cat > "$TEST_TMPDIR/valid.csv" <<'CSV'
@@ -732,7 +761,7 @@ MOCK
   [ -f "$NAME_DIR/goodheader.csv" ]
 }
 
-# ── wget --https-only (#362) ──────────────────────────────────────────────────
+# ── wget --https-only (#362) ────────────────────────────────────────────────
 
 @test "download_file: passes --https-only to wget in 2-arg mode (#362)" {
   wget() {
