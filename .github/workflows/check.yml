@@ -26,8 +26,7 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: web/.nvmrc
-          # v5 auto-caches when package.json declares a packageManager field.
-          # Add "packageManager": "npm@<version>" to enable caching.
+          # v5 auto-caches via the packageManager field in package.json.
 
       - name: Install dependencies
         run: |

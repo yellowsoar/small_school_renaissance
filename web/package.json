@@ -3,13 +3,14 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "\u5ee2\u6821\u9810\u8b66\uff1a\u5168\u53f0\u570b\u5c0f\u5b78\u751f\u4eba\u6578\u63a8\u4f30\u5730\u5716",
+  "description": "廢校預警：全台國小學生人數推估地圖",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/yellowsoar/small_school_renaissance.git"
   },
   "homepage": "https://yellowsoar.github.io/small_school_renaissance/",
   "license": "MIT",
+  "packageManager": "npm@10.9.8",
   "engines": {
     "node": ">=20.19"
   },
