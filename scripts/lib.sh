@@ -136,8 +136,12 @@ convert_to_csv_if_needed() {
 		echo "⚙️ Validating direct-download CSV: ${csv_path}"
 		remove_rows_mismatch_header "$csv_path" || return 2
 		validate_csv_header "$csv_path" "${SHELL_REQUIRED_HEADERS[@]}" || return 2
-		local record_count
-		record_count=$(python3 "$SCRIPT_DIR/csv_utils.py" count-csv-records "$csv_path")
+		local record_count rc_count=0
+		record_count=$(python3 "$SCRIPT_DIR/csv_utils.py" count-csv-records "$csv_path") || rc_count=$?
+		if [ "$rc_count" -ne 0 ]; then
+			echo "❌ CSV record counting failed for ${csv_path} (exit code: ${rc_count})" >&2
+			return 2
+		fi
 		if [ "$record_count" -lt 1 ]; then
 			echo "⚠️ Direct-download CSV is empty or has no data rows: ${csv_path}" >&2
 			return 2
@@ -171,8 +175,14 @@ convert_to_csv_if_needed() {
 				# Verify converted CSV has data rows (not just header) (#141, #262)
 				# Uses csv_utils.py for RFC 4180 logical record count,
 				# consistent with remove_rows_mismatch_header.
-				local record_count
-				record_count=$(python3 "$SCRIPT_DIR/csv_utils.py" count-csv-records "$csv_path")
+				# Exit code checked to prevent silent pass-through (#415).
+				local record_count rc_count=0
+				record_count=$(python3 "$SCRIPT_DIR/csv_utils.py" count-csv-records "$csv_path") || rc_count=$?
+				if [ "$rc_count" -ne 0 ]; then
+					echo "❌ CSV record counting failed for ${csv_path} (exit code: ${rc_count})" >&2
+					rm -f "$csv_path"
+					continue
+				fi
 				if [ "$record_count" -lt 1 ]; then
 					echo "⚠️ Converted CSV from ${ext} is empty or has no data rows: ${csv_path}, trying next format..." >&2
 					rm -f "$csv_path"
