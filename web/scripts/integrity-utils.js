@@ -152,10 +152,9 @@ export async function runIntegrityFlow({
       process.exit(1);
     }
     const hash = verifyIntegrity(body);
-    await writeFile(
+    await atomicWriteFile(
       integrityPath,
       JSON.stringify({ sha256: hash }, null, 2) + '\n',
-      'utf-8',
     );
     console.log(`\u2705 ${label}-integrity.json bootstrapped (sha256: ${hash})`);
   };
@@ -163,10 +162,9 @@ export async function runIntegrityFlow({
   /* --update-integrity: compute and persist the hash */
   if (updateIntegrity) {
     const hash = verifyIntegrity(body);
-    await writeFile(
+    await atomicWriteFile(
       integrityPath,
       JSON.stringify({ sha256: hash }, null, 2) + '\n',
-      'utf-8',
     );
     console.log(`\u2705 ${label}-integrity.json updated (sha256: ${hash})`);
     return;
