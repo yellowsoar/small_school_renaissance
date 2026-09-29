@@ -269,13 +269,28 @@ describe('runIntegrityFlow', () => {
     );
   });
 
-  /* empty hash + non-CI (non-TTY): auto-bootstrap --------------------- */
+  /* empty hash + non-CI + non-TTY: fail-closed (#450) ----------------- */
 
-  it('auto-bootstraps when sha256 is empty outside CI', async () => {
+  it('throws IntegrityError when sha256 is empty in non-TTY non-CI (fail-closed)', async () => {
+    process.stdout.isTTY = false;
+    readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
+
+    const err = await runIntegrityFlow(baseOpts).catch((e) => e);
+
+    expect(err).toBeInstanceOf(IntegrityError);
+    expect(err.message).toContain('non-interactive environments');
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('--trust-first to auto-trust in non-interactive environments'),
+    );
+  });
+
+  /* empty hash + non-CI + trustFirst: auto-bootstrap ------------------ */
+
+  it('auto-bootstraps when sha256 is empty with --trust-first', async () => {
     readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
     verifyIntegrity.mockReturnValue('bootstrapped-hash');
 
-    await runIntegrityFlow(baseOpts);
+    await runIntegrityFlow({ ...baseOpts, trustFirst: true });
 
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('auto-bootstrapping'),
@@ -300,14 +315,27 @@ describe('runIntegrityFlow', () => {
     );
   });
 
-  /* ENOENT + non-CI: auto-bootstrap ----------------------------------- */
+  /* ENOENT + non-CI + non-TTY: fail-closed (#450) --------------------- */
 
-  it('auto-bootstraps when integrity file is missing outside CI', async () => {
+  it('throws IntegrityError when integrity file is missing in non-TTY non-CI (fail-closed)', async () => {
+    process.stdout.isTTY = false;
+    const err = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    readFile.mockRejectedValue(err);
+
+    const caught = await runIntegrityFlow(baseOpts).catch((e) => e);
+
+    expect(caught).toBeInstanceOf(IntegrityError);
+    expect(caught.message).toContain('non-interactive environments');
+  });
+
+  /* ENOENT + non-CI + trustFirst: auto-bootstrap ---------------------- */
+
+  it('auto-bootstraps when integrity file is missing with --trust-first', async () => {
     const err = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
     readFile.mockRejectedValue(err);
     verifyIntegrity.mockReturnValue('fresh-hash');
 
-    await runIntegrityFlow(baseOpts);
+    await runIntegrityFlow({ ...baseOpts, trustFirst: true });
 
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('not found'),
@@ -331,13 +359,25 @@ describe('runIntegrityFlow', () => {
     );
   });
 
-  /* malformed JSON + non-CI: auto-bootstrap --------------------------- */
+  /* malformed JSON + non-CI + non-TTY: fail-closed (#450) ------------- */
 
-  it('auto-bootstraps when JSON is malformed outside CI', async () => {
+  it('throws IntegrityError when JSON is malformed in non-TTY non-CI (fail-closed)', async () => {
+    process.stdout.isTTY = false;
+    readFile.mockResolvedValue('{{invalid json');
+
+    const caught = await runIntegrityFlow(baseOpts).catch((e) => e);
+
+    expect(caught).toBeInstanceOf(IntegrityError);
+    expect(caught.message).toContain('non-interactive environments');
+  });
+
+  /* malformed JSON + non-CI + trustFirst: auto-bootstrap -------------- */
+
+  it('auto-bootstraps when JSON is malformed with --trust-first', async () => {
     readFile.mockResolvedValue('{{invalid json');
     verifyIntegrity.mockReturnValue('recovered-hash');
 
-    await runIntegrityFlow(baseOpts);
+    await runIntegrityFlow({ ...baseOpts, trustFirst: true });
 
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('auto-bootstrapping'),
@@ -354,22 +394,22 @@ describe('runIntegrityFlow', () => {
     verifyIntegrity.mockReturnValue('hash');
     const previewFn = vi.fn();
 
-    await runIntegrityFlow({ ...baseOpts, previewFn });
+    await runIntegrityFlow({ ...baseOpts, trustFirst: true, previewFn });
 
     expect(previewFn).toHaveBeenCalledWith('csv-body-content');
     expect(previewFn).toHaveBeenCalledTimes(1);
   });
 
-  /* non-TTY: no readline --------------------------------------------- */
+  /* non-TTY: no readline, fail-closed (#450) -------------------------- */
 
-  it('does not create readline interface in non-TTY mode', async () => {
+  it('does not create readline interface and throws in non-TTY mode', async () => {
     process.stdout.isTTY = false;
     readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
-    verifyIntegrity.mockReturnValue('hash');
 
-    await runIntegrityFlow(baseOpts);
+    const caught = await runIntegrityFlow(baseOpts).catch((e) => e);
 
     expect(createInterface).not.toHaveBeenCalled();
+    expect(caught).toBeInstanceOf(IntegrityError);
   });
 
   /* trustFirst bypasses TTY prompt ------------------------------------ */
@@ -403,7 +443,26 @@ describe('runIntegrityFlow', () => {
 
     expect(caught).toBeInstanceOf(IntegrityError);
     expect(caught.message).toContain('Aborted');
+    expect(caught.message).toContain('bypass the prompt');
     expect(mockRl.question).toHaveBeenCalled();
     expect(mockRl.close).toHaveBeenCalled();
+  });
+
+  /* TTY rejection error message --------------------------------------- */
+
+  it('shows TTY-specific hint when TTY user rejects', async () => {
+    process.stdout.isTTY = true;
+    readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
+
+    const mockRl = {
+      question: vi.fn((_prompt, cb) => cb('n')),
+      close: vi.fn(),
+    };
+    createInterface.mockReturnValue(mockRl);
+
+    const caught = await runIntegrityFlow(baseOpts).catch((e) => e);
+
+    expect(caught.message).toContain('bypass the prompt');
+    expect(caught.message).not.toContain('non-interactive environments');
   });
 });
