@@ -1,0 +1,50 @@
+name: Bootstrap Lockfile
+
+on:
+  workflow_dispatch:
+    inputs:
+      directory:
+        description: 'Directory containing pyproject.toml'
+        required: true
+        default: 'scripts'
+      branch:
+        description: 'Target branch (empty = default branch)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Regenerate lockfile
+        run: cd ${{ inputs.directory }} && uv lock
+
+      - name: Stage changes
+        id: stage
+        run: |
+          git add ${{ inputs.directory }}/uv.lock
+          if git diff --cached --quiet; then
+            echo "::notice::uv.lock unchanged, nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.stage.outputs.changed == 'true'
+        uses: ./.github/actions/git-commit-push
+        with:
+          commit-message: "chore(${{ inputs.directory }}): regenerate uv.lock"
