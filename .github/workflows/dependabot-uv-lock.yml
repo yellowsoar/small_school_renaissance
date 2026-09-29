@@ -1,0 +1,51 @@
+name: Sync uv.lock for Dependabot
+
+# Dependabot updates scripts/pyproject.toml but cannot regenerate
+# scripts/uv.lock (uv-specific format).  Without this workflow,
+# the CI uv lock --check step (#444) always fails on Dependabot PRs.
+#
+# Trigger: push to dependabot/pip/** branches that touch pyproject.toml.
+# The push event fires when Dependabot creates or updates a PR branch,
+# and the GITHUB_TOKEN has write permissions for same-repo branches.
+
+on:
+  push:
+    branches:
+      - 'dependabot/pip/**'
+    paths:
+      - 'scripts/pyproject.toml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Regenerate lockfile
+        run: cd scripts && uv lock
+
+      - name: Stage changes
+        id: stage
+        run: |
+          git add scripts/uv.lock
+          if git diff --cached --quiet; then
+            echo "::notice::uv.lock unchanged, nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.stage.outputs.changed == 'true'
+        uses: ./.github/actions/git-commit-push
+        with:
+          commit-message: "chore(scripts): regenerate uv.lock for Dependabot"
