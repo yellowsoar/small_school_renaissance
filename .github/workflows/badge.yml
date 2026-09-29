@@ -37,6 +37,13 @@ jobs:
             exit 0
           fi
 
+          # Validate PCT is a non-negative integer
+          if ! [[ "$PCT" =~ ^[0-9]+$ ]]; then
+            echo "::warning::Coverage percentage is not a valid integer: '$PCT'; skipping badge update"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # Determine badge color
           if [ "$PCT" -ge 90 ]; then COLOR="brightgreen"
           elif [ "$PCT" -ge 80 ]; then COLOR="green"
