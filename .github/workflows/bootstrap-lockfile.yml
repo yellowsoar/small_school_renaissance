@@ -29,13 +29,26 @@ jobs:
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
+      - name: Validate directory input
+        env:
+          DIRECTORY: ${{ inputs.directory }}
+        run: |
+          if ! [[ "$DIRECTORY" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+            echo "::error::Invalid directory input: '$DIRECTORY'"
+            exit 1
+          fi
+
       - name: Regenerate lockfile
-        run: cd ${{ inputs.directory }} && uv lock
+        env:
+          DIRECTORY: ${{ inputs.directory }}
+        run: cd -- "$DIRECTORY" && uv lock
 
       - name: Stage changes
         id: stage
+        env:
+          DIRECTORY: ${{ inputs.directory }}
         run: |
-          git add ${{ inputs.directory }}/uv.lock
+          git add -- "$DIRECTORY/uv.lock"
           if git diff --cached --quiet; then
             echo "::notice::uv.lock unchanged, nothing to commit."
             echo "changed=false" >> "$GITHUB_OUTPUT"
