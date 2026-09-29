@@ -219,8 +219,9 @@ jobs:
           CSV_CHANGED: ${{ needs.detect.outputs.changed }}
           BOUNDARY_CHANGED: ${{ needs.detect.outputs.boundary-changed }}
         run: |
-          # Avoid duplicate issues: check for an existing open issue.
-          EXISTING=$(gh issue list --state open --search 'upstream integrity hash changed' --json number --jq '.[0].number' 2>/dev/null || echo '')
+          # Avoid duplicate issues: check for an existing open issue
+          # using the dedicated label instead of free-text search (#436).
+          EXISTING=$(gh issue list --state open --label integrity-alert --json number --jq '.[0].number' 2>/dev/null || echo '')
           if [ -n "$EXISTING" ]; then
             echo "::notice::Open issue #$EXISTING already exists, skipping."
             exit 0
@@ -255,4 +256,5 @@ jobs:
 
           gh issue create \
             --title '⚠️ Upstream integrity hash changed' \
+            --label integrity-alert \
             --body "$BODY"
