@@ -9,6 +9,7 @@ export default function SchoolPopup({ school, year, tier }) {
   const projected = school.projections.get(year);
   const trendClass =
     school.delta == null ? '' : school.delta < 0 ? ' is-down' : ' is-up';
+  const phoneNumber = school.phone ? dialable(school.phone) : null;
 
   return (
     <div>
@@ -71,14 +72,11 @@ export default function SchoolPopup({ school, year, tier }) {
             學校網站 ↗
           </a>
         )}
-        {school.phone && (() => {
-          const number = dialable(school.phone);
-          return number ? (
-            <a href={`tel:${number}`}>{school.phone}</a>
-          ) : (
-            <span>{school.phone}</span>
-          );
-        })()}
+        {school.phone && (
+          phoneNumber
+            ? <a href={`tel:${phoneNumber}`}>{school.phone}</a>
+            : <span>{school.phone}</span>
+        )}
       </p>
     </div>
   );
