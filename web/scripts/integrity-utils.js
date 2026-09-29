@@ -130,14 +130,18 @@ export async function runIntegrityFlow({
    *
    * Returns true immediately when:
    * - --trust-first flag is set (explicit automation opt-in)
+   *
+   * Returns false (fail-closed) when:
    * - stdout is not a TTY (non-interactive: Docker, piped scripts, etc.)
+   *   Use --trust-first for explicit opt-in in these environments (#450).
    *
    * In interactive TTY mode, asks the developer to confirm [y/N].
    *
    * @returns {Promise<boolean>}
    */
   const confirmTrust = async () => {
-    if (trustFirst || !process.stdout.isTTY) return true;
+    if (trustFirst) return true;
+    if (!process.stdout.isTTY) return false;
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     return new Promise((resolve) =>
       rl.question('Auto-trust this download? [y/N] ', (answer) => {
@@ -165,13 +169,14 @@ export async function runIntegrityFlow({
     if (previewFn) previewFn(body);
     const trusted = await confirmTrust();
     if (!trusted) {
+      const hint = process.stdout.isTTY
+        ? 'or --trust-first to bypass the prompt.'
+        : 'or --trust-first to auto-trust in non-interactive environments.';
       console.error(
-        '\u274c Aborted. Use --update-integrity after manual verification, ' +
-          'or --trust-first to bypass the prompt.',
+        `\u274c Aborted. Use --update-integrity after manual verification, ${hint}`,
       );
       throw new IntegrityError(
-        'Aborted. Use --update-integrity after manual verification, ' +
-          'or --trust-first to bypass the prompt.',
+        `Aborted. Use --update-integrity after manual verification, ${hint}`,
       );
     }
     const hash = verifyIntegrity(body);
