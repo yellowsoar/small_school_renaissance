@@ -166,4 +166,53 @@ describe('useGeoJson', () => {
     expect(result.current.status).toBe('loading');
     expect(result.current.data).toBeNull();
   });
+
+  /* ---------------------------------------------------------------- */
+  /*  Error classification (#459)                                      */
+  /* ---------------------------------------------------------------- */
+
+  it('classifies TimeoutError with timeout-specific message (#459)', async () => {
+    const err = new Error('Request timed out after 30000ms');
+    err.name = 'TimeoutError';
+    mocks.fetchWithTimeout.mockRejectedValue(err);
+
+    const { result } = renderHook(() => useGeoJson('/test.geojson'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error.message).toContain('\u8f09\u5165\u903e\u6642');
+    expect(result.current.error.cause).toBe(err);
+  });
+
+  it('classifies SizeLimitError with size-specific message (#459)', async () => {
+    const err = new Error('5242880 bytes');
+    err.name = 'SizeLimitError';
+    mocks.fetchWithTimeout.mockRejectedValue(err);
+
+    const { result } = renderHook(() => useGeoJson('/test.geojson'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error.message).toContain('\u5927\u5c0f\u8d85\u904e\u4e0a\u9650');
+    expect(result.current.error.cause).toBe(err);
+  });
+
+  it('classifies post-download parse failure as "\u89e3\u6790\u5931\u6557" (#459)', async () => {
+    // fetchWithTimeout resolves (downloadComplete = true), then JSON.parse fails
+    mocks.fetchWithTimeout.mockResolvedValue('not json {{{');
+
+    const { result } = renderHook(() => useGeoJson('/test.geojson'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error.message).toContain('\u89e3\u6790\u5931\u6557');
+  });
+
+  it('classifies pre-download failure as "\u8f09\u5165\u5931\u6557" (#459)', async () => {
+    // fetchWithTimeout rejects (downloadComplete = false)
+    mocks.fetchWithTimeout.mockRejectedValue(new Error('network error'));
+
+    const { result } = renderHook(() => useGeoJson('/test.geojson'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error.message).toContain('\u8f09\u5165\u5931\u6557');
+    expect(result.current.error.message).toContain('network error');
+  });
 });
