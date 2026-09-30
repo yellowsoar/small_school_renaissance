@@ -82,7 +82,7 @@ jobs:
       # always passing).  When a hash IS committed, verification is
       # strict (fail-closed on mismatch).  When the hash has not yet
       # been populated, CI warns and downloads with --skip-integrity
-      # for GeoJSON structural validation only — no self-verify loop.
+      # for GeoJSON structural validation only \u2014 no self-verify loop.
       # To populate the hash, run update-integrity.yml (mode=update).
       - name: Verify boundary integrity hash exists
         id: boundary-guard
@@ -98,14 +98,15 @@ jobs:
           fi
 
       - name: Download and verify boundary integrity
+        env:
+          SKIP_INTEGRITY: ${{ steps.boundary-guard.outputs.skip_integrity }}
+          BOUNDARY_SOURCE_URL: ${{ vars.BOUNDARY_SOURCE_URL || '' }}
         run: |
           EXTRA_FLAGS=""
-          if [ "${{ steps.boundary-guard.outputs.skip_integrity }}" = "true" ]; then
+          if [ "$SKIP_INTEGRITY" = "true" ]; then
             EXTRA_FLAGS="--skip-integrity"
           fi
           node scripts/fetch-boundaries.js --force $EXTRA_FLAGS
-        env:
-          BOUNDARY_SOURCE_URL: ${{ vars.BOUNDARY_SOURCE_URL || '' }}
 
       - run: npm run build
         env:
