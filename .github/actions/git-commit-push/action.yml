@@ -31,6 +31,11 @@ runs:
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+        if git diff --cached --quiet; then
+          echo "::notice::Nothing to commit, skipping."
+          exit 0
+        fi
+
         git commit -m "$COMMIT_MESSAGE"
 
         for i in $(seq 1 "$MAX_RETRIES"); do
