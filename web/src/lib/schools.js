@@ -143,7 +143,7 @@ export const parseSchools = (csvText) => {
     );
   }
 
-  const schools = data.map(toSchool).filter(Boolean);
+  const parsed = data.map(toSchool).filter(Boolean);
 
   // --- Drop-ratio guard (#172) + warning (#102) ----------------------------
   // When a significant portion of CSV rows are silently dropped (null
@@ -152,7 +152,7 @@ export const parseSchools = (csvText) => {
   // (above 20%) so data maintainers notice upstream quality issues before
   // they affect policy decisions.
   if (data.length > 0) {
-    const dropCount = data.length - schools.length;
+    const dropCount = data.length - parsed.length;
     if (dropCount > 0) {
       const dropRatio = dropCount / data.length;
       if (dropRatio > MAX_DROP_RATIO && data.length >= MIN_DROP_SAMPLE) {
@@ -171,24 +171,25 @@ export const parseSchools = (csvText) => {
     }
   }
 
-  // --- Duplicate ID disambiguation (#45, #252, #276) -----------------------
+  // --- Duplicate ID disambiguation (#45, #252, #276, #452) -----------------
   // Two-pass deterministic disambiguation: the suffix encodes coordinates so
-  // the resulting ID is independent of CSV row order.
+  // the resulting ID is independent of CSV row order. Duplicated schools are
+  // copied with a new `id` instead of being mutated in place (#452);
+  // non-duplicated schools are passed through unchanged.
   const idFreq = new Map();
-  for (const school of schools) {
+  for (const school of parsed) {
     idFreq.set(school.id, (idFreq.get(school.id) ?? 0) + 1);
   }
 
   const coordSeen = new Map();
-  for (const school of schools) {
-    if (idFreq.get(school.id) > 1) {
-      const [lat, lng] = school.position;
-      const coordKey = `${school.id}::${lat},${lng}`;
-      const count = (coordSeen.get(coordKey) ?? 0) + 1;
-      coordSeen.set(coordKey, count);
-      school.id = count > 1 ? `${coordKey}#${count}` : coordKey;
-    }
-  }
+  const schools = parsed.map((school) => {
+    if (idFreq.get(school.id) <= 1) return school;
+    const [lat, lng] = school.position;
+    const coordKey = `${school.id}::${lat},${lng}`;
+    const count = (coordSeen.get(coordKey) ?? 0) + 1;
+    coordSeen.set(coordKey, count);
+    return { ...school, id: count > 1 ? `${coordKey}#${count}` : coordKey };
+  });
 
   // --- Parse-result validation ---------------------------------------------
   if (schools.length === 0) {
