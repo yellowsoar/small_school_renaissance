@@ -167,4 +167,73 @@ describe('useSchoolData', () => {
 
     expect(typeof result.current.reload).toBe('function');
   });
+
+  /* -------------------------------------------------------------- */
+  /*  retryInfo (#456)                                                 */
+  /* -------------------------------------------------------------- */
+
+  it('retryInfo defaults to null (#456)', () => {
+    fetchWithTimeout.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useSchoolData('/fake.csv'));
+    expect(result.current.retryInfo).toBeNull();
+  });
+
+  it('exposes retryInfo when fetchWithTimeout triggers onRetry (#456)', async () => {
+    let resolvePromise;
+    fetchWithTimeout.mockImplementation((_url, opts) => {
+      // Simulate a retry notification before the fetch resolves.
+      opts?.onRetry?.(0, new Error('timeout'), 500);
+      return new Promise((resolve) => {
+        resolvePromise = resolve;
+      });
+    });
+    parseSchools.mockReturnValue({ schools: mockSchools, counties: mockCounties });
+
+    const { result } = renderHook(() => useSchoolData('/fake.csv'));
+
+    // retryInfo should reflect the retry progress.
+    await waitFor(() =>
+      expect(result.current.retryInfo).toEqual({ current: 2, total: 3 }),
+    );
+    expect(result.current.status).toBe('loading');
+
+    // Resolve the fetch.
+    await act(async () => resolvePromise('csv-content'));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  it('reload clears retryInfo (#456)', async () => {
+    let resolvePromise;
+    fetchWithTimeout
+      .mockImplementationOnce((_url, opts) => {
+        opts?.onRetry?.(0, new Error('timeout'), 500);
+        return new Promise((resolve) => {
+          resolvePromise = resolve;
+        });
+      })
+      .mockResolvedValueOnce('csv-content');
+    parseSchools.mockReturnValue({ schools: mockSchools, counties: mockCounties });
+
+    const { result } = renderHook(() => useSchoolData('/fake.csv'));
+
+    await waitFor(() =>
+      expect(result.current.retryInfo).toEqual({ current: 2, total: 3 }),
+    );
+
+    // Resolve the first fetch.
+    await act(async () => resolvePromise('csv-content'));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    // Reload should clear retryInfo.
+    act(() => result.current.reload());
+    expect(result.current.retryInfo).toBeNull();
+  });
+
+  it('passes onRetry callback to fetchWithTimeout (#456)', () => {
+    fetchWithTimeout.mockReturnValue(new Promise(() => {}));
+    renderHook(() => useSchoolData('/fake.csv'));
+
+    const [, opts] = fetchWithTimeout.mock.calls[0];
+    expect(typeof opts.onRetry).toBe('function');
+  });
 });

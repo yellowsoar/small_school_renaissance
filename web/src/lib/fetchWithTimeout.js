@@ -61,13 +61,13 @@ function abortableSleep(ms, signal) {
  * stalled body transfer triggers the timeout or external abort (#173).
  *
  * @param {string} url
- * @param {{ retries?: number, timeout?: number, signal?: AbortSignal, maxBytes?: number }} [options]
+ * @param {{ retries?: number, timeout?: number, signal?: AbortSignal, maxBytes?: number, onRetry?: (attempt: number, err: Error, delay: number) => void }} [options]
  * @returns {Promise<string>} The response body as text
  * @throws On exhausted retries, timeout, external abort, or size limit exceeded
  */
 export async function fetchWithTimeout(
   url,
-  { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS, signal, maxBytes } = {},
+  { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS, signal, maxBytes, onRetry: callerOnRetry } = {},
 ) {
   return withRetry(
     async () => {
@@ -132,6 +132,7 @@ export async function fetchWithTimeout(
           `[fetchWithTimeout] attempt ${attempt + 1}/${retries + 1} failed (${label}), ` +
             `retrying in ${Math.round(delay)}ms\u2026`,
         );
+        callerOnRetry?.(attempt, err, delay);
       },
     },
   );
