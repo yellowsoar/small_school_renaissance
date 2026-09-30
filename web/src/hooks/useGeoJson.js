@@ -11,6 +11,10 @@ const initialState = { status: 'loading', data: null, error: null };
  * state.  Aborts cleanly on unmount via AbortController.  Exposes `reload`
  * so a failed load is recoverable without a full refresh (#365).
  *
+ * Error messages are classified by failure type (timeout, size limit,
+ * parse/validation, download) to match the pattern used by useSchoolData
+ * (#459).
+ *
  * @param {string} url  URL to the GeoJSON file (typically a static asset)
  * @returns {{ status: 'loading'|'ready'|'error', data: object|null, error: Error|null, reload: () => void }}
  */
@@ -27,11 +31,13 @@ export function useGeoJson(url) {
     const controller = new AbortController();
 
     (async () => {
+      let downloadComplete = false;
       try {
         const text = await fetchWithTimeout(url, {
           signal: controller.signal,
           maxBytes: MAX_GEOJSON_BYTES,
         });
+        downloadComplete = true;
 
         const parsed = JSON.parse(text);
         if (parsed.type !== 'FeatureCollection' || !Array.isArray(parsed.features)) {
@@ -45,12 +51,21 @@ export function useGeoJson(url) {
       } catch (err) {
         if (err.name === 'AbortError') return;
 
+        let message;
+        if (err.name === 'TimeoutError') {
+          message = 'GeoJSON \u8f09\u5165\u903e\u6642\uff0c\u8acb\u6aa2\u67e5\u7db2\u8def\u9023\u7dda';
+        } else if (err.name === 'SizeLimitError') {
+          message = `GeoJSON \u5927\u5c0f\u8d85\u904e\u4e0a\u9650 (${err.message})`;
+        } else if (downloadComplete) {
+          message = `GeoJSON \u89e3\u6790\u5931\u6557 (${err.message})`;
+        } else {
+          message = `GeoJSON \u8f09\u5165\u5931\u6557 (${err.message})`;
+        }
+
         setState({
           status: 'error',
           data: null,
-          error: new Error(`GeoJSON \u8f09\u5165\u5931\u6557 (${err.message})`, {
-            cause: err,
-          }),
+          error: new Error(message, { cause: err }),
         });
       }
     })();
