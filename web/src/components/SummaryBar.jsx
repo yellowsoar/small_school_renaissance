@@ -47,21 +47,28 @@ export default function SummaryBar({
       <dl className="summary">
         {stats.map(({ label, value, toggle }) =>
           toggle ? (
+            // <dt> may contain interactive content, so the toggle lives there;
+            // the visually hidden <dd> completes the dt/dd pair (#457).
             <div key={label} className="summary__item">
-              <button
-                type="button"
-                className={`summary__toggle${excludeClosed ? ' summary__toggle--excluded' : ''}`}
-                aria-pressed={!excludeClosed}
-                title={
-                  excludeClosed
-                    ? '點擊以在地圖上顯示推估歸零學校'
-                    : '點擊以從地圖上隱藏推估歸零學校'
-                }
-                onClick={onToggleClosed}
-              >
-                <span className="summary__label">{label}</span>
-                <span className="summary__value">{integer.format(value)}</span>
-              </button>
+              <dt>
+                <button
+                  type="button"
+                  className={`summary__toggle${excludeClosed ? ' summary__toggle--excluded' : ''}`}
+                  aria-pressed={!excludeClosed}
+                  title={
+                    excludeClosed
+                      ? '點擊以在地圖上顯示推估歸零學校'
+                      : '點擊以從地圖上隱藏推估歸零學校'
+                  }
+                  onClick={onToggleClosed}
+                >
+                  <span className="summary__label">{label}</span>
+                  <span className="summary__value">{integer.format(value)}</span>
+                </button>
+              </dt>
+              <dd className="sr-only">
+                {excludeClosed ? '已從地圖隱藏' : '顯示於地圖上'}
+              </dd>
             </div>
           ) : (
             <div key={label} className="summary__item">

@@ -212,4 +212,40 @@ describe('SummaryBar', () => {
     renderBar({ closingCount: 99, excludeClosed: true });
     expect(screen.getByText('99')).toBeTruthy();
   });
+
+  // --- <dl> content model (regression tests for #457) ----------------------
+
+  it('keeps every <dl> group limited to <dt>/<dd> children', () => {
+    const { container } = renderBar();
+
+    const groups = container.querySelectorAll('dl.summary > div');
+    expect(groups.length).toBeGreaterThan(0);
+
+    for (const group of groups) {
+      const tags = Array.from(group.children, (el) => el.tagName);
+      expect(tags.every((tag) => tag === 'DT' || tag === 'DD')).toBe(true);
+      expect(tags).toContain('DT');
+      expect(tags).toContain('DD');
+    }
+  });
+
+  it('places the closing toggle button inside a <dt>', () => {
+    renderBar();
+
+    const toggle = screen.getByRole('button', { name: /推估歸零/ });
+    expect(toggle.parentElement.tagName).toBe('DT');
+  });
+
+  it('describes the map visibility state in a visually hidden <dd>', () => {
+    const { rerender, props } = renderBar({ excludeClosed: false });
+
+    const group = screen.getByRole('button', { name: /推估歸零/ }).closest('.summary__item');
+    const dd = group.querySelector('dd');
+    expect(dd).toBeTruthy();
+    expect(dd.classList.contains('sr-only')).toBe(true);
+    expect(dd.textContent).toBe('顯示於地圖上');
+
+    rerender(<SummaryBar {...props} excludeClosed />);
+    expect(group.querySelector('dd').textContent).toBe('已從地圖隱藏');
+  });
 });
