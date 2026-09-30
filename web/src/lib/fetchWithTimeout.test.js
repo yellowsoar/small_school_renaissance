@@ -331,6 +331,42 @@ describe('fetchWithTimeout', () => {
 
     expect(warnSpy).not.toHaveBeenCalled();
   });
+
+  /* -------------------------------------------------------------- */
+  /*  Caller onRetry callback (#456)                                   */
+  /* -------------------------------------------------------------- */
+
+  it('invokes the caller-provided onRetry callback on each retry (#456)', async () => {
+    const callerOnRetry = vi.fn();
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(errorResponse(502))
+      .mockResolvedValueOnce(okResponse('ok'));
+
+    const text = await fetchWithTimeout('https://example.com/data.csv', {
+      onRetry: callerOnRetry,
+    });
+    expect(text).toBe('ok');
+
+    // One retry -> one callback invocation.
+    expect(callerOnRetry).toHaveBeenCalledTimes(1);
+    expect(callerOnRetry).toHaveBeenCalledWith(
+      0,
+      expect.objectContaining({ message: expect.stringContaining('HTTP 502') }),
+      expect.any(Number),
+    );
+  });
+
+  it('does not throw when onRetry option is omitted (#456)', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(errorResponse(502))
+      .mockResolvedValueOnce(okResponse('ok'));
+
+    // No onRetry option — should work without error.
+    const text = await fetchWithTimeout('https://example.com/data.csv');
+    expect(text).toBe('ok');
+  });
 });
 
 /* ------------------------------------------------------------------ */
