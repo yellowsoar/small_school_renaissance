@@ -18,7 +18,7 @@ const initialOverlays = Object.fromEntries(
 );
 
 export default function App() {
-  const { status, schools, counties, error, reload } = useSchoolData();
+  const { status, schools, counties, error, reload, retryInfo } = useSchoolData();
   const countyBoundary = useGeoJson(COUNTY_BOUNDARY_URL);
 
   // Stable for the lifetime of a loaded dataset, which is what lets
@@ -121,7 +121,9 @@ export default function App() {
       <main id="main-content" className="stage" tabIndex={-1}>
         {status === 'loading' && (
           <p className="state" role="status">
-            載入全台國小資料中…
+            {retryInfo
+              ? `重新嘗試載入中（第 ${retryInfo.current}/${retryInfo.total} 次）\u2026`
+              : '載入全台國小資料中\u2026'}
           </p>
         )}
 
