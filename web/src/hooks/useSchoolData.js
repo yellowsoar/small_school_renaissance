@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DATA_URL, MAX_CSV_BYTES } from '../config/index.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
+import { DEFAULT_RETRIES } from '../lib/retry-core.js';
 import { parseSchools } from '../lib/schools.js';
 
 const initialState = { status: 'loading', schools: [], counties: [], error: null };
@@ -10,17 +11,24 @@ const initialState = { status: 'loading', schools: [], counties: [], error: null
  * retry, aborting cleanly on unmount.  Exposes `reload` so a failed load is
  * recoverable without a full refresh — the usual cause is a flaky network,
  * not a broken build.
+ *
+ * `retryInfo` exposes the current retry progress ({ current, total }) so the
+ * UI can display which attempt is in flight.  It is `null` when no retry has
+ * occurred yet or after a reload (#456).
  */
 export function useSchoolData(url = DATA_URL) {
   const [state, setState] = useState(initialState);
+  const [retryInfo, setRetryInfo] = useState(null);
   const [attempt, setAttempt] = useState(0);
 
   const reload = useCallback(() => {
     setState(initialState);
+    setRetryInfo(null);
     setAttempt((n) => n + 1);
   }, []);
 
   useEffect(() => {
+    setRetryInfo(null);
     const controller = new AbortController();
 
     (async () => {
@@ -29,9 +37,13 @@ export function useSchoolData(url = DATA_URL) {
         // fetchWithTimeout now returns the response body as text, with
         // both header and body transfer covered by the same timeout (#173).
         // maxBytes enforces a size ceiling to prevent memory exhaustion (#207).
+        // onRetry surfaces retry progress to the UI (#456).
         const text = await fetchWithTimeout(url, {
           signal: controller.signal,
           maxBytes: MAX_CSV_BYTES,
+          onRetry: (retryAttempt) => {
+            setRetryInfo({ current: retryAttempt + 2, total: DEFAULT_RETRIES + 1 });
+          },
         });
         downloadComplete = true;
 
@@ -64,5 +76,5 @@ export function useSchoolData(url = DATA_URL) {
     return () => controller.abort();
   }, [url, attempt]);
 
-  return { ...state, reload };
+  return { ...state, retryInfo, reload };
 }
