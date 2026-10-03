@@ -11,7 +11,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchWithRetry } from './fetch-utils.js';
+import { fetchWithRetry, formatDownloadError } from './fetch-utils.js';
 import { redactUrl, fileExists, atomicWriteFile, runIntegrityFlow, IntegrityError } from './integrity-utils.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,11 +55,7 @@ try {
   });
   body = result.body;
 } catch (err) {
-  const detail =
-    err.name === 'TimeoutError' ? 'timeout after 30s' : err.message;
-  console.error(
-    `\u274c boundary data download failed after 3 attempts: ${detail}`,
-  );
+  console.error(formatDownloadError(err, 'boundary data download'));
   process.exit(1);
 }
 
