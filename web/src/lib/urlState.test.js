@@ -3,12 +3,15 @@ import { MAP, MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS } from '../config/i
 import {
   DEFAULT_YEAR,
   defaultFilters,
+  defaultView,
   filtersFromSearch,
   pruneCounties,
   searchFromFilters,
+  viewFromSearch,
 } from './urlState.js';
 
 const filters = (overrides = {}) => ({ ...defaultFilters(), ...overrides });
+const view = (overrides = {}) => ({ ...defaultView(), ...overrides });
 
 describe('defaultFilters', () => {
   it('matches what an empty query string parses to', () => {
@@ -21,12 +24,24 @@ describe('defaultFilters', () => {
     expect(defaultFilters().counties.size).toBe(0);
   });
 
+  it('holds only filter fields, no view state (#478)', () => {
+    expect(Object.keys(defaultFilters()).sort()).toEqual(
+      ['counties', 'search', 'tiers', 'year'],
+    );
+  });
+});
+
+describe('defaultView', () => {
+  it('matches what an empty query string parses to (#478)', () => {
+    expect(defaultView()).toEqual(viewFromSearch(''));
+  });
+
   it('defaults excludeClosed to true', () => {
-    expect(defaultFilters().excludeClosed).toBe(true);
+    expect(defaultView().excludeClosed).toBe(true);
   });
 
   it('defaults zoom to MAP.zoom', () => {
-    expect(defaultFilters().zoom).toBe(MAP.zoom);
+    expect(defaultView().zoom).toBe(MAP.zoom);
   });
 });
 
@@ -44,6 +59,10 @@ describe('filtersFromSearch', () => {
     expect(parsed.counties).toEqual(new Set(['南投縣', '臺東縣']));
     expect(parsed.tiers).toEqual(new Set(['closed', 'critical']));
     expect(parsed.search).toBe('插角');
+  });
+
+  it('ignores view params, which belong to viewFromSearch (#478)', () => {
+    expect(filtersFromSearch('?z=13&closed=1')).toEqual(filters());
   });
 
   it('falls back to the default year when it is out of range or unparseable', () => {
@@ -85,15 +104,6 @@ describe('filtersFromSearch', () => {
     ).toBe('插角');
   });
 
-  it('reads closed=1 as excludeClosed: false', () => {
-    expect(filtersFromSearch('?closed=1').excludeClosed).toBe(false);
-  });
-
-  it('defaults excludeClosed to true when closed param is absent', () => {
-    expect(filtersFromSearch('').excludeClosed).toBe(true);
-    expect(filtersFromSearch('?year=120').excludeClosed).toBe(true);
-  });
-
   it('truncates an overlong q parameter to MAX_QUERY_LENGTH (#210)', () => {
     const overlong = '國'.repeat(MAX_QUERY_LENGTH + 50);
     const parsed = filtersFromSearch(`?q=${overlong}`);
@@ -107,10 +117,28 @@ describe('filtersFromSearch', () => {
     expect(parsed.search.length).toBe(MAX_QUERY_LENGTH);
     expect(parsed.search).toBe(exact);
   });
+});
+
+describe('viewFromSearch', () => {
+  it('returns defaults for an empty query string (#478)', () => {
+    expect(viewFromSearch('')).toEqual(view());
+  });
+
+  it('ignores filter params, which belong to filtersFromSearch (#478)', () => {
+    expect(viewFromSearch('?year=120&county=南投縣&tier=closed&q=插角')).toEqual(view());
+  });
+
+  it('reads closed=1 as excludeClosed: false', () => {
+    expect(viewFromSearch('?closed=1').excludeClosed).toBe(false);
+  });
+
+  it('defaults excludeClosed to true when closed param is absent', () => {
+    expect(viewFromSearch('').excludeClosed).toBe(true);
+    expect(viewFromSearch('?year=120').excludeClosed).toBe(true);
+  });
 
   it('reads z param as zoom level (#348)', () => {
-    const parsed = filtersFromSearch('?z=12');
-    expect(parsed.zoom).toBe(12);
+    expect(viewFromSearch('?z=12').zoom).toBe(12);
   });
 
   it('falls back to MAP.zoom for out-of-range or invalid z (#348)', () => {
@@ -123,22 +151,18 @@ describe('filtersFromSearch', () => {
       `?z=${MAP.maxZoom + 1}`,
     ];
     for (const query of invalid) {
-      expect(filtersFromSearch(query).zoom, query).toBe(MAP.zoom);
+      expect(viewFromSearch(query).zoom, query).toBe(MAP.zoom);
     }
   });
 
   it('accepts both ends of the zoom range (#348)', () => {
-    expect(
-      filtersFromSearch(`?z=${MAP.minZoom}`).zoom,
-    ).toBe(MAP.minZoom);
-    expect(
-      filtersFromSearch(`?z=${MAP.maxZoom}`).zoom,
-    ).toBe(MAP.maxZoom);
+    expect(viewFromSearch(`?z=${MAP.minZoom}`).zoom).toBe(MAP.minZoom);
+    expect(viewFromSearch(`?z=${MAP.maxZoom}`).zoom).toBe(MAP.maxZoom);
   });
 
   it('defaults zoom to MAP.zoom when z param is absent (#348)', () => {
-    expect(filtersFromSearch('').zoom).toBe(MAP.zoom);
-    expect(filtersFromSearch('?year=120').zoom).toBe(MAP.zoom);
+    expect(viewFromSearch('').zoom).toBe(MAP.zoom);
+    expect(viewFromSearch('?year=120').zoom).toBe(MAP.zoom);
   });
 });
 
@@ -181,6 +205,7 @@ describe('pruneCounties', () => {
 describe('searchFromFilters', () => {
   it('produces an empty string for pristine filters', () => {
     expect(searchFromFilters(filters())).toBe('');
+    expect(searchFromFilters(filters(), view())).toBe('');
   });
 
   it('omits the year when it is the default', () => {
@@ -219,16 +244,11 @@ describe('searchFromFilters', () => {
   });
 
   it('omits closed param when excludeClosed is true (default)', () => {
-    expect(searchFromFilters(filters())).toBe('');
-    expect(
-      searchFromFilters(filters({ excludeClosed: true })),
-    ).toBe('');
+    expect(searchFromFilters(filters(), view({ excludeClosed: true }))).toBe('');
   });
 
   it('adds closed=1 when excludeClosed is false', () => {
-    const query = searchFromFilters(
-      filters({ excludeClosed: false }),
-    );
+    const query = searchFromFilters(filters(), view({ excludeClosed: false }));
     expect(query).toContain('closed=1');
   });
 
@@ -240,19 +260,27 @@ describe('searchFromFilters', () => {
   });
 
   it('omits z when zoom is the default (#348)', () => {
-    expect(searchFromFilters(filters())).toBe('');
-    expect(
-      searchFromFilters(filters({ zoom: MAP.zoom })),
-    ).toBe('');
+    expect(searchFromFilters(filters(), view({ zoom: MAP.zoom }))).toBe('');
   });
 
   it('includes z when zoom differs from default (#348)', () => {
-    const query = searchFromFilters(filters({ zoom: 12 }));
+    const query = searchFromFilters(filters(), view({ zoom: 12 }));
     expect(query).toContain('z=12');
+  });
+
+  it('treats a missing view argument as the default view (#478)', () => {
+    expect(searchFromFilters(filters({ year: 120 }))).toBe(
+      searchFromFilters(filters({ year: 120 }), view()),
+    );
   });
 });
 
 describe('round trip', () => {
+  const roundTrip = (f, v = view()) => {
+    const query = searchFromFilters(f, v);
+    return { filters: filtersFromSearch(query), view: viewFromSearch(query) };
+  };
+
   it('survives a full set of filters', () => {
     const original = filters({
       year: 118,
@@ -261,66 +289,60 @@ describe('round trip', () => {
       search: '國小',
     });
 
-    expect(
-      filtersFromSearch(searchFromFilters(original)),
-    ).toEqual(original);
+    expect(roundTrip(original).filters).toEqual(original);
   });
 
   it('survives every tier individually', () => {
     for (const tier of RISK_TIERS) {
       const original = filters({ tiers: new Set([tier.id]) });
-      expect(
-        filtersFromSearch(searchFromFilters(original)),
-        tier.id,
-      ).toEqual(original);
+      expect(roundTrip(original).filters, tier.id).toEqual(original);
     }
   });
 
   it('survives a search term with a comma in it', () => {
     const original = filters({ search: '插角, 分校' });
-    expect(
-      filtersFromSearch(searchFromFilters(original)),
-    ).toEqual(original);
+    expect(roundTrip(original).filters).toEqual(original);
   });
 
   it('survives excludeClosed: false round trip', () => {
-    const original = filters({ excludeClosed: false });
-    const query = searchFromFilters(original);
-    expect(query).toContain('closed=1');
-    expect(filtersFromSearch(query)).toEqual(original);
+    const original = view({ excludeClosed: false });
+    expect(searchFromFilters(filters(), original)).toContain('closed=1');
+    expect(roundTrip(filters(), original).view).toEqual(original);
   });
 
   it('survives excludeClosed: true round trip (default, no param)', () => {
-    const original = filters({ excludeClosed: true });
-    const query = searchFromFilters(original);
-    expect(query).not.toContain('closed');
-    expect(filtersFromSearch(query)).toEqual(original);
+    const original = view({ excludeClosed: true });
+    expect(searchFromFilters(filters(), original)).not.toContain('closed');
+    expect(roundTrip(filters(), original).view).toEqual(original);
   });
 
   it('survives zoom level round trip (#348)', () => {
-    const original = filters({ zoom: 14 });
-    const query = searchFromFilters(original);
-    expect(query).toContain('z=14');
-    expect(filtersFromSearch(query)).toEqual(original);
+    const original = view({ zoom: 14 });
+    expect(searchFromFilters(filters(), original)).toContain('z=14');
+    expect(roundTrip(filters(), original).view).toEqual(original);
   });
 
   it('survives zoom at default round trip (no z param) (#348)', () => {
-    const original = filters({ zoom: MAP.zoom });
-    const query = searchFromFilters(original);
-    expect(query).not.toContain('z=');
-    expect(filtersFromSearch(query)).toEqual(original);
+    const original = view({ zoom: MAP.zoom });
+    expect(searchFromFilters(filters(), original)).not.toContain('z=');
+    expect(roundTrip(filters(), original).view).toEqual(original);
   });
 
   it('survives full filters including zoom (#348)', () => {
-    const original = filters({
+    const f = filters({
       year: 118,
       counties: new Set(['南投縣']),
       tiers: new Set(['critical']),
       search: '國小',
-      zoom: 15,
     });
-    expect(
-      filtersFromSearch(searchFromFilters(original)),
-    ).toEqual(original);
+    const v = view({ zoom: 15 });
+    expect(roundTrip(f, v)).toEqual({ filters: f, view: v });
+  });
+
+  it('keeps an existing shared link byte-for-byte identical (#478)', () => {
+    // A link produced before the split, with every parameter set.
+    const link = '?year=118&county=南投縣,臺東縣&tier=closed,high&q=國小&closed=1&z=13';
+    const reserialized = searchFromFilters(filtersFromSearch(link), viewFromSearch(link));
+    expect(decodeURIComponent(reserialized)).toBe(link);
   });
 });

@@ -7,8 +7,22 @@ import { BASE_YEAR, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
 /*  Mocks                                                              */
 /* ------------------------------------------------------------------ */
 
+const mocks = vi.hoisted(() => ({
+  useSchoolData: vi.fn(),
+  useUrlFilters: vi.fn(),
+  useGeoJson: vi.fn(),
+  filterSchools: vi.fn(),
+  summarize: vi.fn(),
+  tierFor: vi.fn(),
+  schoolMapProps: null,
+  summaryBarProps: null,
+}));
+
 vi.mock('./components/SchoolMap.jsx', () => ({
-  default: () => <div data-testid="school-map" />,
+  default: (props) => {
+    mocks.schoolMapProps = props;
+    return <div data-testid="school-map" />;
+  },
 }));
 
 vi.mock('./components/ControlPanel.jsx', () => ({
@@ -16,7 +30,10 @@ vi.mock('./components/ControlPanel.jsx', () => ({
 }));
 
 vi.mock('./components/SummaryBar.jsx', () => ({
-  default: () => <div data-testid="summary-bar" />,
+  default: (props) => {
+    mocks.summaryBarProps = props;
+    return <div data-testid="summary-bar" />;
+  },
 }));
 
 vi.mock('./components/Legend.jsx', () => ({
@@ -25,15 +42,6 @@ vi.mock('./components/Legend.jsx', () => ({
 
 vi.mock('./components/ErrorBoundary.jsx', () => ({
   default: ({ children }) => <div data-testid="error-boundary">{children}</div>,
-}));
-
-const mocks = vi.hoisted(() => ({
-  useSchoolData: vi.fn(),
-  useUrlFilters: vi.fn(),
-  useGeoJson: vi.fn(),
-  filterSchools: vi.fn(),
-  summarize: vi.fn(),
-  tierFor: vi.fn(),
 }));
 
 vi.mock('./hooks/useSchoolData.js', () => ({
@@ -63,12 +71,25 @@ const defaultFilters = {
   counties: new Set(),
   tiers: new Set(),
   search: '',
+};
+
+const defaultView = {
+  zoom: 7,
   excludeClosed: true,
 };
 
 const mockSetFilters = vi.fn();
 const mockResetFilters = vi.fn();
+const mockSetView = vi.fn();
 const mockReload = vi.fn();
+
+const urlFiltersReturn = (view = defaultView) => [
+  defaultFilters,
+  mockSetFilters,
+  mockResetFilters,
+  view,
+  mockSetView,
+];
 
 const defaultGeoJson = { status: 'ready', data: { type: 'FeatureCollection', features: [] }, error: null };
 
@@ -81,7 +102,7 @@ const setupLoading = () => {
     reload: mockReload,
   });
   mocks.useGeoJson.mockReturnValue(defaultGeoJson);
-  mocks.useUrlFilters.mockReturnValue([defaultFilters, mockSetFilters, mockResetFilters]);
+  mocks.useUrlFilters.mockReturnValue(urlFiltersReturn());
   mocks.filterSchools.mockReturnValue([]);
   mocks.summarize.mockReturnValue({});
   mocks.tierFor.mockReturnValue(null);
@@ -96,13 +117,13 @@ const setupError = (message = '\u8cc7\u6599\u8f09\u5165\u5931\u6557') => {
     reload: mockReload,
   });
   mocks.useGeoJson.mockReturnValue(defaultGeoJson);
-  mocks.useUrlFilters.mockReturnValue([defaultFilters, mockSetFilters, mockResetFilters]);
+  mocks.useUrlFilters.mockReturnValue(urlFiltersReturn());
   mocks.filterSchools.mockReturnValue([]);
   mocks.summarize.mockReturnValue({});
   mocks.tierFor.mockReturnValue(null);
 };
 
-const setupReady = ({ visible = [{ id: '1' }] } = {}) => {
+const setupReady = ({ visible = [{ id: '1' }], view = defaultView } = {}) => {
   mocks.useSchoolData.mockReturnValue({
     status: 'ready',
     schools: [{ id: '1' }],
@@ -111,7 +132,7 @@ const setupReady = ({ visible = [{ id: '1' }] } = {}) => {
     reload: mockReload,
   });
   mocks.useGeoJson.mockReturnValue(defaultGeoJson);
-  mocks.useUrlFilters.mockReturnValue([defaultFilters, mockSetFilters, mockResetFilters]);
+  mocks.useUrlFilters.mockReturnValue(urlFiltersReturn(view));
   mocks.filterSchools.mockReturnValue(visible);
   mocks.summarize.mockReturnValue({ total: 1 });
   mocks.tierFor.mockReturnValue(null);
@@ -124,6 +145,8 @@ const setupReady = ({ visible = [{ id: '1' }] } = {}) => {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.schoolMapProps = null;
+    mocks.summaryBarProps = null;
   });
 
   it('renders loading state with status message', () => {
@@ -212,6 +235,33 @@ describe('App', () => {
     render(<App />);
 
     expect(screen.queryByText(/\u76ee\u524d\u7684\u7be9\u9078\u689d\u4ef6\u6c92\u6709\u7b26\u5408\u7684\u5b78\u6821/)).toBeNull();
+  });
+
+  it('passes the filters object straight to filterSchools (#478)', () => {
+    setupReady();
+    render(<App />);
+
+    expect(mocks.filterSchools).toHaveBeenCalledWith([{ id: '1' }], defaultFilters);
+  });
+
+  it('feeds SchoolMap zoom from view and writes zoom changes back to view (#478)', () => {
+    setupReady({ view: { zoom: 13, excludeClosed: true } });
+    render(<App />);
+
+    expect(mocks.schoolMapProps.zoom).toBe(13);
+    mocks.schoolMapProps.onZoomChange(9);
+    expect(mockSetView).toHaveBeenCalledWith({ zoom: 9 });
+    expect(mockSetFilters).not.toHaveBeenCalled();
+  });
+
+  it('wires the closed-school toggle to view, not filters (#478)', () => {
+    setupReady({ view: { zoom: 7, excludeClosed: false } });
+    render(<App />);
+
+    expect(mocks.summaryBarProps.excludeClosed).toBe(false);
+    mocks.summaryBarProps.onToggleClosed();
+    expect(mockSetView).toHaveBeenCalledWith({ excludeClosed: true });
+    expect(mockSetFilters).not.toHaveBeenCalled();
   });
 
   it('renders the header title and subtitle', () => {
