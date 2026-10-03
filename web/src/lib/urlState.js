@@ -1,9 +1,19 @@
 /**
- * Filters <-> query string. Pure and dependency-free so it can be tested
- * without a browser, and so the URL format is defined in exactly one place.
+ * Filters + view state <-> query string. Pure and dependency-free so it can be
+ * tested without a browser, and so the URL format is defined in exactly one
+ * place.
  *
  * A map of public data is something people cite: "look at 南投縣 in 130". That
- * only works if the view is addressable, so the filter state lives in the URL.
+ * only works if the view is addressable, so this state lives in the URL.
+ *
+ * The URL carries two groups of state (#478):
+ * - filters (year, counties, tiers, search) decide which schools are counted.
+ *   "清除篩選" resets these.
+ * - view (zoom, excludeClosed) is how the user is looking at the result. It is
+ *   never touched by a filter reset, and changing it must not re-run
+ *   filterSchools.
+ * Keeping them in separate objects means a reset or a new filter field cannot
+ * accidentally clobber view state (#472).
  */
 import { MAP, MAX_QUERY_LENGTH, PROJECTION_YEARS, RISK_TIERS } from '../config/index.js';
 
@@ -19,8 +29,12 @@ export const defaultFilters = () => ({
   counties: new Set(),
   tiers: new Set(),
   search: '',
-  excludeClosed: true,
+});
+
+/** The default view: island-wide zoom, zero-out schools hidden. */
+export const defaultView = () => ({
   zoom: MAP.zoom,
+  excludeClosed: true,
 });
 
 /** Multi-value params are comma separated; empty means "no filter". */
@@ -49,16 +63,27 @@ export const filtersFromSearch = (search) => {
   // deep links and avoid exceeding browser URL length limits (#210).
   const rawQ = params.get('q')?.trim() ?? '';
 
-  // Zoom level from `z` param, validated against MAP bounds (#348).
-  const z = Number.parseInt(params.get('z'), 10);
-
   return {
     year: Number.isInteger(year) && year >= MIN_YEAR && year <= MAX_YEAR ? year : DEFAULT_YEAR,
     counties: new Set(counties),
     tiers: new Set(splitList(params.get('tier')).filter((tier) => VALID_TIERS.has(tier))),
     search: rawQ.slice(0, MAX_QUERY_LENGTH),
-    excludeClosed: params.get('closed') !== '1',
+  };
+};
+
+/**
+ * Reads view state out of a query string. Same fallback rules as
+ * filtersFromSearch: anything malformed becomes the default.
+ */
+export const viewFromSearch = (search) => {
+  const params = new URLSearchParams(search);
+
+  // Zoom level from `z` param, validated against MAP bounds (#348).
+  const z = Number.parseInt(params.get('z'), 10);
+
+  return {
     zoom: Number.isInteger(z) && z >= MAP.minZoom && z <= MAP.maxZoom ? z : MAP.zoom,
+    excludeClosed: params.get('closed') !== '1',
   };
 };
 
@@ -77,10 +102,14 @@ export const pruneCounties = (filters, knownCounties) => {
 };
 
 /**
- * Serializes filters back to a query string, omitting anything left at its
- * default so a pristine view has a clean URL.
+ * Serializes filters and view back to a single query string, omitting
+ * anything left at its default so a pristine view has a clean URL.
+ *
+ * Both groups go through this one function so the parameter order stays
+ * fixed (year, county, tier, q, closed, z) and existing links keep producing
+ * the same URL.
  */
-export const searchFromFilters = (filters) => {
+export const searchFromFilters = (filters, view = defaultView()) => {
   const params = new URLSearchParams();
 
   if (filters.year !== DEFAULT_YEAR) params.set('year', String(filters.year));
@@ -97,8 +126,8 @@ export const searchFromFilters = (filters) => {
   // (e.g. programmatic update), the serialized URL stays bounded (#210).
   const trimmed = filters.search.trim();
   if (trimmed) params.set('q', trimmed.slice(0, MAX_QUERY_LENGTH));
-  if (!filters.excludeClosed) params.set('closed', '1');
-  if (filters.zoom != null && filters.zoom !== MAP.zoom) params.set('z', String(filters.zoom));
+  if (!view.excludeClosed) params.set('closed', '1');
+  if (view.zoom != null && view.zoom !== MAP.zoom) params.set('z', String(view.zoom));
 
   const query = params.toString();
   return query ? `?${query}` : '';

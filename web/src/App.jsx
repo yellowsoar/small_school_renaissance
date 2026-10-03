@@ -25,7 +25,10 @@ export default function App() {
   // useUrlFilters re-validate the URL's counties exactly once.
   const countySet = useMemo(() => (counties.length ? new Set(counties) : null), [counties]);
 
-  const [filters, setFilters, resetFilters] = useUrlFilters(countySet);
+  // filters and view are separate objects (#478): zoom changes (every
+  // scroll/pinch) and the excludeClosed toggle only produce a new `view`,
+  // so they never trigger filterSchools (#348, #364).
+  const [filters, setFilters, resetFilters, view, setView] = useUrlFilters(countySet);
   const [layers, setLayers] = useReducer(merge, {
     heatmap: true,
     markers: true,
@@ -34,22 +37,7 @@ export default function App() {
   });
   const [panelOpen, setPanelOpen] = useState(true);
 
-  // Exclude zoom and excludeClosed from the data-filtering dependency so
-  // that zoom changes (which happen on every scroll/pinch) and
-  // excludeClosed toggles never trigger filterSchools (#348, #364).
-  // excludeClosed is not consumed by filterSchools(); its filtering is
-  // handled by the downstream `visible` memo.
-  const dataFilters = useMemo(
-    () => ({
-      year: filters.year,
-      counties: filters.counties,
-      tiers: filters.tiers,
-      search: filters.search,
-    }),
-    [filters.year, filters.counties, filters.tiers, filters.search],
-  );
-
-  const filtered = useMemo(() => filterSchools(schools, dataFilters), [schools, dataFilters]);
+  const filtered = useMemo(() => filterSchools(schools, filters), [schools, filters]);
 
   // Count closed-tier schools before the excludeClosed toggle is applied,
   // so the toggle button always shows how many zero-out schools exist.
@@ -65,13 +53,13 @@ export default function App() {
   // Apply the excludeClosed toggle as a secondary filter (#144).
   const visible = useMemo(
     () =>
-      filters.excludeClosed
+      view.excludeClosed
         ? filtered.filter((s) => {
             const tier = tierFor(s.projections?.get(filters.year));
             return !tier || tier.id !== 'closed';
           })
         : filtered,
-    [filtered, filters.year, filters.excludeClosed],
+    [filtered, filters.year, view.excludeClosed],
   );
 
   const totals = useMemo(() => summarize(visible, filters.year), [visible, filters.year]);
@@ -81,7 +69,7 @@ export default function App() {
     [countyBoundary.data],
   );
 
-  const handleZoomChange = useCallback((z) => setFilters({ zoom: z }), [setFilters]);
+  const handleZoomChange = useCallback((z) => setView({ zoom: z }), [setView]);
 
   return (
     <div className="app" data-panel={panelOpen ? 'open' : 'closed'}>
@@ -101,9 +89,9 @@ export default function App() {
             totals={totals}
             year={filters.year}
             closingCount={closingCount}
-            excludeClosed={filters.excludeClosed}
+            excludeClosed={view.excludeClosed}
             onToggleClosed={() =>
-              setFilters({ excludeClosed: !filters.excludeClosed })
+              setView({ excludeClosed: !view.excludeClosed })
             }
           />
         )}
@@ -143,7 +131,7 @@ export default function App() {
               year={filters.year}
               layers={layers}
               overlayData={overlayData}
-              zoom={filters.zoom}
+              zoom={view.zoom}
               onZoomChange={handleZoomChange}
               search={filters.search}
             />
