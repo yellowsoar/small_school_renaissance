@@ -52,9 +52,9 @@ export async function fetchWithRetry(
   return withRetry(
     async () => {
       const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
-      classifyResponse(res);
-      const contentType = res.headers.get('content-type') ?? '';
-      const body = await readBodyWithLimit(res, maxBytes);
+      const checkedRes = classifyResponse(res);
+      const contentType = checkedRes.headers.get('content-type') ?? '';
+      const body = await readBodyWithLimit(checkedRes, maxBytes);
       return { body, contentType };
     },
     {
