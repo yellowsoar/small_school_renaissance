@@ -14,10 +14,24 @@
  * #root element's content with a warning and throws to halt module
  * evaluation (preventing React from mounting).
  *
+ * The `window.top === window.self` comparison is wrapped in try-catch as
+ * a defensive measure only: per the HTML spec, `top` and `self` are
+ * cross-origin accessible and should never throw. If a non-conforming
+ * environment does throw, the page is treated as framed (fail-closed).
+ * See #467.
+ *
  * @throws {Error} If the page is loaded in a frame.
  */
 export function enforceTopFrame() {
-  if (window.top === window.self) return;
+  let isTop = false;
+  try {
+    isTop = window.top === window.self;
+  } catch {
+    // Per HTML spec, `top`/`self` are cross-origin accessible and should
+    // not throw. Defensive guard for non-conforming environments:
+    // treat any access failure as framed (fail-closed). See #467.
+  }
+  if (isTop) return;
 
   const root = document.getElementById('root');
   if (root) {
