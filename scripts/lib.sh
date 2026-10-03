@@ -115,7 +115,9 @@ validate_csv_header() {
 # Convert the first available spreadsheet (ods > xlsx > xls) to CSV.
 # Tries all available formats in priority order; stops at the first
 # successful conversion.  Previously stopped at the first failure (#261).
-# Skips if CSV already exists. soffice supports all three formats.
+# Skips if CSV already exists and is not older than any spreadsheet
+# source; a stale CSV (older than a re-downloaded ods/xlsx/xls) is
+# removed and re-converted (#473). soffice supports all three formats.
 # Requires NAME_DIR to be set by the caller.
 #
 # Return codes (#85):
@@ -129,6 +131,24 @@ validate_csv_header() {
 convert_to_csv_if_needed() {
 	local base="$1"
 	local csv_path="./${NAME_DIR:?NAME_DIR not set}/${base}.csv"
+	local ext src
+
+	# Stale-CSV check (#473): atomic_download() rewrites spreadsheets on
+	# every run and stamps them with the download time, so a CSV converted
+	# on a previous run is older than its re-downloaded source.  Remove
+	# it so the conversion below regenerates it.  Direct-download CSVs are
+	# unaffected: csv is last in NAME_EXT, so it is always written after
+	# the spreadsheets.
+	if [ -f "$csv_path" ]; then
+		for ext in ods xlsx xls; do
+			src="./${NAME_DIR}/${base}.${ext}"
+			if [ -f "$src" ] && [ "$src" -nt "$csv_path" ]; then
+				echo "ℹ️  ${csv_path} is older than ${src}, re-converting (#473)"
+				rm -f "$csv_path"
+				break
+			fi
+		done
+	fi
 
 	if [ -f "$csv_path" ]; then
 		# Direct-download CSV: validate header and row integrity (#363)
@@ -151,7 +171,6 @@ convert_to_csv_if_needed() {
 	fi
 
 	local tried=0
-	local ext src
 	for ext in ods xlsx xls; do
 		src="./${NAME_DIR}/${base}.${ext}"
 		if [ -f "$src" ]; then
@@ -336,6 +355,10 @@ download_file() {
 # Guard mv -f inside its own if to prevent silent success when rename
 # fails (disk full, permissions, cross-FS); cleans up temp file on
 # failure and reports the real error (#344).
+# After the rename, the final file's mtime is reset to "now": wget
+# copies the server's Last-Modified header onto the -O output by
+# default, but convert_to_csv_if_needed() relies on mtime meaning
+# "downloaded on this run" to detect stale converted CSVs (#473).
 # Usage: atomic_download <url> <final_path> [expected_hash]
 atomic_download() {
 	local url="$1" final="$2" expected_hash="${3:-}"
@@ -346,6 +369,7 @@ atomic_download() {
 		&& validate_not_html "$tmp" \
 		&& validate_checksum "$tmp" "$expected_hash"; then
 		if mv -f "$tmp" "$final"; then
+			touch "$final"
 			return 0
 		else
 			local rc=$?
