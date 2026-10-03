@@ -71,9 +71,21 @@ export function useUrlFilters(knownCounties = null) {
     [],
   );
 
-  /** Clears the filters but keeps the year the user chose. */
+  /**
+   * Clears the filters but keeps the year and the view state the user chose.
+   * Zoom and the "推估歸零" toggle are view preferences, not filters: neither
+   * counts toward ControlPanel's hasFilters, and App.jsx keeps both out of
+   * dataFilters (#348, #364). Resetting them would yank the map back to the
+   * island-wide view and flip the closed-school toggle behind the user (#472).
+   */
   const reset = useCallback(
-    () => setFilters((current) => ({ ...defaultFilters(), year: current.year })),
+    () =>
+      setFilters((current) => ({
+        ...defaultFilters(),
+        year: current.year,
+        zoom: current.zoom,
+        excludeClosed: current.excludeClosed,
+      })),
     [],
   );
 
