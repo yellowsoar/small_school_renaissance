@@ -126,6 +126,27 @@ describe('useUrlFilters', () => {
     expect(result.current[0].search).toBe('');
   });
 
+  it('reset keeps zoom and the closed-school toggle (#472)', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?z=13&county=%E8%87%BA%E5%8C%97%E5%B8%82&q=test&closed=1',
+    );
+
+    const { result } = renderHook(() => useUrlFilters());
+
+    act(() => {
+      const [, , reset] = result.current;
+      reset();
+    });
+
+    expect(result.current[0].zoom).toBe(13);
+    expect(result.current[0].excludeClosed).toBe(false);
+    expect(result.current[0].counties.size).toBe(0);
+    expect(result.current[0].search).toBe('');
+    expect(window.location.search).toBe('?closed=1&z=13');
+  });
+
   it('prunes unknown counties when knownCounties is provided', async () => {
     window.history.replaceState(
       null,
