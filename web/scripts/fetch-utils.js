@@ -39,34 +39,88 @@ const PREVIEW_SAMPLE_COUNT = 3;
  * When `maxBytes` is provided (defaults to 10 MB), the response body
  * size is enforced via streaming read with early abort (#259).
  *
+ * On failure, the thrown error is annotated with `attempts` (how many
+ * requests were actually made) and `timeoutMs` (the per-attempt timeout
+ * in effect) so callers can report what really happened instead of
+ * assuming every retry was used (#470).  See `formatDownloadError()`.
+ *
  * @param {string} url - URL to fetch
  * @param {{ retries?: number, timeout?: number, maxBytes?: number }} options
  * @returns {Promise<{ body: string, contentType: string }>} The response
  *   body text and Content-Type header value (empty string when absent)
- * @throws {Error|DOMException} After all retries are exhausted
+ * @throws {Error|DOMException} After all retries are exhausted, or
+ *   immediately for non-retriable errors; carries `attempts` and
+ *   `timeoutMs` properties
  */
 export async function fetchWithRetry(
   url,
   { retries = DEFAULT_RETRIES, timeout = DEFAULT_TIMEOUT_MS, maxBytes = MAX_CSV_BYTES } = {},
 ) {
-  return withRetry(
-    async () => {
-      const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
-      const checkedRes = classifyResponse(res);
-      const contentType = checkedRes.headers.get('content-type') ?? '';
-      const body = await readBodyWithLimit(checkedRes, maxBytes);
-      return { body, contentType };
-    },
-    {
-      retries,
-      onRetry: (attempt, err, delay) => {
-        const label = err.name === 'TimeoutError' ? 'timeout' : err.message;
-        console.warn(
-          `\u26a0\ufe0f  attempt ${attempt + 1}/${retries + 1} failed (${label}), retrying in ${Math.round(delay)}ms\u2026`,
-        );
+  let attempts = 0;
+  try {
+    return await withRetry(
+      async (attempt) => {
+        attempts = attempt + 1;
+        const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
+        const checkedRes = classifyResponse(res);
+        const contentType = checkedRes.headers.get('content-type') ?? '';
+        const body = await readBodyWithLimit(checkedRes, maxBytes);
+        return { body, contentType };
       },
-    },
-  );
+      {
+        retries,
+        onRetry: (attempt, err, delay) => {
+          const label = err.name === 'TimeoutError' ? 'timeout' : err.message;
+          console.warn(
+            `\u26a0\ufe0f  attempt ${attempt + 1}/${retries + 1} failed (${label}), retrying in ${Math.round(delay)}ms\u2026`,
+          );
+        },
+      },
+    );
+  } catch (err) {
+    // Record the real attempt count and timeout on the error (#470).
+    // withRetry() stops early for non-retriable errors (4xx,
+    // SizeLimitError, oversized Retry-After), so "retries + 1" is not
+    // a safe assumption.
+    if (err !== null && typeof err === 'object' && Object.isExtensible(err)) {
+      Object.assign(err, { attempts, timeoutMs: timeout });
+    }
+    throw err;
+  }
+}
+
+/**
+ * Format a one-line diagnostic for a failed `fetchWithRetry()` call.
+ *
+ * Uses the `attempts` and `timeoutMs` values recorded on the error by
+ * `fetchWithRetry()` rather than hardcoded numbers, and flags
+ * non-retriable failures so a 404 from a mistyped DATA_PATH is not
+ * mistaken for a flaky network (#470).
+ *
+ * @param {Error|DOMException} err - Error thrown by `fetchWithRetry()`
+ * @param {string} [label='download'] - What was being downloaded
+ * @returns {string} e.g. "download failed after 1 attempt (non-retriable):
+ *   HTTP 404 Not Found", prefixed with a cross-mark emoji
+ */
+export function formatDownloadError(err, label = 'download') {
+  let detail;
+  if (err?.name === 'TimeoutError') {
+    detail = Number.isFinite(err.timeoutMs)
+      ? `timeout after ${err.timeoutMs / 1000}s`
+      : 'timeout';
+  } else {
+    detail = err?.message ?? String(err);
+  }
+
+  let context = '';
+  if (Number.isInteger(err?.attempts) && err.attempts > 0) {
+    context += ` after ${err.attempts} attempt${err.attempts === 1 ? '' : 's'}`;
+  }
+  if (err?.retriable === false) {
+    context += ' (non-retriable)';
+  }
+
+  return `\u274c ${label} failed${context}: ${detail}`;
 }
 
 /* ------------------------------------------------------------------ */
