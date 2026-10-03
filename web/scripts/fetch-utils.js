@@ -220,7 +220,13 @@ export function validateCsvContent(
  */
 export function summarizeCsvForReview(body) {
   try {
-    const { data } = Papa.parse(body, { header: true, skipEmptyLines: true });
+    // Trim header whitespace so lookups stay aligned with parseSchools()
+    // and validateCsvContent(), which both normalize headers (#468).
+    const { data } = Papa.parse(body, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.trim(),
+    });
 
     if (!data || data.length === 0) {
       return null;

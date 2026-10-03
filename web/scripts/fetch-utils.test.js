@@ -776,4 +776,24 @@ describe('summarizeCsvForReview', () => {
     expect(result).not.toBeNull();
     expect(result.sampleSchools[0]).toEqual({ name: '\u7121\u7e23\u5e02\u570b\u5c0f', county: '' });
   });
+
+  /* -------------------------------------------------------------- */
+  /*  Header whitespace normalization (#468)                          */
+  /* -------------------------------------------------------------- */
+
+  it('trims whitespace-padded headers like parseSchools() (#468)', () => {
+    const paddedHeader = ALL_COLUMNS.map((col) => ` ${col} `).join(',');
+    const csv = [paddedHeader, makeRow('\u5927\u540c\u570b\u5c0f', '\u81fa\u5317\u5e02', '25.05', '121.52')].join('\n');
+
+    const result = summarizeCsvForReview(csv);
+
+    expect(result).not.toBeNull();
+    expect(result.sampleSchools).toEqual([{ name: '\u5927\u540c\u570b\u5c0f', county: '\u81fa\u5317\u5e02' }]);
+    expect(result.coordinateBounds).toEqual({
+      latMin: 25.05,
+      latMax: 25.05,
+      lonMin: 121.52,
+      lonMax: 121.52,
+    });
+  });
 });
