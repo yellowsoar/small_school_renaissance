@@ -327,6 +327,68 @@ MOCK
   [ -f "$NAME_DIR/valid.csv" ]
 }
 
+# ── convert_to_csv_if_needed: stale CSV re-conversion (#473) ────
+
+@test "convert_to_csv_if_needed: re-converts when spreadsheet is newer than CSV (#473)" {
+  mkdir -p "$TEST_TMPDIR/bin"
+  cat > "$TEST_TMPDIR/bin/soffice" <<'MOCK'
+#!/usr/bin/env bash
+prev=""
+outdir=""
+src=""
+for arg in "$@"; do
+  if [ "$prev" = "--outdir" ]; then
+    outdir="$arg"
+  fi
+  prev="$arg"
+  src="$arg"
+done
+base=$(basename "$src")
+base="${base%.*}.csv"
+printf "學校代碼,學校名稱,縣市名稱,緯度,經度\nNEW001,新版國小,臺北市,25.05,121.51\n" > "${outdir}/${base}"
+MOCK
+  chmod +x "$TEST_TMPDIR/bin/soffice"
+  export PATH="$TEST_TMPDIR/bin:$PATH"
+
+  # CSV converted on a previous run (old mtime) ...
+  printf '學校代碼,學校名稱,縣市名稱,緯度,經度\nOLD001,舊版國小,臺北市,25.05,121.51\n' > "$NAME_DIR/stale.csv"
+  # touch -t is POSIX (works on GNU and BSD/macOS, unlike -d) (#39)
+  touch -t 200001010000 "$NAME_DIR/stale.csv"
+  # ... and a spreadsheet re-downloaded on this run (current mtime)
+  echo "dummy" > "$NAME_DIR/stale.xls"
+
+  run convert_to_csv_if_needed "stale"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"re-converting"* ]]
+  grep -q "NEW001" "$NAME_DIR/stale.csv"
+  ! grep -q "OLD001" "$NAME_DIR/stale.csv"
+}
+
+@test "convert_to_csv_if_needed: keeps CSV newer than spreadsheet without converting (#473)" {
+  mkdir -p "$TEST_TMPDIR/bin"
+  # soffice must not be invoked: fail loudly if it is
+  cat > "$TEST_TMPDIR/bin/soffice" <<'MOCK'
+#!/usr/bin/env bash
+echo "soffice should not be called" >&2
+exit 1
+MOCK
+  chmod +x "$TEST_TMPDIR/bin/soffice"
+  export PATH="$TEST_TMPDIR/bin:$PATH"
+
+  # Spreadsheet downloaded earlier in the run (old mtime) ...
+  echo "dummy" > "$NAME_DIR/fresh.xls"
+  touch -t 200001010000 "$NAME_DIR/fresh.xls"
+  # ... and a direct-download CSV written after it (current mtime)
+  printf '學校代碼,學校名稱,縣市名稱,緯度,經度\nA001,大同國小,臺北市,25.05,121.51\n' > "$NAME_DIR/fresh.csv"
+
+  run convert_to_csv_if_needed "fresh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Direct-download CSV validated"* ]]
+  [[ "$output" != *"re-converting"* ]]
+  [[ "$output" != *"soffice should not be called"* ]]
+  grep -q "A001" "$NAME_DIR/fresh.csv"
+}
+
 # ── validate_not_html (#163) ───────────────────────────────────────────────
 
 @test "validate_not_html: detects HTML file and deletes it (#163)" {
@@ -408,6 +470,19 @@ MOCK
   local leftover
   leftover=$(find "$TEST_TMPDIR/$NAME_DIR" -name 'test_file.ods.*' | wc -l)
   [ "$leftover" -eq 0 ]
+}
+
+@test "atomic_download: resets mtime so server Last-Modified does not leak through (#473)" {
+  # wget copies the server's Last-Modified onto -O output by default;
+  # simulate that with an old mtime on the temp file.
+  download_file() { printf 'name,age\nAlice,30\n' > "$2"; touch -t 200001010000 "$2"; }
+  export -f download_file
+
+  local final_path="$TEST_TMPDIR/$NAME_DIR/fresh_mtime.xls"
+  touch -t 200501010000 "$TEST_TMPDIR/reference"
+  run atomic_download "http://example.com/test.xls" "$final_path"
+  [ "$status" -eq 0 ]
+  [ "$final_path" -nt "$TEST_TMPDIR/reference" ]
 }
 
 # ── check_file (#241) ──────────────────────────────────────────────────────
