@@ -48,4 +48,18 @@ describe('enforceTopFrame', () => {
 
     expect(() => enforceTopFrame()).toThrow('frame');
   });
+
+  // Regression test for #467: defensive guard against non-conforming
+  // environments where reading window.top throws.
+  it('treats a throwing window.top access as framed (fail-closed)', () => {
+    Object.defineProperty(window, 'top', {
+      get() {
+        throw new DOMException('Blocked', 'SecurityError');
+      },
+      configurable: true,
+    });
+
+    expect(() => enforceTopFrame()).toThrow('frame');
+    expect(root.textContent).toBe('此頁面不支援嵌入顯示');
+  });
 });
