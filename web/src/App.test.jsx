@@ -237,6 +237,28 @@ describe('App', () => {
     expect(screen.queryByText(/\u76ee\u524d\u7684\u7be9\u9078\u689d\u4ef6\u6c92\u6709\u7b26\u5408\u7684\u5b78\u6821/)).toBeNull();
   });
 
+  it('points at the closed-school toggle when every match is a hidden zero-out school (#481)', () => {
+    setupReady({ visible: [{ id: '1', projections: new Map([[130, 0]]) }] });
+    mocks.tierFor.mockReturnValue({ id: 'closed' });
+    render(<App />);
+
+    expect(screen.queryByText(/\u76ee\u524d\u7684\u7be9\u9078\u689d\u4ef6\u6c92\u6709\u7b26\u5408\u7684\u5b78\u6821/)).toBeNull();
+    expect(screen.getByText(/\u7686\u70ba\u63a8\u4f30\u6b78\u96f6\uff0c\u76ee\u524d\u5df2\u96b1\u85cf/)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('\u986f\u793a\u63a8\u4f30\u6b78\u96f6\u5b78\u6821'));
+    expect(mockSetView).toHaveBeenCalledWith({ excludeClosed: false });
+    expect(mockResetFilters).not.toHaveBeenCalled();
+  });
+
+  it('keeps the filter empty state when no school matches the filters at all (#481)', () => {
+    setupReady({ visible: [] });
+    mocks.tierFor.mockReturnValue({ id: 'closed' });
+    render(<App />);
+
+    expect(screen.getByText(/\u76ee\u524d\u7684\u7be9\u9078\u689d\u4ef6\u6c92\u6709\u7b26\u5408\u7684\u5b78\u6821/)).toBeTruthy();
+    expect(screen.queryByText('\u986f\u793a\u63a8\u4f30\u6b78\u96f6\u5b78\u6821')).toBeNull();
+  });
+
   it('passes the filters object straight to filterSchools (#478)', () => {
     setupReady();
     render(<App />);
