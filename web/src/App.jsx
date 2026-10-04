@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { BASE_YEAR, COUNTY_BOUNDARY_URL, OVERLAY_LAYERS, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
 import { filterSchools, summarize, tierFor } from './lib/schools.js';
+import { integer } from './lib/formatters.js';
 import { useSchoolData } from './hooks/useSchoolData.js';
 import { useGeoJson } from './hooks/useGeoJson.js';
 import { useUrlFilters } from './hooks/useUrlFilters.js';
@@ -149,18 +150,34 @@ export default function App() {
               </div>
             )}
 
-            {visible.length === 0 && (
-              <p className="stage__empty" role="status">
-                目前的篩選條件沒有符合的學校。
-                <button
-                  type="button"
-                  className="stage__empty-reset"
-                  onClick={resetFilters}
-                >
-                  清除篩選
-                </button>
-              </p>
-            )}
+            {visible.length === 0 &&
+              (filtered.length > 0 ? (
+                // Schools do match the filters, but every one of them is a
+                // zero-out school hidden by the "推估歸零" toggle. Point at
+                // the toggle instead of the filters: clearing the filters
+                // would only throw away the tier the user just picked (#481).
+                <p className="stage__empty" role="status">
+                  符合條件的 {integer.format(filtered.length)} 所學校皆為推估歸零，目前已隱藏。
+                  <button
+                    type="button"
+                    className="stage__empty-reset"
+                    onClick={() => setView({ excludeClosed: false })}
+                  >
+                    顯示推估歸零學校
+                  </button>
+                </p>
+              ) : (
+                <p className="stage__empty" role="status">
+                  目前的篩選條件沒有符合的學校。
+                  <button
+                    type="button"
+                    className="stage__empty-reset"
+                    onClick={resetFilters}
+                  >
+                    清除篩選
+                  </button>
+                </p>
+              ))}
 
             <aside id="sidebar" className="sidebar" inert={!panelOpen || undefined}>
               <ControlPanel
