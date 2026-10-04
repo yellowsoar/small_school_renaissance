@@ -14,13 +14,24 @@ describe('useUrlFilters', () => {
 
   it('returns default filters from a clean URL', () => {
     const { result } = renderHook(() => useUrlFilters());
-    const [filters] = result.current;
+    const [filters, , , view] = result.current;
 
     expect(filters.year).toBe(130);
     expect(filters.counties.size).toBe(0);
     expect(filters.tiers.size).toBe(0);
     expect(filters.search).toBe('');
-    expect(filters.zoom).toBe(MAP.zoom);
+    expect(view.zoom).toBe(MAP.zoom);
+    expect(view.excludeClosed).toBe(true);
+  });
+
+  it('keeps view state out of the filters object (#478)', () => {
+    window.history.replaceState(null, '', '/?z=13&closed=1');
+
+    const { result } = renderHook(() => useUrlFilters());
+    const [filters] = result.current;
+
+    expect(filters).not.toHaveProperty('zoom');
+    expect(filters).not.toHaveProperty('excludeClosed');
   });
 
   it('reads initial state from URL query params', () => {
@@ -140,11 +151,50 @@ describe('useUrlFilters', () => {
       reset();
     });
 
-    expect(result.current[0].zoom).toBe(13);
-    expect(result.current[0].excludeClosed).toBe(false);
+    expect(result.current[3].zoom).toBe(13);
+    expect(result.current[3].excludeClosed).toBe(false);
     expect(result.current[0].counties.size).toBe(0);
     expect(result.current[0].search).toBe('');
     expect(window.location.search).toBe('?closed=1&z=13');
+  });
+
+  it('reset does not produce a new view object (#478)', () => {
+    window.history.replaceState(null, '', '/?z=13&q=test');
+
+    const { result } = renderHook(() => useUrlFilters());
+    const viewBefore = result.current[3];
+
+    act(() => {
+      const [, , reset] = result.current;
+      reset();
+    });
+
+    expect(result.current[3]).toBe(viewBefore);
+  });
+
+  it('updateView() does not produce a new filters object (#478)', () => {
+    const { result } = renderHook(() => useUrlFilters());
+    const filtersBefore = result.current[0];
+
+    act(() => {
+      const [, , , , updateView] = result.current;
+      updateView({ zoom: 12 });
+    });
+
+    expect(result.current[3].zoom).toBe(12);
+    expect(result.current[0]).toBe(filtersBefore);
+  });
+
+  it('keeps both groups in the URL when they change in the same tick (#478)', () => {
+    const { result } = renderHook(() => useUrlFilters());
+
+    act(() => {
+      const [, update, , , updateView] = result.current;
+      update({ year: 118 });
+      updateView({ zoom: 12, excludeClosed: false });
+    });
+
+    expect(window.location.search).toBe('?year=118&closed=1&z=12');
   });
 
   it('prunes unknown counties when knownCounties is provided', async () => {
@@ -176,6 +226,18 @@ describe('useUrlFilters', () => {
     expect(result.current[0].search).toBe('烏來');
   });
 
+  it('restores filters and view together on popstate (#478)', () => {
+    const { result } = renderHook(() => useUrlFilters());
+
+    window.history.replaceState(null, '', '/?year=118&closed=1&z=12');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(result.current[0].year).toBe(118);
+    expect(result.current[3]).toEqual({ zoom: 12, excludeClosed: false });
+  });
+
   it('survives replaceState throwing SecurityError without losing filter state (#210)', () => {
     const { result } = renderHook(() => useUrlFilters());
 
@@ -185,15 +247,17 @@ describe('useUrlFilters', () => {
       throw new DOMException('SecurityError');
     });
 
-    // Updating filters should not throw, even though replaceState does.
+    // Updating should not throw, even though replaceState does.
     act(() => {
-      const [, update] = result.current;
+      const [, update, , , updateView] = result.current;
       update({ year: 118, search: '插角' });
+      updateView({ zoom: 12 });
     });
 
-    // In-memory filter state is preserved.
+    // In-memory state is preserved.
     expect(result.current[0].year).toBe(118);
     expect(result.current[0].search).toBe('插角');
+    expect(result.current[3].zoom).toBe(12);
 
     // Restore for other tests.
     window.history.replaceState = original;
@@ -225,11 +289,11 @@ describe('useUrlFilters', () => {
     const { result } = renderHook(() => useUrlFilters());
 
     act(() => {
-      const [, update] = result.current;
-      update({ zoom: 12 });
+      const [, , , , updateView] = result.current;
+      updateView({ zoom: 12 });
     });
 
-    expect(result.current[0].zoom).toBe(12);
+    expect(result.current[3].zoom).toBe(12);
     expect(window.location.search).toContain('z=12');
   });
 
@@ -237,8 +301,8 @@ describe('useUrlFilters', () => {
     const { result } = renderHook(() => useUrlFilters());
 
     act(() => {
-      const [, update] = result.current;
-      update({ zoom: MAP.zoom });
+      const [, , , , updateView] = result.current;
+      updateView({ zoom: MAP.zoom });
     });
 
     expect(window.location.search).toBe('');
@@ -248,9 +312,9 @@ describe('useUrlFilters', () => {
     window.history.replaceState(null, '', '/?z=14');
 
     const { result } = renderHook(() => useUrlFilters());
-    const [filters] = result.current;
+    const [, , , view] = result.current;
 
-    expect(filters.zoom).toBe(14);
+    expect(view.zoom).toBe(14);
   });
 
   it('syncs zoom on popstate navigation (#348)', () => {
@@ -261,6 +325,6 @@ describe('useUrlFilters', () => {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
 
-    expect(result.current[0].zoom).toBe(15);
+    expect(result.current[3].zoom).toBe(15);
   });
 });
