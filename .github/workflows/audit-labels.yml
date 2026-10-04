@@ -1,0 +1,21 @@
+name: Audit label sync
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Sync audit labels
+        run: |
+          gh label create "severity:critical" --color b60205 --description "Priority 9 (Impact 3 x Confidence 3)" --force
+          gh label create "severity:high" --color d93f0b --description "Priority 6" --force
+          gh label create "severity:medium" --color fbca04 --description "Priority 4" --force
+          gh label create "severity:low" --color 0e8a16 --description "Priority 1-3, only via --force" --force
+          gh label create "audit:repo-auditor" --color bfdadc --description "Created by DEV-REPO-AUDITOR skill" --force
