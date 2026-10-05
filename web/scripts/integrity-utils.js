@@ -126,14 +126,30 @@ export async function runIntegrityFlow({
   previewFn,
 }) {
   /**
+   * True only when both stdin and stdout are TTYs (#483).
+   *
+   * The prompt writes to stdout but reads from stdin, so both ends must be
+   * attached to a terminal.  Checking stdout alone let `docker run -t`
+   * (without -i) or `npm run dev < /dev/null` reach rl.question() with no
+   * way to answer: the promise never settled and Node exited with code 13
+   * on the unsettled top-level await.
+   *
+   * @returns {boolean}
+   */
+  const isInteractive = () =>
+    Boolean(process.stdin.isTTY && process.stdout.isTTY);
+
+  /**
    * Prompt for explicit opt-in before auto-trusting downloaded data (#383).
    *
    * Returns true immediately when:
    * - --trust-first flag is set (explicit automation opt-in)
    *
    * Returns false (fail-closed) when:
-   * - stdout is not a TTY (non-interactive: Docker, piped scripts, etc.)
-   *   Use --trust-first for explicit opt-in in these environments (#450).
+   * - stdin or stdout is not a TTY (non-interactive: Docker, piped scripts,
+   *   stdin redirected from /dev/null, etc.)
+   *   Use --trust-first for explicit opt-in in these environments (#450, #483).
+   * - stdin closes before an answer arrives (EOF, Ctrl-D) (#483)
    *
    * In interactive TTY mode, asks the developer to confirm [y/N].
    *
@@ -141,14 +157,21 @@ export async function runIntegrityFlow({
    */
   const confirmTrust = async () => {
     if (trustFirst) return true;
-    if (!process.stdout.isTTY) return false;
+    if (!isInteractive()) return false;
     const rl = createInterface({ input: process.stdin, output: process.stdout });
-    return new Promise((resolve) =>
+    return new Promise((resolve) => {
+      let answered = false;
+      // readline closes on stdin EOF without invoking the question callback;
+      // treat that as "no" so the promise always settles (#483).
+      rl.once('close', () => {
+        if (!answered) resolve(false);
+      });
       rl.question('Auto-trust this download? [y/N] ', (answer) => {
+        answered = true;
         rl.close();
         resolve(answer.trim().toLowerCase() === 'y');
-      }),
-    );
+      });
+    });
   };
 
   /**
@@ -169,7 +192,7 @@ export async function runIntegrityFlow({
     if (previewFn) previewFn(body);
     const trusted = await confirmTrust();
     if (!trusted) {
-      const hint = process.stdout.isTTY
+      const hint = isInteractive()
         ? 'or --trust-first to bypass the prompt.'
         : 'or --trust-first to auto-trust in non-interactive environments.';
       console.error(
