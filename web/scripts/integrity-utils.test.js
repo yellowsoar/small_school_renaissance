@@ -161,15 +161,18 @@ describe('runIntegrityFlow', () => {
 
   let savedCI;
   let savedIsTTY;
+  let savedStdinIsTTY;
 
   beforeEach(() => {
     vi.clearAllMocks();
     savedCI = process.env.CI;
     savedIsTTY = process.stdout.isTTY;
+    savedStdinIsTTY = process.stdin.isTTY;
 
     // Default environment: non-CI, non-TTY
     delete process.env.CI;
     process.stdout.isTTY = false;
+    process.stdin.isTTY = false;
 
     verifyIntegrity.mockReturnValue('abc123');
     randomUUID.mockReturnValue('mock-uuid-0000');
@@ -187,6 +190,7 @@ describe('runIntegrityFlow', () => {
     if (savedCI === undefined) delete process.env.CI;
     else process.env.CI = savedCI;
     process.stdout.isTTY = savedIsTTY;
+    process.stdin.isTTY = savedStdinIsTTY;
     vi.restoreAllMocks();
   });
 
@@ -416,6 +420,7 @@ describe('runIntegrityFlow', () => {
 
   it('skips TTY prompt when trustFirst is true', async () => {
     process.stdout.isTTY = true;
+    process.stdin.isTTY = true;
     readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
     verifyIntegrity.mockReturnValue('hash');
 
@@ -431,11 +436,13 @@ describe('runIntegrityFlow', () => {
 
   it('throws IntegrityError when TTY user declines auto-bootstrap', async () => {
     process.stdout.isTTY = true;
+    process.stdin.isTTY = true;
     readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
 
     const mockRl = {
       question: vi.fn((_prompt, cb) => cb('n')),
       close: vi.fn(),
+      once: vi.fn(),
     };
     createInterface.mockReturnValue(mockRl);
 
@@ -452,11 +459,13 @@ describe('runIntegrityFlow', () => {
 
   it('shows TTY-specific hint when TTY user rejects', async () => {
     process.stdout.isTTY = true;
+    process.stdin.isTTY = true;
     readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
 
     const mockRl = {
       question: vi.fn((_prompt, cb) => cb('n')),
       close: vi.fn(),
+      once: vi.fn(),
     };
     createInterface.mockReturnValue(mockRl);
 
@@ -464,5 +473,72 @@ describe('runIntegrityFlow', () => {
 
     expect(caught.message).toContain('bypass the prompt');
     expect(caught.message).not.toContain('non-interactive environments');
+  });
+
+  /* stdout TTY but stdin not: fail-closed, no prompt (#483) ----------- */
+
+  it('fails closed without prompting when stdout is a TTY but stdin is not (#483)', async () => {
+    process.stdout.isTTY = true;
+    process.stdin.isTTY = false;
+    readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
+
+    const caught = await runIntegrityFlow(baseOpts).catch((e) => e);
+
+    expect(createInterface).not.toHaveBeenCalled();
+    expect(caught).toBeInstanceOf(IntegrityError);
+    expect(caught.message).toContain('non-interactive environments');
+    expect(caught.message).not.toContain('bypass the prompt');
+  });
+
+  /* stdin EOF before an answer: resolve "no" instead of hanging (#483) */
+
+  it('treats stdin closing before an answer as a decline instead of hanging (#483)', async () => {
+    process.stdout.isTTY = true;
+    process.stdin.isTTY = true;
+    readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
+
+    // Simulate stdin EOF: readline emits 'close' and never invokes the
+    // question callback.
+    const mockRl = {
+      question: vi.fn(),
+      close: vi.fn(),
+      once: vi.fn((event, handler) => {
+        if (event === 'close') queueMicrotask(handler);
+      }),
+    };
+    createInterface.mockReturnValue(mockRl);
+
+    const caught = await runIntegrityFlow(baseOpts).catch((e) => e);
+
+    expect(caught).toBeInstanceOf(IntegrityError);
+    expect(caught.message).toContain('Aborted');
+    expect(mockRl.question).toHaveBeenCalled();
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  /* "y" answer still wins when rl.close() emits 'close' (#483) -------- */
+
+  it('honours a "y" answer even though rl.close() emits close (#483)', async () => {
+    process.stdout.isTTY = true;
+    process.stdin.isTTY = true;
+    readFile.mockResolvedValue(JSON.stringify({ sha256: '' }));
+    verifyIntegrity.mockReturnValue('tty-hash');
+
+    let onClose;
+    const mockRl = {
+      once: vi.fn((event, handler) => {
+        if (event === 'close') onClose = handler;
+      }),
+      close: vi.fn(() => onClose?.()),
+      question: vi.fn((_prompt, cb) => cb('y')),
+    };
+    createInterface.mockReturnValue(mockRl);
+
+    await runIntegrityFlow(baseOpts);
+
+    expect(mockRl.close).toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('bootstrapped'),
+    );
   });
 });
