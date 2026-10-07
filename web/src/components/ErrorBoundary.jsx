@@ -3,6 +3,14 @@ import { Component } from 'react';
 const MAX_RETRIES = 3;
 
 /**
+ * How long children must stay error-free after a retry before the circuit
+ * breaker resets. Errors thrown from passive effects (useEffect) surface only
+ * after the recovered tree has committed, so resetting on commit would zero
+ * the counter right before the same error comes back (#487).
+ */
+export const RECOVERY_STABLE_MS = 2000;
+
+/**
  * Last line of defence: one bad row should degrade a panel, not blank the page.
  * Class component because React still has no hook equivalent.
  *
@@ -22,10 +30,22 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidUpdate(_, prevState) {
-    // Recovery succeeded — reset the circuit breaker for the next error cycle.
     if (prevState.error && !this.state.error) {
-      this.setState({ retries: 0 });
+      // Recovery committed. Only reset the circuit breaker once the children
+      // have stayed healthy for RECOVERY_STABLE_MS (#191, #487).
+      clearTimeout(this.resetTimer);
+      this.resetTimer = setTimeout(
+        () => this.setState({ retries: 0 }),
+        RECOVERY_STABLE_MS,
+      );
+    } else if (!prevState.error && this.state.error) {
+      // Failed again before stabilising: keep counting toward MAX_RETRIES.
+      clearTimeout(this.resetTimer);
     }
+  }
+
+  componentWillUnmount() {
+    clearTimeout(this.resetTimer);
   }
 
   handleRetry = () => {
