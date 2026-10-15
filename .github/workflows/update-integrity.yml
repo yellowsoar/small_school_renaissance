@@ -130,6 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write  # gh workflow run deploy.yml (#489)
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -168,8 +169,26 @@ jobs:
         with:
           commit-message: ${{ steps.prep.outputs.msg }}
 
+      # Pushes made with GITHUB_TOKEN never start new workflow runs, so the
+      # hash commit above does not fire deploy.yml's push trigger and Pages
+      # keeps serving the old build. workflow_dispatch is the documented
+      # exception, so dispatch the deploy explicitly (#489).
+      - name: Trigger deploy
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run deploy.yml --ref main
+
       - name: Report update result
-        run: echo "::notice::Integrity hashes updated and committed."
+        env:
+          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          if [ "$IS_MAIN" = "true" ]; then
+            echo "::notice::Integrity hashes updated and committed; deploy.yml dispatched."
+          else
+            echo "::warning::Integrity hashes committed to ${GITHUB_REF_NAME}, but deploy only runs from main. Run \"Deploy web to GitHub Pages\" manually after merging."
+          fi
 
   alert:
     needs: detect
