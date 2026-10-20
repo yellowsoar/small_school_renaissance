@@ -1,4 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { StrictMode } from 'react';
 import { render } from '@testing-library/react';
 import SchoolMap from './SchoolMap.jsx';
 import { MAP, TILE_LAYERS } from '../config/index.js';
@@ -85,7 +86,7 @@ const noop = () => {};
 /*  Tests                                                              */
 /* ------------------------------------------------------------------ */
 
-describe('SchoolMap', () => {
+ describe('SchoolMap', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     leafletMocks.useMap.mockReturnValue({ getZoom: () => 7, setZoom: vi.fn(), fitBounds: vi.fn() });
@@ -379,6 +380,10 @@ describe('FitBoundsOnSearch (#373)', () => {
     leafletCoreMocks.latLngBounds.mockReturnValue('mock-bounds');
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('does not fitBounds when search is empty (#373)', () => {
     vi.useFakeTimers();
     render(
@@ -514,5 +519,98 @@ describe('FitBoundsOnSearch (#373)', () => {
       padding: [50, 50],
     });
     vi.useRealTimers();
+  });
+});
+
+describe('FitBoundsOnSearch whitespace regression (#491)', () => {
+  const originalSchools = [{ id: '1', position: [25.03, 121.56] }];
+  const latestSchools = [{ id: '2', position: [24.99, 121.55] }];
+  let fitBoundsFn;
+
+  const mapElement = (search, currentSchools = originalSchools) => (
+    <SchoolMap
+      schools={currentSchools}
+      year={year}
+      layers={layers}
+      overlayData={overlayData}
+      onZoomChange={noop}
+      search={search}
+    />
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    fitBoundsFn = vi.fn();
+    leafletMocks.useMap.mockReturnValue({
+      getZoom: () => MAP.zoom,
+      setZoom: vi.fn(),
+      fitBounds: fitBoundsFn,
+    });
+    leafletCoreMocks.latLngBounds.mockReturnValue('mock-bounds');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    ['add leading', '烏來', ' 烏來'],
+    ['add trailing', '烏來', '烏來 '],
+    ['remove leading', ' 烏來', '烏來'],
+    ['remove trailing', '烏來 ', '烏來'],
+  ])('keeps the original deadline when edits %s whitespace', (_, initial, edited) => {
+    const { rerender } = render(mapElement(''));
+    rerender(mapElement(initial));
+    vi.advanceTimersByTime(200);
+    rerender(mapElement(edited));
+    vi.advanceTimersByTime(299);
+    expect(fitBoundsFn).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(fitBoundsFn).toHaveBeenCalledOnce();
+    expect(fitBoundsFn).toHaveBeenCalledWith('mock-bounds', {
+      maxZoom: 15,
+      padding: [50, 50],
+    });
+    vi.advanceTimersByTime(1000);
+    expect(fitBoundsFn).toHaveBeenCalledOnce();
+  });
+
+  it('uses the latest schools without postponing a whitespace-edited search', () => {
+    const { rerender } = render(mapElement(''));
+    rerender(mapElement('烏來'));
+    vi.advanceTimersByTime(200);
+    rerender(mapElement('烏來 ', latestSchools));
+    vi.advanceTimersByTime(300);
+    expect(fitBoundsFn).toHaveBeenCalledOnce();
+    expect(leafletCoreMocks.latLngBounds).toHaveBeenCalledWith([[24.99, 121.55]]);
+  });
+
+  it.each(['', '   '])('cancels a pending fit when search becomes %j', (cleared) => {
+    const { rerender } = render(mapElement(''));
+    rerender(mapElement('烏來'));
+    vi.advanceTimersByTime(200);
+    rerender(mapElement(cleared));
+    vi.advanceTimersByTime(1000);
+    expect(fitBoundsFn).not.toHaveBeenCalled();
+  });
+
+  it('cancels the pending fit on unmount', () => {
+    const { rerender, unmount } = render(mapElement(''));
+    rerender(mapElement('烏來'));
+    vi.advanceTimersByTime(200);
+    unmount();
+    vi.advanceTimersByTime(1000);
+    expect(fitBoundsFn).not.toHaveBeenCalled();
+  });
+
+  it('fits an initial non-empty query exactly once under StrictMode', () => {
+    render(<StrictMode>{mapElement('烏來')}</StrictMode>);
+    vi.advanceTimersByTime(499);
+    expect(fitBoundsFn).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(fitBoundsFn).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(1000);
+    expect(fitBoundsFn).toHaveBeenCalledOnce();
   });
 });

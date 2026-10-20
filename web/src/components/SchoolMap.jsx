@@ -43,10 +43,12 @@ function MapViewSync({ zoom, onZoomChange }) {
  *   non-empty string. Clearing the search does not reset the view.
  * - Uses a ref for schools so that non-search filter changes (year
  *   slider, tier toggles) do not cancel the pending debounce timer.
+ * - Depends on the trimmed query so whitespace-only edits neither cancel
+ *   nor postpone a pending fit (#491).
  */
 function FitBoundsOnSearch({ schools, search }) {
   const map = useMap();
-  const prevSearchRef = useRef('');
+  const trimmedSearch = search.trim();
   const schoolsRef = useRef(schools);
 
   useEffect(() => {
@@ -54,12 +56,7 @@ function FitBoundsOnSearch({ schools, search }) {
   }, [schools]);
 
   useEffect(() => {
-    const trimmed = search.trim();
-    const prevTrimmed = prevSearchRef.current.trim();
-    prevSearchRef.current = search;
-
-    // Skip if the effective search didn't change or was cleared.
-    if (trimmed === prevTrimmed || trimmed === '') return;
+    if (trimmedSearch === '') return;
 
     const timer = setTimeout(() => {
       const current = schoolsRef.current;
@@ -70,7 +67,7 @@ function FitBoundsOnSearch({ schools, search }) {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [search, map]);
+  }, [trimmedSearch, map]);
 
   return null;
 }
