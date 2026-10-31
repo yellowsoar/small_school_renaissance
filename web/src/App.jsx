@@ -20,7 +20,15 @@ const initialOverlays = Object.fromEntries(
 
 export default function App() {
   const { status, schools, counties, error, reload, retryInfo } = useSchoolData();
-  const countyBoundary = useGeoJson(COUNTY_BOUNDARY_URL);
+  const [layers, setLayers] = useReducer(merge, {
+    heatmap: true,
+    markers: true,
+    baseMap: 'osm',
+    ...initialOverlays,
+  });
+  const countyBoundary = useGeoJson(COUNTY_BOUNDARY_URL, {
+    enabled: layers.countyBoundary,
+  });
 
   // Stable for the lifetime of a loaded dataset, which is what lets
   // useUrlFilters re-validate the URL's counties exactly once.
@@ -30,12 +38,6 @@ export default function App() {
   // scroll/pinch) and the excludeClosed toggle only produce a new `view`,
   // so they never trigger filterSchools (#348, #364).
   const [filters, setFilters, resetFilters, view, setView] = useUrlFilters(countySet);
-  const [layers, setLayers] = useReducer(merge, {
-    heatmap: true,
-    markers: true,
-    baseMap: 'osm',
-    ...initialOverlays,
-  });
   const [panelOpen, setPanelOpen] = useState(true);
 
   const filtered = useMemo(() => filterSchools(schools, filters), [schools, filters]);
@@ -137,7 +139,7 @@ export default function App() {
               search={filters.search}
             />
 
-            {countyBoundary.status === 'error' && (
+            {layers.countyBoundary && countyBoundary.status === 'error' && (
               <div className="boundary-notice" role="status">
                 <p>縣市界線載入失敗</p>
                 <button
