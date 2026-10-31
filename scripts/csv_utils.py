@@ -155,10 +155,12 @@ def lookup_checksum():
         # BOM-inserting tool (#414).
         with open(sys.argv[2], encoding="utf-8-sig") as f:
             data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError("root must be a JSON object")
         print(data.get(sys.argv[3], ""))
-    except json.JSONDecodeError as e:
+    except ValueError as e:
         print(
-            f"WARNING: {sys.argv[2]} contains invalid JSON ({e}), "
+            f"WARNING: {sys.argv[2]} contains invalid JSON manifest ({e}), "
             "returning empty checksum",
             file=sys.stderr,
         )
@@ -182,9 +184,11 @@ def record_checksum():
             # utf-8-sig on read: tolerate BOM (#414).
             with open(path, encoding="utf-8-sig") as f:
                 data = json.load(f)
-        except json.JSONDecodeError as e:
+            if not isinstance(data, dict):
+                raise ValueError("root must be a JSON object")
+        except ValueError as e:
             print(
-                f"WARNING: {path} contains invalid JSON ({e}), "
+                f"WARNING: {path} contains invalid JSON manifest ({e}), "
                 "resetting checksum manifest",
                 file=sys.stderr,
             )
@@ -196,8 +200,13 @@ def record_checksum():
                     f"  Corrupt file backed up to {corrupt_bak}",
                     file=sys.stderr,
                 )
-            except OSError:
-                pass  # best-effort backup
+            except OSError as backup_error:
+                print(
+                    f"ERROR: cannot back up {path} ({backup_error}), "
+                    "leaving checksum manifest unchanged",
+                    file=sys.stderr,
+                )
+                sys.exit(3)
             data = {}
         except OSError as e:
             print(

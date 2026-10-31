@@ -633,6 +633,65 @@ MOCK
 
 # ── record_checksum (#314) ────────────────────────────────────────────────
 
+@test "lookup_checksum: warns on non-object roots without modifying manifest (#495)" {
+  local root rc
+  for root in '[]' 'null' '"text"' '42' 'true' 'false'; do
+    printf '%s\n' "$root" > "$CHECKSUM_FILE"
+    cp "$CHECKSUM_FILE" "$TEST_TMPDIR/original"
+    rc=0
+    lookup_checksum "data/file.csv" > "$TEST_TMPDIR/stdout" 2> "$TEST_TMPDIR/stderr" || rc=$?
+    [ "$rc" -eq 0 ]
+    printf '\n' > "$TEST_TMPDIR/expected"
+    cmp "$TEST_TMPDIR/expected" "$TEST_TMPDIR/stdout"
+    grep -q 'WARNING:' "$TEST_TMPDIR/stderr"
+    grep -q 'root must be a JSON object' "$TEST_TMPDIR/stderr"
+    ! grep -q 'Traceback' "$TEST_TMPDIR/stderr"
+    cmp "$TEST_TMPDIR/original" "$CHECKSUM_FILE"
+    [ ! -e "${CHECKSUM_FILE}.corrupt" ]
+  done
+}
+
+@test "record_checksum: backs up non-object roots before recovery (#495)" {
+  local root rc
+  for root in '[]' 'null' '"text"' '42' 'true' 'false'; do
+    printf '%s\n' "$root" > "$CHECKSUM_FILE"
+    cp "$CHECKSUM_FILE" "$TEST_TMPDIR/original"
+    rc=0
+    record_checksum "data/file.csv" "abc123" > "$TEST_TMPDIR/stdout" 2> "$TEST_TMPDIR/stderr" || rc=$?
+    [ "$rc" -eq 0 ]
+    [ ! -s "$TEST_TMPDIR/stdout" ]
+    grep -q 'WARNING:' "$TEST_TMPDIR/stderr"
+    grep -q 'root must be a JSON object' "$TEST_TMPDIR/stderr"
+    grep -q 'backed up' "$TEST_TMPDIR/stderr"
+    ! grep -q 'Traceback' "$TEST_TMPDIR/stderr"
+    cmp "$TEST_TMPDIR/original" "${CHECKSUM_FILE}.corrupt"
+    run python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8")) == {"data/file.csv": "abc123"}' "$CHECKSUM_FILE"
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "record_checksum: preserves invalid manifest when backup fails (#495)" {
+  local root rc
+  # A directory at the backup path fails deterministically, even as root.
+  mkdir "${CHECKSUM_FILE}.corrupt"
+  for root in '[]' 'null' '"text"' '42' 'true' 'false' 'not json'; do
+    printf '%s\n' "$root" > "$CHECKSUM_FILE"
+    cp "$CHECKSUM_FILE" "$TEST_TMPDIR/original"
+    rc=0
+    record_checksum "data/file.csv" "abc123" > "$TEST_TMPDIR/stdout" 2> "$TEST_TMPDIR/stderr" || rc=$?
+    [ "$rc" -eq 3 ]
+    [ ! -s "$TEST_TMPDIR/stdout" ]
+    grep -q 'ERROR:' "$TEST_TMPDIR/stderr"
+    grep -q 'cannot back up' "$TEST_TMPDIR/stderr"
+    ! grep -q 'Traceback' "$TEST_TMPDIR/stderr"
+    cmp "$TEST_TMPDIR/original" "$CHECKSUM_FILE"
+    [ -d "${CHECKSUM_FILE}.corrupt" ]
+    run find "$TEST_TMPDIR" -name '*.tmp'
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+  done
+}
+
 @test "record_checksum: inserts new key into empty manifest (#314)" {
   echo '{}' > "$CHECKSUM_FILE"
   record_checksum "data/file.csv" "abc123"
