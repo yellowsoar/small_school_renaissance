@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import App from './App.jsx';
-import { BASE_YEAR, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
+import { BASE_YEAR, COUNTY_BOUNDARY_URL, REFERENCE_YEAR, PROJECTION_YEARS } from './config/index.js';
 
 /* ------------------------------------------------------------------ */
 /*  Mocks                                                              */
@@ -26,7 +26,13 @@ vi.mock('./components/SchoolMap.jsx', () => ({
 }));
 
 vi.mock('./components/ControlPanel.jsx', () => ({
-  default: () => <div data-testid="control-panel" />,
+  default: ({ layers, onLayers }) => (
+    <div data-testid="control-panel">
+      <button type="button" onClick={() => onLayers({ countyBoundary: !layers.countyBoundary })}>
+        Toggle county boundary
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('./components/SummaryBar.jsx', () => ({
@@ -360,5 +366,37 @@ describe('App', () => {
     render(<App />);
 
     expect(mocks.useGeoJson).toHaveBeenCalled();
+    expect(mocks.useGeoJson).toHaveBeenCalledWith(COUNTY_BOUNDARY_URL, { enabled: false });
+  });
+
+  it('passes each boundary toggle to the hook without dropping map data (#493)', () => {
+    setupReady();
+    render(<App />);
+    expect(mocks.useGeoJson).toHaveBeenLastCalledWith(COUNTY_BOUNDARY_URL, { enabled: false });
+    const cached = defaultGeoJson.data;
+    expect(mocks.schoolMapProps.overlayData.countyBoundary).toBe(cached);
+    fireEvent.click(screen.getByText('Toggle county boundary'));
+    expect(mocks.useGeoJson).toHaveBeenLastCalledWith(COUNTY_BOUNDARY_URL, { enabled: true });
+    expect(mocks.schoolMapProps.layers.countyBoundary).toBe(true);
+    expect(mocks.schoolMapProps.overlayData.countyBoundary).toBe(cached);
+    fireEvent.click(screen.getByText('Toggle county boundary'));
+    expect(mocks.useGeoJson).toHaveBeenLastCalledWith(COUNTY_BOUNDARY_URL, { enabled: false });
+    expect(mocks.schoolMapProps.layers.countyBoundary).toBe(false);
+    expect(mocks.schoolMapProps.overlayData.countyBoundary).toBe(cached);
+  });
+
+  it('only shows the boundary failure while enabled and keeps retry wired (#493)', () => {
+    setupReady();
+    const retry = vi.fn();
+    mocks.useGeoJson.mockReturnValue({ status: 'error', data: null, error: new Error('network'), reload: retry });
+    render(<App />);
+    expect(screen.queryByText('縣市界線載入失敗')).toBeNull();
+    fireEvent.click(screen.getByText('Toggle county boundary'));
+    expect(screen.getByText('縣市界線載入失敗')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '重試' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('Toggle county boundary'));
+    expect(screen.queryByText('縣市界線載入失敗')).toBeNull();
+    expect(screen.queryByRole('button', { name: '重試' })).toBeNull();
   });
 });

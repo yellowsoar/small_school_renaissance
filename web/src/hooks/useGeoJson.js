@@ -5,10 +5,13 @@ import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 const MAX_GEOJSON_BYTES = 5 * 1024 * 1024;
 
 const initialState = { status: 'loading', data: null, error: null };
+const idleState = { status: 'idle', data: null, error: null };
 
 /**
- * Fetches and parses a GeoJSON file.  Loads once and caches in component
- * state.  Aborts cleanly on unmount via AbortController.  Exposes `reload`
+ * Fetches and parses a GeoJSON file. Defers loading until first enabled
+ * (#493), then keeps the request and cached data across visibility toggles.
+ * URL changes and explicit reloads still fetch again after activation.
+ * Aborts cleanly on unmount via AbortController. Exposes `reload`
  * so a failed load is recoverable without a full refresh (#365).
  *
  * Error messages are classified by failure type (timeout, size limit,
@@ -16,18 +19,26 @@ const initialState = { status: 'loading', data: null, error: null };
  * (#459).
  *
  * @param {string} url  URL to the GeoJSON file (typically a static asset)
- * @returns {{ status: 'loading'|'ready'|'error', data: object|null, error: Error|null, reload: () => void }}
+ * @param {{ enabled?: boolean }} [options] Start loading when first enabled.
+ * @returns {{ status: 'idle'|'loading'|'ready'|'error', data: object|null, error: Error|null, reload: () => void }}
  */
-export function useGeoJson(url) {
-  const [state, setState] = useState(initialState);
+export function useGeoJson(url, { enabled = true } = {}) {
+  const [state, setState] = useState(() => enabled ? initialState : idleState);
+  const [activated, setActivated] = useState(enabled);
   const [attempt, setAttempt] = useState(0);
+  // Once started, visibility no longer controls the request lifecycle.
+  const shouldLoad = enabled || activated;
 
   const reload = useCallback(() => {
+    if (!shouldLoad) return;
     setState(initialState);
     setAttempt((n) => n + 1);
-  }, []);
+  }, [shouldLoad]);
 
   useEffect(() => {
+    if (!shouldLoad) return;
+    setActivated(true);
+    setState(initialState);
     const controller = new AbortController();
 
     (async () => {
@@ -49,7 +60,7 @@ export function useGeoJson(url) {
 
         setState({ status: 'ready', data: parsed, error: null });
       } catch (err) {
-        if (err.name === 'AbortError') return;
+        if (controller.signal.aborted || err.name === 'AbortError') return;
 
         let message;
         if (err.name === 'TimeoutError') {
@@ -71,7 +82,7 @@ export function useGeoJson(url) {
     })();
 
     return () => controller.abort();
-  }, [url, attempt]);
+  }, [url, attempt, shouldLoad]);
 
   return { ...state, reload };
 }
