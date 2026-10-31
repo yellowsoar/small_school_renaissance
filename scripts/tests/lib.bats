@@ -143,9 +143,9 @@ Bob,25,Kaohsiung
 CSV
   run remove_rows_mismatch_header "$TEST_TMPDIR/quoted.csv"
   [ "$status" -eq 0 ]
+  [ "$(wc -l < "$TEST_TMPDIR/quoted.csv" | tr -d ' ')" = "3" ]
   grep -q "Alice" "$TEST_TMPDIR/quoted.csv"
   grep -q "Taipei, Taiwan" "$TEST_TMPDIR/quoted.csv"
-  grep -q "Bob" "$TEST_TMPDIR/quoted.csv"
   [[ "$output" == *"All rows match header"* ]]
 }
 
@@ -157,6 +157,7 @@ Bob,25,normal
 CSV
   run remove_rows_mismatch_header "$TEST_TMPDIR/escaped.csv"
   [ "$status" -eq 0 ]
+  [ "$(wc -l < "$TEST_TMPDIR/escaped.csv" | tr -d ' ')" = "3" ]
   grep -q "Alice" "$TEST_TMPDIR/escaped.csv"
   grep -q "Bob" "$TEST_TMPDIR/escaped.csv"
   [[ "$output" == *"All rows match header"* ]]
