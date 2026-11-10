@@ -503,6 +503,7 @@ MOCK
   export -f wget
   run check_file "http://example.com/test.csv"
   [ "$status" -eq 4 ]
+  # Warning should be emitted for network errors
   [[ "$output" == *"⚠️"* ]]
   [[ "$output" == *"network error"* ]]
   [[ "$output" == *"wget exit 4"* ]]
@@ -761,7 +762,6 @@ MOCK
 }
 
 @test "atomic_download: skips checksum when hash is empty (#314)" {
-  download_file() { printf 'name,age\nAlice,30\n'; } > /dev/null
   download_file() { printf 'name,age\nAlice,30\n' > "$2"; }
   export -f download_file
 
