@@ -503,7 +503,6 @@ MOCK
   export -f wget
   run check_file "http://example.com/test.csv"
   [ "$status" -eq 4 ]
-  # Warning should be emitted for network errors
   [[ "$output" == *"⚠️"* ]]
   [[ "$output" == *"network error"* ]]
   [[ "$output" == *"wget exit 4"* ]]
@@ -762,6 +761,7 @@ MOCK
 }
 
 @test "atomic_download: skips checksum when hash is empty (#314)" {
+  download_file() { printf 'name,age\nAlice,30\n'; } > /dev/null
   download_file() { printf 'name,age\nAlice,30\n' > "$2"; }
   export -f download_file
 
@@ -931,4 +931,75 @@ MOCK
   export -f wget
   run check_file "https://example.com/test.csv"
   [ "$status" -eq 0 ]
+}
+
+# Direct CLI safety checks: the shell wrapper already uses a separate output.
+@test "remove-mismatched-rows CLI: rejects same-file aliases without data loss (#497)" {
+  local alias rc
+  printf '\357\273\277a,b\r\n1,2\r\nbad\r\n' > "$TEST_TMPDIR/original"
+  for alias in identical relative absolute dotdot symlink hardlink; do
+    cp "$TEST_TMPDIR/original" "$TEST_TMPDIR/input.csv"
+    local infile="$TEST_TMPDIR/input.csv" outfile="$TEST_TMPDIR/input.csv"
+    case "$alias" in
+      relative) outfile="input.csv" ;;
+      absolute) infile="input.csv" ;;
+      dotdot) outfile="$TEST_TMPDIR/data/../input.csv" ;;
+      symlink)
+        ln -s input.csv "$TEST_TMPDIR/symlink.csv"
+        outfile="$TEST_TMPDIR/symlink.csv"
+        ;;
+      hardlink)
+        ln "$infile" "$TEST_TMPDIR/hardlink.csv"
+        outfile="$TEST_TMPDIR/hardlink.csv"
+        ;;
+    esac
+    rc=0
+    python3 "$LIB_DIR/csv_utils.py" remove-mismatched-rows "$infile" "$outfile" \
+      > "$TEST_TMPDIR/stdout" 2> "$TEST_TMPDIR/stderr" || rc=$?
+    [ "$rc" -eq 3 ]
+    [ ! -s "$TEST_TMPDIR/stdout" ]
+    grep -q 'ERROR:.*same file' "$TEST_TMPDIR/stderr"
+    ! grep -q 'Traceback' "$TEST_TMPDIR/stderr"
+    cmp "$TEST_TMPDIR/original" "$infile"
+    cmp "$TEST_TMPDIR/original" "$outfile"
+  done
+}
+
+@test "remove-mismatched-rows CLI: supports new and existing distinct outputs (#497)" {
+  local mode rc
+  printf '\357\273\277a,b\r\n1,2\r\nbad\r\n' > "$TEST_TMPDIR/input.csv"
+  cp "$TEST_TMPDIR/input.csv" "$TEST_TMPDIR/original"
+  printf 'a,b\n1,2\n' > "$TEST_TMPDIR/expected"
+  for mode in new existing; do
+    if [ "$mode" = existing ]; then
+      printf 'old output\n' > "$TEST_TMPDIR/output.csv"
+    fi
+    rc=0
+    python3 "$LIB_DIR/csv_utils.py" remove-mismatched-rows \
+      "$TEST_TMPDIR/input.csv" "$TEST_TMPDIR/output.csv" \
+      > "$TEST_TMPDIR/stdout" 2> "$TEST_TMPDIR/stderr" || rc=$?
+    [ "$rc" -eq 0 ]
+    printf '1\n' > "$TEST_TMPDIR/count"
+    cmp "$TEST_TMPDIR/count" "$TEST_TMPDIR/stdout"
+    [ ! -s "$TEST_TMPDIR/stderr" ]
+    cmp "$TEST_TMPDIR/original" "$TEST_TMPDIR/input.csv"
+    cmp "$TEST_TMPDIR/expected" "$TEST_TMPDIR/output.csv"
+  done
+}
+
+@test "remove-mismatched-rows CLI: fails closed on output identity errors (#497)" {
+  printf 'a,b\n1,2\n' > "$TEST_TMPDIR/input.csv"
+  cp "$TEST_TMPDIR/input.csv" "$TEST_TMPDIR/original"
+  # A symlink loop makes stat fail deterministically, including as root.
+  ln -s loop.csv "$TEST_TMPDIR/loop.csv"
+  local rc=0
+  python3 "$LIB_DIR/csv_utils.py" remove-mismatched-rows \
+    "$TEST_TMPDIR/input.csv" "$TEST_TMPDIR/loop.csv" \
+    > "$TEST_TMPDIR/stdout" 2> "$TEST_TMPDIR/stderr" || rc=$?
+  [ "$rc" -eq 3 ]
+  [ ! -s "$TEST_TMPDIR/stdout" ]
+  grep -q 'ERROR: cannot compare input and output' "$TEST_TMPDIR/stderr"
+  ! grep -q 'Traceback' "$TEST_TMPDIR/stderr"
+  cmp "$TEST_TMPDIR/original" "$TEST_TMPDIR/input.csv"
+  [ -L "$TEST_TMPDIR/loop.csv" ]
 }
