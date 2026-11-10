@@ -10,6 +10,8 @@ Commands:
   remove-mismatched-rows <infile> <outfile>
       Remove rows whose column count doesn't match the header.
       Prints the number of removed rows to stdout.
+      Input and output must be different files; in-place editing is not supported.
+      Exit codes: 0 = success, 2 = argument error, 3 = file error.
 
   validate-csv-header <csvfile> <col1> [col2 ...]
       Check that a CSV header contains all required columns.
@@ -56,6 +58,24 @@ def remove_mismatched_rows():
         f_in = open(infile, newline="", encoding="utf-8-sig")
     except OSError as e:
         print(f"ERROR: cannot read {infile}: {e}", file=sys.stderr)
+        sys.exit(3)
+    # Compare file identity before opening a potentially truncating output (#497).
+    # fstat uses the already-open input; stat follows output symlinks.
+    try:
+        same_file = os.path.samestat(os.fstat(f_in.fileno()), os.stat(outfile))
+    except FileNotFoundError:
+        same_file = False  # A new output is allowed.
+    except OSError as e:
+        f_in.close()
+        print(f"ERROR: cannot compare input and output: {e}", file=sys.stderr)
+        sys.exit(3)
+    if same_file:
+        f_in.close()
+        print(
+            "ERROR: input and output refer to the same file; "
+            "in-place editing is not supported",
+            file=sys.stderr,
+        )
         sys.exit(3)
     try:
         f_out = open(outfile, "w", newline="", encoding="utf-8")
