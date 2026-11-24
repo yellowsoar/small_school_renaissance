@@ -62,7 +62,7 @@ teardown() {
   [ "$(cat "$TEST_TMPDIR/f.txt")" = "goodbye world" ]
   # Permission mode preserved (not downgraded to mktemp default 0600)
   local mode
-  mode=$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file" 2>/dev/null)
+  mode=$(stat -c '%a' "$TEST_TMPDIR/f.txt" 2>/dev/null || stat -f '%Lp' "$TEST_TMPDIR/f.txt" 2>/dev/null)
   [ "$mode" = "644" ]
 }
 
