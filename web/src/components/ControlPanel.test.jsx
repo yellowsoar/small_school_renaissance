@@ -3,10 +3,14 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import ControlPanel from './ControlPanel.jsx';
 import { RISK_TIERS, PROJECTION_YEARS, TILE_LAYERS, OVERLAY_LAYERS } from '../config/index.js';
 import { readFileSync } from 'node:fs';
-import { URL } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Vitest disables CSS processing, so read the actual source for the binding check.
-const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
+const globalCss = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), '../styles/global.css'),
+  'utf8',
+);
 
 // WCAG relative luminance for the opaque hex colors used by risk chips.
 const luminance = (hex) => {
@@ -311,7 +315,7 @@ describe('ControlPanel', () => {
     });
 
     const overlayCheckbox = screen.getByRole('checkbox', {
-      name: OVERLAY_LAYERS[0].label,
+      name: OVERLAY_LAYERS[0].id ? OVERLAY_LAYERS[0].label : '',
     });
     expect(overlayCheckbox.checked).toBe(false);
   });
