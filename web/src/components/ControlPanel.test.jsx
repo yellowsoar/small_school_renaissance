@@ -315,7 +315,7 @@ describe('ControlPanel', () => {
     });
 
     const overlayCheckbox = screen.getByRole('checkbox', {
-      name: OVERLAY_LAYERS[0].id ? OVERLAY_LAYERS[0].label : '',
+      name: OVERLAY_LAYERS[0].label,
     });
     expect(overlayCheckbox.checked).toBe(false);
   });
