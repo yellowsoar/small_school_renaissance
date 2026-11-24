@@ -2,6 +2,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ControlPanel from './ControlPanel.jsx';
 import { RISK_TIERS, PROJECTION_YEARS, TILE_LAYERS, OVERLAY_LAYERS } from '../config/index.js';
+import globalCss from '../styles/global.css?raw';
+
+// WCAG relative luminance for the opaque hex colors used by risk chips.
+const luminance = (hex) => {
+  const digits = hex.slice(1);
+  const expanded = digits.length === 3 ? [...digits].map((c) => c + c).join('') : digits;
+  const channels = expanded.match(/../g).map((channel) => {
+    const value = parseInt(channel, 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+};
+
+const contrastRatio = (foreground, background) => {
+  const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+};
 
 /* ------------------------------------------------------------------ */
 /*  Fixtures                                                           */
@@ -35,6 +52,12 @@ const renderPanel = (overrides = {}) =>
 /* ------------------------------------------------------------------ */
 
 describe('ControlPanel', () => {
+  it('checks contrast against known black/white reference values (#500)', () => {
+    expect(contrastRatio('#000', '#ffffff')).toBe(21);
+    expect(contrastRatio('#fff', '#000000')).toBe(21);
+    expect(contrastRatio('#f07300', '#f07300')).toBe(1);
+  });
+
   it('renders the current year value', () => {
     const { container } = renderPanel();
 
@@ -47,6 +70,43 @@ describe('ControlPanel', () => {
 
     for (const tier of RISK_TIERS) {
       expect(screen.getByText(tier.label)).toBeTruthy();
+    }
+  });
+
+  it.each(RISK_TIERS)('gives the active $id chip at least 4.5:1 text contrast (#500)', (tier) => {
+    renderPanel({
+      filters: { ...defaultFilters, tiers: new Set([tier.id]) },
+    });
+
+    const chip = screen.getByRole('button', { name: tier.label });
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    expect(chip.getAttribute('data-active')).toBe('true');
+    expect(chip.style.getPropertyValue('--chip')).toBe(tier.color);
+    // Assert the rendered foreground, not just the configuration.
+    const foreground = chip.style.getPropertyValue('--chip-ink');
+    expect(foreground).toMatch(/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i);
+    expect(contrastRatio(foreground, tier.color)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('only applies the risk foreground in the active CSS rule (#500)', () => {
+    expect(globalCss).toMatch(
+      /\.chip\[data-active='true'\]\s*\{\s*color:\s*var\(--chip-ink,\s*#fff\);/,
+    );
+    const inactiveRule = globalCss.match(/\.chip\s*\{([^}]+)\}/)[1];
+    expect(inactiveRule).toContain('color: var(--ink-soft);');
+    expect(inactiveRule).not.toContain('--chip-ink');
+  });
+
+  it('keeps county chips independent of risk foreground colors (#500)', () => {
+    renderPanel({
+      filters: { ...defaultFilters, counties: new Set([counties[0]]) },
+    });
+
+    for (const county of counties) {
+      const chip = screen.getByRole('button', { name: county });
+      expect(chip.style.getPropertyValue('--chip-ink')).toBe('');
+      expect(chip.style.getPropertyValue('--chip')).toBe('');
+      expect(chip.getAttribute('aria-pressed')).toBe(String(county === counties[0]));
     }
   });
 

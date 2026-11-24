@@ -59,7 +59,7 @@ export const TILE_LAYERS = [
     label: '地形圖',
     url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
     attribution:
-      'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="https://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
+      'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>) | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
     maxNativeZoom: 17,
   },
 ];
@@ -80,6 +80,7 @@ export const TW_BOUNDS = {
 /**
  * Risk tiers, ordered from most to least severe. `max` is inclusive,
  * `Infinity` closes the final bucket.
+ * `chipTextColor` is for active filter text only; map/legend colors stay unchanged.
  */
 export const RISK_TIERS = [
   {
@@ -87,6 +88,7 @@ export const RISK_TIERS = [
     label: '推估歸零',
     shape: 'star7',
     color: '#111111',
+    chipTextColor: '#fff',
     max: 0,
     describe: () => '人數 = 0',
   },
@@ -95,6 +97,7 @@ export const RISK_TIERS = [
     label: '極高風險',
     shape: 'star5',
     color: '#d7263d',
+    chipTextColor: '#fff',
     max: 30,
     describe: () => '0 < 人數 ≤ 30',
   },
@@ -103,6 +106,7 @@ export const RISK_TIERS = [
     label: '高風險',
     shape: 'triangle',
     color: '#f07300',
+    chipTextColor: '#000',
     max: 50,
     describe: () => '30 < 人數 ≤ 50',
   },
@@ -111,6 +115,7 @@ export const RISK_TIERS = [
     label: '需關注',
     shape: 'square',
     color: '#e5b700',
+    chipTextColor: '#000',
     max: 100,
     describe: () => '50 < 人數 ≤ 100',
   },
@@ -119,6 +124,7 @@ export const RISK_TIERS = [
     label: '相對穩定',
     shape: 'circle',
     color: '#2f9e44',
+    chipTextColor: '#000',
     max: Infinity,
     describe: () => '人數 > 100',
   },

@@ -412,7 +412,7 @@ a {
 }
 
 .chip[data-active='true'] {
-  color: #fff;
+  color: var(--chip-ink, #fff);
   background: var(--chip, var(--accent));
   border-color: var(--chip, var(--accent));
 }
