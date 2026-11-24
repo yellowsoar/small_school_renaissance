@@ -62,7 +62,7 @@ teardown() {
   [ "$(cat "$TEST_TMPDIR/f.txt")" = "goodbye world" ]
   # Permission mode preserved (not downgraded to mktemp default 0600)
   local mode
-  mode=$(stat -c '%a' "$TEST_TMPDIR/f.txt" 2>/dev/null || stat -f '%Lp' "$TEST_TMPDIR/f.txt" 2>/dev/null)
+  mode=$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file" 2>/dev/null)
   [ "$mode" = "644" ]
 }
 
@@ -143,6 +143,7 @@ Bob,25,Kaohsiung
 CSV
   run remove_rows_mismatch_header "$TEST_TMPDIR/quoted.csv"
   [ "$status" -eq 0 ]
+  [ "$(wc -l < "$TEST_TMPDIR/quoted.csv" | tr -d ' ')" = "3" ]
   grep -q "Alice" "$TEST_TMPDIR/quoted.csv"
   grep -q "Taipei, Taiwan" "$TEST_TMPDIR/quoted.csv"
   [[ "$output" == *"All rows match header"* ]]
@@ -156,6 +157,7 @@ Bob,25,normal
 CSV
   run remove_rows_mismatch_header "$TEST_TMPDIR/escaped.csv"
   [ "$status" -eq 0 ]
+  [ "$(wc -l < "$TEST_TMPDIR/escaped.csv" | tr -d ' ')" = "3" ]
   grep -q "Alice" "$TEST_TMPDIR/escaped.csv"
   grep -q "Bob" "$TEST_TMPDIR/escaped.csv"
   [[ "$output" == *"All rows match header"* ]]
@@ -462,6 +464,7 @@ MOCK
   local final_path="$TEST_TMPDIR/$NAME_DIR/test_file.ods"
   run atomic_download "http://example.com/test.ods" "$final_path"
   [ "$status" -ne 0 ]
+  # No file at final path
   [ ! -f "$final_path" ]
   # No leftover temp files (validate_not_html deletes the HTML, rm -f in else is a no-op)
   local leftover
@@ -500,6 +503,7 @@ MOCK
   export -f wget
   run check_file "http://example.com/test.csv"
   [ "$status" -eq 4 ]
+  # Warning should be emitted for network errors
   [[ "$output" == *"⚠️"* ]]
   [[ "$output" == *"network error"* ]]
   [[ "$output" == *"wget exit 4"* ]]
