@@ -453,7 +453,7 @@ MOCK
 }
 
 @test "atomic_download: cleans up temp file when HTML detected (#195)" {
-  # Mock download_file to write HTML content (validate_not_html will detect the HTML, rm -f in else is a no-op)
+  # Mock download_file to write HTML content (validate_not_html will detect and delete)
   download_file() {
     echo '<!DOCTYPE html><html><body>Maintenance</body></html>' > "$2"
   }
@@ -463,7 +463,7 @@ MOCK
   run atomic_download "http://example.com/test.ods" "$final_path"
   [ "$status" -ne 0 ]
   [ ! -f "$final_path" ]
-  # No leftover temp files
+  # No leftover temp files (validate_not_html deletes the HTML, rm -f in else is a no-op)
   local leftover
   leftover=$(find "$TEST_TMPDIR/$NAME_DIR" -name 'test_file.ods.*' | wc -l)
   [ "$leftover" -eq 0 ]
