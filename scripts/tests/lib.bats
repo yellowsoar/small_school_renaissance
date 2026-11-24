@@ -1003,3 +1003,131 @@ MOCK
   cmp "$TEST_TMPDIR/original" "$TEST_TMPDIR/input.csv"
   [ -L "$TEST_TMPDIR/loop.csv" ]
 }
+
+@test "record_checksum: preserves unreadable but replaceable manifest (#499)" {
+  # Root bypasses chmod read restrictions; fail rather than claim coverage.
+  [ "$(id -u)" -ne 0 ]
+  printf '{"first":"one","second":"two"}\n' > "$CHECKSUM_FILE"
+  cp "$CHECKSUM_FILE" "$TEST_TMPDIR/original"
+  [ -w "$TEST_TMPDIR" ]
+  chmod 000 "$CHECKSUM_FILE"
+  [ ! -r "$CHECKSUM_FILE" ]
+  run record_checksum "third" "three"
+  chmod 600 "$CHECKSUM_FILE"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"ERROR: cannot read"* ]]
+  [[ "$output" == *"leaving checksum manifest unchanged"* ]]
+  [[ "$output" != *"Traceback"* ]]
+  cmp "$TEST_TMPDIR/original" "$CHECKSUM_FILE"
+  [ ! -e "${CHECKSUM_FILE}.corrupt" ]
+  run find "$TEST_TMPDIR" -name '*.tmp'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "record_checksum: fails closed when parent cannot be searched (#499)" {
+  [ "$(id -u)" -ne 0 ]
+  local parent="$TEST_TMPDIR/blocked"
+  mkdir "$parent"
+  export CHECKSUM_FILE="$parent/manifest.json"
+  printf '{"first":"one","second":"two"}\n' > "$CHECKSUM_FILE"
+  cp "$CHECKSUM_FILE" "$TEST_TMPDIR/original"
+  chmod 000 "$parent"
+  run record_checksum "third" "three"
+  chmod 700 "$parent"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"ERROR: cannot read"* ]]
+  [[ "$output" != *"Traceback"* ]]
+  cmp "$TEST_TMPDIR/original" "$CHECKSUM_FILE"
+  [ ! -e "${CHECKSUM_FILE}.corrupt" ]
+  run find "$TEST_TMPDIR" -name '*.tmp'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "record_checksum: preserves dangling and looping symlinks (#499)" {
+  local target
+  for target in absent.json data-checksums.json; do
+    ln -s "$target" "$CHECKSUM_FILE"
+    run record_checksum "third" "three"
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"ERROR: cannot read"* ]]
+    [[ "$output" != *"Traceback"* ]]
+    [ -L "$CHECKSUM_FILE" ]
+    [ "$(readlink "$CHECKSUM_FILE")" = "$target" ]
+    [ ! -e "$TEST_TMPDIR/absent.json" ]
+    [ ! -e "${CHECKSUM_FILE}.corrupt" ]
+    run find "$TEST_TMPDIR" -name '*.tmp'
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    rm "$CHECKSUM_FILE"
+  done
+}
+
+@test "record_checksum: rejects directory and invalid parent paths (#499)" {
+  local mode
+  for mode in directory missing-parent file-parent dangling-parent; do
+    case "$mode" in
+      directory)
+        export CHECKSUM_FILE="$TEST_TMPDIR/directory"
+        mkdir "$CHECKSUM_FILE"
+        ;;
+      missing-parent) export CHECKSUM_FILE="$TEST_TMPDIR/missing/manifest.json" ;;
+      file-parent)
+        printf 'not a directory\n' > "$TEST_TMPDIR/file"
+        export CHECKSUM_FILE="$TEST_TMPDIR/file/manifest.json"
+        ;;
+      dangling-parent)
+        ln -s nowhere "$TEST_TMPDIR/dangling"
+        export CHECKSUM_FILE="$TEST_TMPDIR/dangling/manifest.json"
+        ;;
+    esac
+    run record_checksum "third" "three"
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"ERROR: cannot read"* ]]
+    [[ "$output" != *"Traceback"* ]]
+    [ ! -e "${CHECKSUM_FILE}.corrupt" ]
+    [ -d "$TEST_TMPDIR/directory" ]
+    if [ "$mode" = file-parent ]; then
+      [ "$(cat "$TEST_TMPDIR/file")" = "not a directory" ]
+    fi
+    if [ "$mode" = dangling-parent ]; then
+      [ "$(readlink "$TEST_TMPDIR/dangling")" = nowhere ]
+    fi
+    run find "$TEST_TMPDIR" -name '*.tmp'
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+  done
+}
+
+@test "record_checksum: updates and inserts while preserving unrelated keys (#499)" {
+  printf '{"first":"one","second":"two"}\n' > "$CHECKSUM_FILE"
+  run record_checksum "first" "updated"
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  run record_checksum "third" "three"
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  run python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8")) == {"first": "updated", "second": "two", "third": "three"}' "$CHECKSUM_FILE"
+  [ "$status" -eq 0 ]
+  [ ! -e "${CHECKSUM_FILE}.corrupt" ]
+  run find "$TEST_TMPDIR" -name '*.tmp'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "record_checksum: creates genuinely missing relative and absolute paths (#499)" {
+  local manifest
+  for manifest in "$TEST_TMPDIR/new.json" relative.json; do
+    export CHECKSUM_FILE="$manifest"
+    run record_checksum "first" "one"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8")) == {"first": "one"}' "$CHECKSUM_FILE"
+    [ "$status" -eq 0 ]
+    [ ! -e "${CHECKSUM_FILE}.corrupt" ]
+    run find "$TEST_TMPDIR" -name '*.tmp'
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+  done
+}

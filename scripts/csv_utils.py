@@ -199,42 +199,52 @@ def record_checksum():
     _require_args(3, "record-checksum <manifest> <key> <hash>")
     path, key, val = sys.argv[2], sys.argv[3], sys.argv[4]
     data = {}
-    if os.path.isfile(path):
+    try:
         try:
             # utf-8-sig on read: tolerate BOM (#414).
             with open(path, encoding="utf-8-sig") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
                 raise ValueError("root must be a JSON object")
-        except ValueError as e:
-            print(
-                f"WARNING: {path} contains invalid JSON manifest ({e}), "
-                "resetting checksum manifest",
-                file=sys.stderr,
-            )
-            # Preserve corrupt file for post-mortem investigation.
-            corrupt_bak = f"{path}.corrupt"
+        except FileNotFoundError:
+            # A missing target may still be an existing dangling symlink (#499).
+            # lstat must confirm the entry itself is absent, not inaccessible.
             try:
-                os.replace(path, corrupt_bak)
-                print(
-                    f"  Corrupt file backed up to {corrupt_bak}",
-                    file=sys.stderr,
-                )
-            except OSError as backup_error:
-                print(
-                    f"ERROR: cannot back up {path} ({backup_error}), "
-                    "leaving checksum manifest unchanged",
-                    file=sys.stderr,
-                )
-                sys.exit(3)
-            data = {}
-        except OSError as e:
+                os.lstat(path)
+            except FileNotFoundError:
+                # Missing/inaccessible parent paths are not creatable manifests.
+                os.stat(os.path.dirname(path) or ".")
+            else:
+                raise
+    except ValueError as e:
+        print(
+            f"WARNING: {path} contains invalid JSON manifest ({e}), "
+            "resetting checksum manifest",
+            file=sys.stderr,
+        )
+        # Preserve corrupt file for post-mortem investigation.
+        corrupt_bak = f"{path}.corrupt"
+        try:
+            os.replace(path, corrupt_bak)
             print(
-                f"WARNING: cannot read {path} ({e}), "
-                "starting with empty checksum manifest",
+                f"  Corrupt file backed up to {corrupt_bak}",
                 file=sys.stderr,
             )
-            data = {}
+        except OSError as backup_error:
+            print(
+                f"ERROR: cannot back up {path} ({backup_error}), "
+                "leaving checksum manifest unchanged",
+                file=sys.stderr,
+            )
+            sys.exit(3)
+        data = {}
+    except OSError as e:
+        print(
+            f"ERROR: cannot read {path} ({e}), "
+            "leaving checksum manifest unchanged",
+            file=sys.stderr,
+        )
+        sys.exit(3)
     data[key] = val
 
     dir_name = os.path.dirname(path) or "."
