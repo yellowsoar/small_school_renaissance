@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ControlPanel from './ControlPanel.jsx';
 import { RISK_TIERS, PROJECTION_YEARS, TILE_LAYERS, OVERLAY_LAYERS } from '../config/index.js';
-import globalCss from '../styles/global.css?raw';
+import { readFileSync } from 'node:fs';
+import { URL } from 'node:url';
+
+// Vitest disables CSS processing, so read the actual source for the binding check.
+const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
 
 // WCAG relative luminance for the opaque hex colors used by risk chips.
 const luminance = (hex) => {
