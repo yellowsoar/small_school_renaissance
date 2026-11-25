@@ -57,7 +57,7 @@ export default function ControlPanel({
                 type="button"
                 className="chip"
                 data-active={active}
-                style={{ '--chip': tier.color }}
+                style={{ '--chip': tier.color, '--chip-ink': tier.chipTextColor }}
                 aria-pressed={active}
                 onClick={() => onChange({ tiers: toggle(filters.tiers, tier.id) })}
               >
